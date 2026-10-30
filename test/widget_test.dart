@@ -1,30 +1,43 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
+import 'package:dungeon_admin/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:dungeon_admin/main.dart';
-
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('넓은 화면: 사이드바 메뉴로 모든 화면을 오갈 수 있다', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    await tester.pumpWidget(const AdminApp());
+    expect(find.text('오늘의 던전 현황을 한눈에 봅니다.'), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    const pages = {
+      '회원 관리': 'risingkang',
+      '신호 관리': '마이크로 WTI 원유 12월물',
+      '푸시 알림': '오늘의 던전이 열렸습니다',
+      '공지사항': '던전우상향 정식 출시 안내',
+      '대시보드': '최근 신호',
+    };
+    for (final MapEntry(key: menu, value: content) in pages.entries) {
+      await tester.tap(find.widgetWithText(ListTile, menu));
+      await tester.pumpAndSettle();
+      expect(find.text(content), findsWidgets, reason: menu);
+    }
+    expect(tester.takeException(), isNull);
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets('좁은 화면: 서랍 메뉴로 이동한다', (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const AdminApp());
+    await tester.tap(find.byTooltip('Open navigation menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, '공지사항'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('던전우상향 정식 출시 안내'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
