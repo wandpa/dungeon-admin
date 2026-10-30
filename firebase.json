@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "site": "dungeon-admin",
+    "site": "dungeonrising-admin",
     "public": "build/web",
     "ignore": [
       "firebase.json",
