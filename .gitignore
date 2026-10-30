@@ -46,3 +46,6 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Firebase 배포 캐시
+.firebase/

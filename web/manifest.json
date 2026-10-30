@@ -1,6 +1,6 @@
 {
-    "name": "dungeon_admin",
-    "short_name": "dungeon_admin",
+    "name": "던전우상향 관리자",
+    "short_name": "던전 관리자",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
