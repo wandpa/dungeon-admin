@@ -66,7 +66,7 @@ class DashboardPage extends StatelessWidget {
                     child: Icon(Icons.person, color: AppColors.textTertiary),
                   ),
                   title: Text(m.username),
-                  subtitle: Text(m.email, style: const TextStyle(color: AppColors.textTertiary)),
+                  subtitle: Text(maskEmail(m.email), style: const TextStyle(color: AppColors.textTertiary)),
                   trailing: Text(
                     formatDateTime(m.joinedAt),
                     style: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
