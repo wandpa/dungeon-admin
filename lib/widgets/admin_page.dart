@@ -123,8 +123,7 @@ class AdminTable extends StatelessWidget {
                     for (final (i, r) in rows.indexed)
                       DataRow(
                         selected: selected?.contains(i) ?? false,
-                        onSelectChanged:
-                            selectable ? (v) => onSelectChanged?.call(i, v ?? false) : null,
+                        onSelectChanged: selectable ? (v) => onSelectChanged?.call(i, v ?? false) : null,
                         cells: [for (final cell in r) DataCell(cell)],
                       ),
                   ],
@@ -134,9 +133,11 @@ class AdminTable extends StatelessWidget {
             if (rows.isEmpty)
               Padding(
                 padding: const EdgeInsets.all(32),
-                child: Text(emptyText,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: AppColors.textTertiary)),
+                child: Text(
+                  emptyText,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.textTertiary),
+                ),
               ),
           ],
         ),
@@ -177,10 +178,79 @@ class FilterBar extends StatelessWidget {
           ),
         ),
         for (final (i, f) in filters.indexed)
-          FilterChip(
-            label: Text(f),
-            selected: i == selectedIndex,
-            onSelected: (_) => onFilterSelected?.call(i),
+          FilterChip(label: Text(f), selected: i == selectedIndex, onSelected: (_) => onFilterSelected?.call(i)),
+      ],
+    );
+  }
+}
+
+/// 표 아래 페이지 넘김.
+class Pager extends StatelessWidget {
+  const Pager({super.key, required this.page, required this.pageCount, required this.summary, required this.onChanged});
+
+  final int page;
+  final int pageCount;
+  final String summary;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Text('$summary · ${page + 1} / $pageCount', style: const TextStyle(color: AppColors.textTertiary)),
+        IconButton(
+          tooltip: '이전 페이지',
+          onPressed: page > 0 ? () => onChanged(page - 1) : null,
+          icon: const Icon(Icons.chevron_left),
+        ),
+        IconButton(
+          tooltip: '다음 페이지',
+          onPressed: page < pageCount - 1 ? () => onChanged(page + 1) : null,
+          icon: const Icon(Icons.chevron_right),
+        ),
+      ],
+    );
+  }
+}
+
+/// [range] 가 비어 있으면 모든 날짜를 받는다. 끝나는 날은 그날 전체를 포함한다.
+bool inDateRange(DateTime at, DateTimeRange? range) =>
+    range == null || (!at.isBefore(range.start) && at.isBefore(range.end.add(const Duration(days: 1))));
+
+/// 기간 선택 버튼.
+class DateRangeFilter extends StatelessWidget {
+  const DateRangeFilter({super.key, required this.range, required this.onChanged});
+
+  final DateTimeRange? range;
+  final ValueChanged<DateTimeRange?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = range;
+    String day(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        OutlinedButton.icon(
+          onPressed: () async {
+            final picked = await showDateRangePicker(
+              context: context,
+              firstDate: DateTime(2026, 1, 1),
+              lastDate: DateTime(2027, 12, 31),
+              initialDateRange: r,
+            );
+            if (picked != null) onChanged(picked);
+          },
+          icon: const Icon(Icons.date_range, size: 18),
+          label: Text(r == null ? '전체 기간' : '${day(r.start)} ~ ${day(r.end)}'),
+        ),
+        if (r != null)
+          IconButton(
+            tooltip: '기간 지우기',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => onChanged(null),
+            icon: const Icon(Icons.close, size: 18),
           ),
       ],
     );
@@ -198,11 +268,11 @@ class StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(6),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+      child: Text(
+        label,
+        style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700),
       ),
-      child: Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
     );
   }
 }

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
 import 'member_monitor_page.dart' show MonitorRequest, memberMonitorRequest;
+import 'system_page.dart' show systemLevelColor, systemLevelIcon;
 
 import '../mock_accounts.dart';
 import '../mock_data.dart';
+import '../mock_symbols.dart';
+import '../mock_system.dart';
 import '../theme.dart';
 import '../widgets/admin_page.dart';
 
@@ -19,6 +22,7 @@ class DashboardPage extends StatelessWidget {
       title: '대시보드',
       description: '오늘의 던전 현황과 회사 전체 전략·잡·주문을 한눈에 봅니다.',
       children: [
+        const _SystemMonitor(),
         Wrap(
           spacing: 16,
           runSpacing: 16,
@@ -81,6 +85,63 @@ class DashboardPage extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 서버·수신 상태를 늘 보여 주고, 장애가 있으면 함께 알린다.
+class _SystemMonitor extends StatelessWidget {
+  const _SystemMonitor();
+
+  @override
+  Widget build(BuildContext context) {
+    final active = activeIncidents;
+    return Panel(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 4,
+            children: [
+              const Text('시스템 모니터링', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              TextButton(onPressed: () => systemPageRequest.value++, child: const Text('시스템 상태 보기')),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 24,
+            runSpacing: 10,
+            children: [
+              for (final s in systemSummaries)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(systemLevelIcon(s.level), size: 18, color: systemLevelColor(s.level)),
+                    const SizedBox(width: 6),
+                    Text(s.label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+                    const SizedBox(width: 6),
+                    Text(s.level.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                  ],
+                ),
+            ],
+          ),
+          for (final alert in dstAlerts) ...[
+            const SizedBox(height: 10),
+            Text('$alert · 종목 마스터에서 전환하세요', style: const TextStyle(color: AppColors.warning, fontSize: 13)),
+          ],
+          if (active.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              '장애 ${active.length}건 처리 중 · ${active.first.title}',
+              style: const TextStyle(color: AppColors.warning, fontSize: 13),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -258,11 +319,7 @@ class _OperationSectionState extends State<_OperationSection> {
               if (totals.isEmpty)
                 const Text('이 기간의 주문이 없습니다.', style: TextStyle(color: AppColors.textTertiary))
               else
-                Wrap(
-                  spacing: 32,
-                  runSpacing: 16,
-                  children: [for (final t in totals) _CurrencyTotal(t)],
-                ),
+                Wrap(spacing: 32, runSpacing: 16, children: [for (final t in totals) _CurrencyTotal(t)]),
             ],
           ),
         ),

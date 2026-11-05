@@ -37,19 +37,17 @@ class _MembersPageState extends State<MembersPage> {
   int _count(MemberStatus? s) => s == null ? mockMembers.length : mockMembers.where((m) => m.status == s).length;
 
   void _setFilter(MemberStatus? s) => setState(() {
-        _status = s;
-        _page = 0;
-        _selectedIds.clear();
-      });
+    _status = s;
+    _page = 0;
+    _selectedIds.clear();
+  });
 
   Future<void> _bulk({required bool approve}) async {
     final targets = mockMembers.where((m) => _selectedIds.contains(m.id)).toList();
     final ok = await showConfirmDialog(
       context,
       title: approve ? '가입 승인' : '가입 거절',
-      message: approve
-          ? '선택한 ${targets.length}명의 가입을 승인합니다.'
-          : '선택한 ${targets.length}명의 가입을 거절합니다. 거절한 가입 정보는 삭제됩니다.',
+      message: approve ? '선택한 ${targets.length}명의 가입을 승인합니다.' : '선택한 ${targets.length}명의 가입을 거절합니다. 거절한 가입 정보는 삭제됩니다.',
       confirmText: approve ? '승인' : '거절',
       destructive: !approve,
     );
@@ -116,8 +114,7 @@ class _MembersPageState extends State<MembersPage> {
         ),
       ],
       children: [
-        if (pending > 0 && !selectable)
-          _PendingBanner(count: pending, onTap: () => _setFilter(MemberStatus.pending)),
+        if (pending > 0 && !selectable) _PendingBanner(count: pending, onTap: () => _setFilter(MemberStatus.pending)),
         FilterBar(
           hint: '아이디·이메일 검색',
           filters: [for (final s in statuses) '${s?.label ?? '전체'} ${_count(s)}'],
@@ -151,9 +148,13 @@ class _MembersPageState extends State<MembersPage> {
           columns: const ['번호', '아이디', '이메일', '가입일', '최근 접속', '상태', ''],
           emptyText: '조건에 맞는 회원이 없습니다.',
           selected: selectable
-              ? {for (final (i, m) in visible.indexed) if (_selectedIds.contains(m.id)) i}
+              ? {
+                  for (final (i, m) in visible.indexed)
+                    if (_selectedIds.contains(m.id)) i,
+                }
               : null,
-          onSelectChanged: (i, v) => setState(() => v ? _selectedIds.add(visible[i].id) : _selectedIds.remove(visible[i].id)),
+          onSelectChanged: (i, v) =>
+              setState(() => v ? _selectedIds.add(visible[i].id) : _selectedIds.remove(visible[i].id)),
           onSelectAll: (v) => setState(() {
             for (final m in visible) {
               v ? _selectedIds.add(m.id) : _selectedIds.remove(m.id);
@@ -177,7 +178,10 @@ class _MembersPageState extends State<MembersPage> {
                     TextButton(onPressed: () => _openDetail(m), child: const Text('상세')),
                     // 승인 전 회원은 로그인한 적이 없어 모니터링할 내용이 없다.
                     if (m.status != MemberStatus.pending)
-                      TextButton(onPressed: () => memberMonitorRequest.value = MonitorRequest(m.id), child: const Text('모니터링')),
+                      TextButton(
+                        onPressed: () => memberMonitorRequest.value = MonitorRequest(m.id),
+                        child: const Text('모니터링'),
+                      ),
                   ],
                 ),
               ],
@@ -186,8 +190,10 @@ class _MembersPageState extends State<MembersPage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            Text('총 ${filtered.length}명 · ${page + 1} / $pageCount',
-                style: const TextStyle(color: AppColors.textTertiary)),
+            Text(
+              '총 ${filtered.length}명 · ${page + 1} / $pageCount',
+              style: const TextStyle(color: AppColors.textTertiary),
+            ),
             IconButton(
               tooltip: '이전 페이지',
               onPressed: page > 0 ? () => setState(() => _page = page - 1) : null,
@@ -206,12 +212,12 @@ class _MembersPageState extends State<MembersPage> {
 }
 
 Color memberStatusColor(MemberStatus s) => switch (s) {
-      MemberStatus.pending => AppColors.accent,
-      MemberStatus.active => AppColors.success,
-      MemberStatus.dormant => AppColors.textTertiary,
-      MemberStatus.suspended => AppColors.up,
-      MemberStatus.deleteRequested => AppColors.warning,
-    };
+  MemberStatus.pending => AppColors.accent,
+  MemberStatus.active => AppColors.success,
+  MemberStatus.dormant => AppColors.textTertiary,
+  MemberStatus.suspended => AppColors.up,
+  MemberStatus.deleteRequested => AppColors.warning,
+};
 
 class _PendingBanner extends StatelessWidget {
   const _PendingBanner({required this.count, required this.onTap});
@@ -229,8 +235,7 @@ class _PendingBanner extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           const Icon(Icons.how_to_reg_outlined, color: AppColors.accent),
-          Text('가입 승인을 기다리는 회원이 $count명 있습니다.',
-              style: const TextStyle(fontWeight: FontWeight.w600)),
+          Text('가입 승인을 기다리는 회원이 $count명 있습니다.', style: const TextStyle(fontWeight: FontWeight.w600)),
           TextButton(onPressed: onTap, child: const Text('승인 대기 보기')),
         ],
       ),

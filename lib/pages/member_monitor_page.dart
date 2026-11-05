@@ -10,11 +10,12 @@ import '../mock_workers.dart';
 import '../theme.dart';
 import '../widgets/admin_page.dart';
 import 'consultations_page.dart' show consultStatusColor;
+import 'member_detail_dialog.dart';
 import 'members_page.dart' show memberStatusColor;
 
 part 'member_monitor_accounts.dart';
 
-const _minWideHeight = 1180.0;
+const _minWideHeight = 1040.0;
 
 /// 다른 화면에서 이 회원을 모니터링으로 열어 달라는 요청. [issue] 를 주면 그 문제 위치로 간다.
 class MonitorRequest {
@@ -312,6 +313,11 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
           final bar = _MemberBar(
             member: member,
             tab: _tab,
+            onDetail: () async {
+              if (member == null) return;
+              await showMemberDetail(context, member);
+              if (mounted) setState(() {});
+            },
             onTabChanged: (t) {
               if (t == _MonitorTab.accounts && t != _tab && member != null) {
                 logActivity(ActivityKind.view, '${member.username} 계좌·주문 열람');
@@ -485,8 +491,6 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  header,
-                  const SizedBox(height: 12),
                   Expanded(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -509,8 +513,13 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
                             children: [
                               bar,
                               const SizedBox(height: 8),
-                              if (issueBar != null) ...[issueBar, const SizedBox(height: 8)],
-                              if (accountBar != null) ...[accountBar, const SizedBox(height: 8)],
+                              Wrap(
+                                spacing: 16,
+                                runSpacing: 6,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [?accountBar, ?issueBar],
+                              ),
+                              const SizedBox(height: 8),
                               Expanded(child: body),
                             ],
                           ),
@@ -970,6 +979,9 @@ class _JobsPaneState extends State<_JobsPane> {
     final current = w.jobs.where((j) => !j.isFinished).toList();
     final finished = w.jobs.where((j) => j.isFinished).toList();
     final visible = _showFinished ? finished : current;
+    List<WorkerJob> slot(JobSlot s) => current.where((j) => j.slot == s).toList();
+    Widget card(WorkerJob j, {int? order}) =>
+        _JobCard(j, w, order: order, selected: identical(j, widget.selected), onTap: () => widget.onSelect(j));
 
     Widget tab(String label, bool forFinished) => ChoiceChip(
       label: Text(label, style: const TextStyle(fontSize: 12)),
@@ -992,10 +1004,22 @@ class _JobsPaneState extends State<_JobsPane> {
           ? _Empty(_showFinished ? '종료된 전략이 없습니다.' : '실행 중인 잡이 없습니다.')
           : ListView(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              children: [
-                for (final j in visible)
-                  _JobCard(j, w, selected: identical(j, widget.selected), onTap: () => widget.onSelect(j)),
-              ],
+              children: _showFinished
+                  ? [for (final j in visible) card(j)]
+                  : [
+                      if (slot(JobSlot.running).isNotEmpty) ...[
+                        const _SlotHeader('실행 슬롯'),
+                        for (final j in slot(JobSlot.running)) card(j),
+                      ],
+                      if (slot(JobSlot.stopped).isNotEmpty) ...[
+                        const _SlotHeader('중지됨', note: '꺼져 있어 매매하지 않습니다'),
+                        for (final j in slot(JobSlot.stopped)) card(j),
+                      ],
+                      if (slot(JobSlot.queued).isNotEmpty) ...[
+                        const _SlotHeader('대기열', note: '완료 시 다음 잡 자동 시작'),
+                        for (final (i, j) in slot(JobSlot.queued).indexed) card(j, order: i + 1),
+                      ],
+                    ],
             ),
     );
   }
@@ -1163,6 +1187,38 @@ class _Facts extends StatelessWidget {
   }
 }
 
+class _SlotHeader extends StatelessWidget {
+  const _SlotHeader(this.title, {this.note});
+
+  final String title;
+  final String? note;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 6, left: 2),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accent),
+          ),
+          if (note != null) ...[
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                note!,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 Color _jobStatusColor(WorkerJob job) => switch (job.status) {
   'abnormal_terminated' || 'error' || 'failed' => AppColors.up,
   'monitoring' ||
@@ -1177,12 +1233,13 @@ String _jobAccount(WorkerJob job) => '${job.accountName} (${job.isPaper ? '모�
 
 /// 잡 목록의 카드. 누르면 아래 잡 상세 패널에 설정과 이력이 나온다.
 class _JobCard extends StatelessWidget {
-  const _JobCard(this.job, this.worker, {required this.selected, required this.onTap});
+  const _JobCard(this.job, this.worker, {required this.selected, required this.onTap, this.order});
 
   final WorkerJob job;
   final MemberWorker worker;
   final bool selected;
   final VoidCallback onTap;
+  final int? order; // 대기열 순서
 
   @override
   Widget build(BuildContext context) {
@@ -1211,6 +1268,7 @@ class _JobCard extends StatelessWidget {
                   runSpacing: 4,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
+                    if (order != null) StatusBadge('대기 $order', color: AppColors.textSecondary),
                     Text(job.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                     if (job.isAlert) const StatusBadge('알람', color: AppColors.accent),
                     StatusBadge(job.statusLabel, color: _jobStatusColor(job)),
@@ -1406,18 +1464,38 @@ class _JobSettings extends StatelessWidget {
         if (job.isAlert)
           const _SettingRow('주문', '알람 모드에서는 주문을 내지 않습니다')
         else ...[
-          _SettingRow('거래 방향', job.entrySideLabel),
+          if (!s.entrySettings.containsKey('거래 방향')) _SettingRow('거래 방향', job.entrySideLabel),
           _SettingRow('주문 유형', s.orderType),
           _SettingRow('주문 수량', '${_num(s.qty)}${worker.qtyUnit}'),
           _SettingRow('반복 횟수', '${job.repeatCount}회'),
         ],
         for (final MapEntry(:key, :value) in s.entrySettings.entries) _SettingRow(key, value),
+        if (s.entryMode != null) _SettingRow('진입 방식', s.entryMode),
+        if (s.conditions.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          const _SectionTitle('신호 조건'),
+          for (final MapEntry(key: group, value: all) in s.conditions.entries)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(group, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                  for (final (i, c) in all.indexed)
+                    Text('${i == 0 ? '   ' : 'AND '}$c', style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
+        ],
         if (!job.isAlert) ...[
           const SizedBox(height: 10),
           const _SectionTitle('청산설정'),
-          _SettingRow('손절', s.stopLossPct == null ? null : '${_num(s.stopLossPct!)}%'),
-          _SettingRow('익절', s.takeProfitPct == null ? null : '${_num(s.takeProfitPct!)}%'),
-          _SettingRow('트레일링 스탑', s.trailingStop),
+          _SettingRow('손절', s.stopLossPct == null ? null : '${_num(s.stopLossPct!)}${s.stopLossUnit}'),
+          _SettingRow('익절', s.takeProfitPct == null ? null : '${_num(s.takeProfitPct!)}${s.takeProfitUnit}'),
+          if (s.trailingStop == null)
+            const _SettingRow('트레일링 스탑', null)
+          else
+            for (final MapEntry(:key, :value) in s.trailingStop!.entries) _SettingRow(key, value),
         ],
       ],
     );
@@ -1427,8 +1505,8 @@ class _JobSettings extends StatelessWidget {
 /// 앱 이력 화면의 전략 설정 표기. 값이 없는 손절·익절은 빼지 않고 '사용 안 함'으로 둔다.
 Map<String, String> _strategyFacts(JobStrategy s, MemberWorker w) => {
   '주문 수량': '${_num(s.qty)}${w.qtyUnit}',
-  '손절': s.stopLossPct == null ? '사용 안 함' : '${_num(s.stopLossPct!)}%',
-  '청산(익절)': s.takeProfitPct == null ? '사용 안 함' : '${_num(s.takeProfitPct!)}%',
+  '손절': s.stopLossPct == null ? '사용 안 함' : '${_num(s.stopLossPct!)}${s.stopLossUnit}',
+  '청산(익절)': s.takeProfitPct == null ? '사용 안 함' : '${_num(s.takeProfitPct!)}${s.takeProfitUnit}',
 };
 
 /// 앱 이력 화면의 회차 카드 + 타임라인.

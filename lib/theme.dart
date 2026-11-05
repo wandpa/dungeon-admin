@@ -31,17 +31,10 @@ ThemeData buildTheme() {
     ),
   );
   return base.copyWith(
-    textTheme: base.textTheme.apply(
-      bodyColor: AppColors.textPrimary,
-      displayColor: AppColors.textPrimary,
-    ),
+    textTheme: base.textTheme.apply(bodyColor: AppColors.textPrimary, displayColor: AppColors.textPrimary),
     dividerColor: AppColors.border,
     dataTableTheme: const DataTableThemeData(
-      headingTextStyle: TextStyle(
-        color: AppColors.textTertiary,
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-      ),
+      headingTextStyle: TextStyle(color: AppColors.textTertiary, fontSize: 13, fontWeight: FontWeight.w600),
       dataTextStyle: TextStyle(color: AppColors.textPrimary, fontSize: 14),
     ),
     inputDecorationTheme: InputDecorationTheme(

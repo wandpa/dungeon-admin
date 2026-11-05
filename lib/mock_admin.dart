@@ -12,6 +12,8 @@ enum AdminPermission {
   sendPush('푸시 발송'),
   editNotices('공지 관리'),
   hideSignals('신호 숨김'),
+  handleIncidents('장애 처리'),
+  manageSymbols('종목 마스터 관리'),
   viewActivity('활동 기록 조회'),
   manageAdmins('관리자 계정 관리');
 
@@ -27,6 +29,8 @@ enum AdminRole {
     AdminPermission.sendPush,
     AdminPermission.editNotices,
     AdminPermission.hideSignals,
+    AdminPermission.handleIncidents,
+    AdminPermission.manageSymbols,
     AdminPermission.viewActivity,
   ]),
   consultant('상담 직원', []);
@@ -55,6 +59,8 @@ enum ActivityKind {
   push('푸시'),
   notice('공지'),
   signal('신호'),
+  system('시스템'),
+  symbol('종목'),
   admin('계정');
 
   const ActivityKind(this.label);
@@ -123,13 +129,7 @@ List<AdminUser> _seedAdmins() => [
 ];
 
 List<AdminActivity> _seedActivities() => [
-  AdminActivity(
-    DateTime(2026, 10, 30, 9, 15),
-    '박상담',
-    ActivityKind.view,
-    'uptrend99 회원 모니터링 열람',
-    target: 'uptrend99',
-  ),
+  AdminActivity(DateTime(2026, 10, 30, 9, 15), '박상담', ActivityKind.view, 'uptrend99 회원 모니터링 열람', target: 'uptrend99'),
   AdminActivity(DateTime(2026, 10, 30, 9, 2), '박상담', ActivityKind.access, '로그인'),
   AdminActivity(DateTime(2026, 10, 30, 8, 58), '이운영', ActivityKind.notice, '「10/29(목) 새벽 서버 점검 안내」 게시'),
   AdminActivity(DateTime(2026, 10, 30, 8, 30), '이운영', ActivityKind.push, '「오늘의 던전이 열렸습니다」 전체 1,018명 발송'),

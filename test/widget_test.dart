@@ -3,8 +3,17 @@ import 'package:dungeon_admin/mock_accounts.dart';
 import 'package:dungeon_admin/mock_admin.dart';
 import 'package:dungeon_admin/mock_consultations.dart';
 import 'package:dungeon_admin/mock_data.dart';
+import 'package:dungeon_admin/mock_symbols.dart';
+import 'package:dungeon_admin/mock_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+Future<void> pickAccount(WidgetTester tester, String label) async {
+  await tester.tap(find.byType(DropdownButton<String?>));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
+  await tester.pumpAndSettle();
+}
 
 void main() {
   setUp(() {
@@ -14,6 +23,8 @@ void main() {
     resetMockSignals();
     resetSentPushes();
     resetMockConsultations();
+    resetMockIncidents();
+    resetMockSymbols();
     signIn('admin', samplePassword);
   });
 
@@ -27,11 +38,11 @@ void main() {
 
     const pages = {
       '회원 관리': 'risingkang',
-      '상담 이력': '접수 1',
-      '회원 모니터링': '고객 로그 · 전체',
       '신호 관리': '마이크로 WTI 원유 12월물',
       '푸시 알림': '오늘의 던전이 열렸습니다',
       '공지사항': '던전우상향 정식 출시 안내',
+      '종목 마스터': '주문 가능',
+      '시스템 상태': '증권사 연결',
       '관리자': '활동 기록',
       '대시보드': '오늘 발생 신호',
     };
@@ -63,7 +74,9 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const AdminApp());
-    await tester.tap(find.widgetWithText(ListTile, '회원 모니터링'));
+    await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
     await tester.pumpAndSettle();
 
     // 처음에는 워커가 있는 첫 회원의 워커 전체가 목록으로 나오고 로그도 전체다.
@@ -117,7 +130,8 @@ void main() {
     expect(find.text('돌파 (상세보기)'), findsOneWidget);
     expect(find.text('진입설정'), findsOneWidget);
     expect(find.text('청산설정'), findsOneWidget);
-    expect(find.text('현재가 대비 +10틱'), findsOneWidget);
+    expect(find.text('현재가 대비'), findsOneWidget);
+    expect(find.text('+10틱'), findsOneWidget);
     expect(find.text('지정가'), findsOneWidget);
     expect(find.text('체결 내역'), findsOneWidget);
     expect(find.text('주문 5건 · 체결 5건 · 거부 0건'), findsOneWidget);
@@ -136,7 +150,10 @@ void main() {
     await tester.tap(find.text('고점 이탈 알람'));
     await tester.pumpAndSettle();
     expect(find.text('알람 모드에서는 주문을 내지 않습니다'), findsOneWidget);
-    expect(find.text('RSI(14) 70 이상 AND 볼린저밴드 상단 이탈'), findsOneWidget);
+    expect(find.text('신호 조건'), findsOneWidget);
+    expect(find.text('매도 OR 1'), findsOneWidget);
+    expect(find.text('AND 볼린저밴드(20, 2) 상단 이탈'), findsOneWidget);
+    expect(find.text('봉 완성 시'), findsOneWidget); // 진입 방식
     expect(find.text('아직 이력이 없어요'), findsOneWidget);
     expect(find.text('고객 로그 · 고점 이탈 알람'), findsOneWidget);
     expect(find.text('고점 이탈 알람 감시 시작'), findsOneWidget);
@@ -193,7 +210,9 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const AdminApp());
-    await tester.tap(find.widgetWithText(ListTile, '회원 모니터링'));
+    await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
     await tester.pumpAndSettle();
 
     expect(find.text('실매매'), findsOneWidget);
@@ -245,7 +264,9 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const AdminApp());
-    await tester.tap(find.widgetWithText(ListTile, '회원 모니터링'));
+    await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('마이크로 WTI 원유 12월물 (MCLZ26)'));
     await tester.pumpAndSettle();
@@ -253,8 +274,7 @@ void main() {
     expect(find.text('눌림목 소액 매수'), findsOneWidget); // 한 워커에 계좌가 다른 잡이 섞여 있다
 
     // 서브 계좌: 그 계좌를 쓰는 워커와 잡만 남고 다른 계좌의 손익은 빠진다.
-    await tester.tap(find.widgetWithText(ChoiceChip, '해외선물 서브 ****3405'));
-    await tester.pumpAndSettle();
+    await pickAccount(tester, '해외선물 서브 ****3405');
     expect(find.text('눌림목 소액 매수'), findsOneWidget);
     expect(find.text('돌파 매수 전략'), findsNothing);
     expect(find.text('삼성전자 (005930)'), findsNothing);
@@ -264,16 +284,14 @@ void main() {
     expect(find.text('Android 앱 로그인'), findsNothing);
 
     // 메인 계좌: 체결 로그가 나오고, 고른 계좌는 알림 탭에도 그대로 적용된다.
-    await tester.tap(find.widgetWithText(ChoiceChip, '해외선물 메인 ****3401'));
-    await tester.pumpAndSettle();
+    await pickAccount(tester, '해외선물 메인 ****3401');
     expect(find.text('돌파 매수 전략'), findsOneWidget);
     expect(find.text('마이크로 WTI 원유 12월물 매수 2계약 체결 @100.75'), findsOneWidget);
     await tester.tap(find.widgetWithText(ChoiceChip, '알림'));
     await tester.pumpAndSettle();
     expect(find.textContaining('삼성전자 매수 체결'), findsNothing);
     expect(find.textContaining('마이크로 금 12월물 매도 체결'), findsOneWidget);
-    await tester.tap(find.widgetWithText(ChoiceChip, '전체 계좌'));
-    await tester.pumpAndSettle();
+    await pickAccount(tester, '전체 계좌');
     expect(find.textContaining('삼성전자 매수 체결'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -283,7 +301,9 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const AdminApp());
-    await tester.tap(find.widgetWithText(ListTile, '회원 모니터링'));
+    await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
     await tester.pumpAndSettle();
 
     // 실전과 모의 손익은 합치지 않는다.
@@ -487,7 +507,13 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const AdminApp());
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, menu));
+    if (menu == '회원 모니터링') {
+      await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
+    } else {
+      await tester.tap(find.widgetWithText(ListTile, menu));
+    }
     await tester.pumpAndSettle();
   }
 
@@ -605,8 +631,9 @@ void main() {
     expect(mockConsultations.first.workerId, 501);
 
     // 상태를 완료로 바꾸면 처리자와 전후 상태가 남는다.
-    await tester.tap(find.widgetWithText(ListTile, '상담 이력'));
+    await tester.tap(find.widgetWithText(ChoiceChip, '상담 이력'));
     await tester.pumpAndSettle();
+    expect(find.widgetWithText(ListTile, '상담 이력'), findsNothing); // 회원 관리 안에 있다
     expect(find.text('접수 2'), findsOneWidget);
     await tester.enterText(find.widgetWithText(TextField, '회원·내용·담당자 검색'), '입금 후 재시도');
     await tester.pumpAndSettle();
@@ -622,6 +649,352 @@ void main() {
     await tester.tap(find.text('risingkang'));
     await tester.pumpAndSettle();
     expect(find.text('risingkang 워커'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('잡: 앱처럼 실행 슬롯·중지됨·대기열로 나누고 전략별 설정을 보여 준다', (tester) async {
+    await openMenu(tester, '회원 모니터링');
+    await tester.tap(find.text('bottomhunter'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SK하이닉스 (000660)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('실행 슬롯'), findsOneWidget);
+    expect(find.text('대기열'), findsNWidgets(3)); // 머리글 + 대기 잡 2개의 상태
+    expect(find.text('완료 시 다음 잡 자동 시작'), findsOneWidget);
+    expect(find.text('대기 1'), findsOneWidget);
+    expect(find.text('대기 2'), findsOneWidget);
+
+    // 트레일링 진입: 앱 설정 항목과 트레일링 스탑 값이 나온다.
+    await tester.tap(find.text('눌림목 반등'));
+    await tester.pumpAndSettle();
+    expect(find.text('트레일링 진입 (상세보기)'), findsOneWidget);
+    expect(find.text('진입 간격'), findsOneWidget);
+    expect(find.text('추종 폭'), findsOneWidget);
+    expect(find.text('1회차 2% · 2회차 4%'), findsOneWidget);
+
+    // 꺼진 잡은 중지됨에 있고, 틱 단위 손절이 그대로 보인다.
+    await tester.tap(find.text('risingkang'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('삼성전자 (005930)'));
+    await tester.pumpAndSettle();
+    expect(find.text('중지됨'), findsWidgets);
+    expect(find.text('꺼져 있어 매매하지 않습니다'), findsOneWidget);
+    await tester.tap(find.text('마이크로 WTI 원유 12월물 (MCLZ26)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('돌파 매수 전략'));
+    await tester.pumpAndSettle();
+    expect(find.text('25틱'), findsOneWidget);
+    expect(find.text('평가 시점'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('시스템 상태: 대시보드 경보에서 이동해 장애를 확인·해결한다', (tester) async {
+    await openMenu(tester, '대시보드');
+    expect(find.text('시스템 모니터링'), findsOneWidget);
+    expect(find.text('국내 수신'), findsOneWidget);
+    expect(find.text('해외 수신'), findsOneWidget);
+    expect(find.text('정상'), findsWidgets);
+    expect(find.text('지연'), findsOneWidget); // 증권사 연결
+    expect(find.textContaining('장애 2건 처리 중'), findsOneWidget);
+    await tester.tap(find.text('시스템 상태 보기'));
+    await tester.pumpAndSettle();
+    expect(find.text('전체 상태: 지연'), findsOneWidget);
+    expect(find.text('KIS 해외선물 실전'), findsWidgets);
+    expect(find.text('푸시 발송 중단'), findsNothing); // 해결된 장애는 기본으로 숨긴다
+
+    await tester.tap(find.text('확인'));
+    await tester.pumpAndSettle();
+    expect(mockIncidents.first.status, IncidentStatus.acknowledged);
+    expect(mockIncidents.first.handledBy, '김대표');
+    expect(mockActivities.first.kind, ActivityKind.system);
+
+    await tester.tap(find.text('해결').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '해결'));
+    await tester.pumpAndSettle();
+    expect(find.text('해외선물 주문 응답 지연'), findsNothing);
+
+    await tester.tap(find.widgetWithText(FilterChip, '해결된 장애 포함'));
+    await tester.pumpAndSettle();
+    expect(find.text('푸시 발송 중단'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('종목 마스터: 시간을 고치면 확인 후 저장되고 변경 전후가 기록된다', (tester) async {
+    await openMenu(tester, '종목 마스터');
+    expect(find.text('국내선물 2'), findsOneWidget);
+    expect(find.text('해외선물 5'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilterChip, '국내선물 2'));
+    await tester.pumpAndSettle();
+    expect(find.text('코스피200'), findsOneWidget);
+    expect(find.text('나스닥100'), findsNothing);
+    expect(find.text('장 시간'), findsOneWidget);
+    expect(find.text('08:45~15:45'), findsNWidgets(2)); // 장 시작~장 종료
+    expect(find.text('08:30~15:45'), findsNWidgets(2)); // 주문 가능
+
+    // 형식이 틀리면 저장할 수 없다. 팝업이 아니라 화면 안에서 고친다.
+    await tester.tap(find.byTooltip('수정').first);
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsNothing);
+    expect(find.text('상품 수정 · 101'), findsOneWidget);
+    expect(find.text('250000'), findsOneWidget); // 계약승수는 틱 가치 ÷ 틱 크기
+    expect(find.text('장 시작'), findsWidgets);
+    final fields = find.byType(TextField);
+    Finder field(String value) => find.descendant(of: fields, matching: find.text(value));
+    await tester.enterText(field('08:45').first, '25:00');
+    await tester.pumpAndSettle();
+    expect(find.text('시간은 09:00 형식으로 입력하세요.'), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, '저장')).onPressed, isNull);
+
+    await tester.enterText(field('25:00').first, '09:00');
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '저장'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('장 시작 08:45 → 09:00'), findsOneWidget);
+    expect(find.textContaining('워커 1개의 주문과 청산에 바로 적용됩니다'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, '저장').last);
+    await tester.pumpAndSettle();
+    expect(mockSymbols.first.sessionOpen, '09:00');
+    expect(mockActivities.first.kind, ActivityKind.symbol);
+    expect(mockActivities.first.text, '101 장 시작 08:45 → 09:00');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('종목 마스터: 상품과 항목을 체크해 일괄 적용하고 상품별 전후가 남는다', (tester) async {
+    await openMenu(tester, '종목 마스터');
+    expect(find.text('일괄 적용'), findsNothing);
+
+    // 국내선물 전체를 체크한다.
+    await tester.tap(find.widgetWithText(FilterChip, '국내선물 2'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Checkbox).first);
+    await tester.pumpAndSettle();
+    expect(find.text('일괄 적용 · 선택한 상품 2개'), findsOneWidget);
+    expect(find.text('101, 106'), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, '일괄 적용')).onPressed, isNull);
+
+    // 장 시작만 체크해 값을 넣는다. 형식이 틀리면 적용할 수 없다.
+    await tester.tap(find.widgetWithText(FilterChip, '장 시작'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '08:45'), '9시');
+    await tester.pumpAndSettle();
+    expect(find.text('장 시작은(는) 09:00 형식으로 입력하세요.'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, '9시'), '09:00');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, '일괄 적용'));
+    await tester.pumpAndSettle();
+    expect(find.text('일괄 적용 · 상품 2개'), findsOneWidget);
+    expect(find.textContaining('101: 장 시작 08:45 → 09:00'), findsOneWidget);
+    expect(find.textContaining('워커 1개의 주문과 청산에 바로 적용됩니다'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, '적용'));
+    await tester.pumpAndSettle();
+
+    final domestic = mockSymbols.where((s) => s.marketType == '국내선물');
+    expect(domestic.every((s) => s.sessionOpen == '09:00'), isTrue);
+    expect(domestic.every((s) => s.sessionClose == '15:45'), isTrue); // 체크하지 않은 항목은 그대로
+    expect(mockSymbols.firstWhere((s) => s.productCode == 'MCL').sessionOpen, '07:00');
+    expect(mockActivities.first.text, '106 일괄 적용: 장 시작 08:45 → 09:00');
+    expect(mockActivities[1].text, '101 일괄 적용: 장 시작 08:45 → 09:00');
+    expect(find.text('일괄 적용'), findsNothing); // 끝나면 선택이 풀린다
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('종목 마스터: 서머타임은 버튼 하나로 시작·종료한다', (tester) async {
+    await openMenu(tester, '종목 마스터');
+    expect(find.text('미국 서머타임 적용 중'), findsOneWidget);
+    expect(find.text('유럽 서머타임 미적용'), findsOneWidget);
+
+    // 상품이나 항목을 고르지 않고 버튼만 누른다. 바뀔 시간은 확인창에 나온다.
+    await tester.tap(find.text('미국 서머타임 종료하기'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('상품 3개의 시간을 1시간 늦춥니다'), findsOneWidget);
+    expect(find.textContaining('MCL  07:00~06:00 → 08:00~07:00'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, '적용'));
+    await tester.pumpAndSettle();
+
+    final mcl = mockSymbols.firstWhere((s) => s.productCode == 'MCL');
+    expect(mcl.sessionOpen, '08:00');
+    expect(mcl.sessionClose, '07:00');
+    expect(mcl.orderOpen, '08:00');
+    expect(mcl.orderClose, '07:00');
+    expect(mcl.breakTime, '07:00-08:00');
+    expect(mcl.holidays, '2026-11-26');
+    expect(mockSymbols.firstWhere((s) => s.productCode == '101').sessionOpen, '08:45'); // 국내는 그대로
+    expect(mockSymbols.firstWhere((s) => s.productCode == 'HSI').sessionOpen, '10:15'); // 서머타임 없는 해외도 그대로
+    expect(mockSymbols.firstWhere((s) => s.productCode == 'FESX').sessionOpen, '09:10'); // 유럽도 그대로
+    expect(mockActivities.first.text, 'MGC 미국 서머타임 종료: 장 시간 07:00~06:00 → 08:00~07:00');
+
+    // 상태가 바뀌어 같은 전환을 두 번 할 수 없고, 다시 시작하면 원래대로 돌아온다.
+    expect(find.text('미국 서머타임 미적용'), findsOneWidget);
+    expect(find.text('미국 서머타임 종료하기'), findsNothing);
+    await tester.tap(find.text('미국 서머타임 시작하기'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '적용'));
+    await tester.pumpAndSettle();
+    expect(mcl.sessionOpen, '07:00');
+    expect(shiftTimes('23:30', 1), '00:30');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('종목 마스터: 상품을 고르면 월물 테이블이 나오고 월물을 관리한다', (tester) async {
+    await openMenu(tester, '종목 마스터');
+    expect(find.text('월물 추가'), findsNothing);
+
+    await tester.tap(find.text('마이크로 WTI 원유'));
+    await tester.pumpAndSettle();
+    expect(find.text('마이크로 WTI 원유 (MCL) 월물 4개'), findsOneWidget);
+    expect(find.text('MCLZ26'), findsOneWidget);
+    expect(find.text('MCLF27'), findsOneWidget);
+    expect(find.text('최근월물'), findsNWidgets(2)); // 표 머리글 + 최근월물 표시
+    expect(find.text('차월물'), findsOneWidget);
+    expect(find.text('차차월물'), findsOneWidget);
+    expect(find.text('차차차월물'), findsOneWidget);
+    expect(find.text('D-18'), findsOneWidget);
+
+    // 장 시간과 거래 정보가 월물마다 나온다.
+    expect(find.text('장 시작'), findsOneWidget);
+    expect(find.text('장 종료'), findsOneWidget);
+    expect(find.text('07:00'), findsNWidgets(5));
+    expect(find.text('06:00'), findsNWidgets(5));
+    expect(find.text('거래량'), findsOneWidget);
+    expect(find.text('미결제약정'), findsOneWidget);
+    expect(find.text('184,320'), findsOneWidget);
+    expect(find.text('101.1'), findsOneWidget);
+
+    // 형식이 맞아야 추가된다.
+    await tester.enterText(find.widgetWithText(TextField, 'MCLH27'), 'MCLH27');
+    await tester.enterText(find.widgetWithText(TextField, '202703'), '2027-03');
+    await tester.pumpAndSettle();
+    expect(find.text('월물은 202612 형식으로 입력하세요.'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, '2027-03'), '202703');
+    await tester.enterText(find.widgetWithText(TextField, '2027-02-18'), '2027-02-18');
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '월물 추가'));
+    await tester.pumpAndSettle();
+    expect(find.text('마이크로 WTI 원유 (MCL) 월물 5개'), findsOneWidget);
+    expect(mockActivities.first.text, 'MCL 월물 추가 MCLH27 (202703, 만기 2027-02-18)');
+
+    // 최근월물을 중지하면 다음 월물이 최근월물이 된다. 워커가 있으면 확인을 받는다.
+    final mcl = mockSymbols.firstWhere((s) => s.productCode == 'MCL');
+    expect(mcl.nearMonth!.code, 'MCLZ26');
+    await tester.tap(find.byType(Switch).first);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('이 월물을 쓰는 워커가 3개'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, '사용 중지'));
+    await tester.pumpAndSettle();
+    expect(mcl.nearMonth!.code, 'MCLF27');
+    expect(mcl.monthLabel(mcl.months.firstWhere((m) => m.code == 'MCLG27')), '차월물'); // 한 칸씩 올라온다
+    expect(find.text('중지'), findsOneWidget); // 중지한 월물은 순서에서 빠진다
+
+    // 만기일을 고치면 전후가 기록된다.
+    await tester.tap(find.byTooltip('월물 수정').first);
+    await tester.pumpAndSettle();
+    expect(find.text('월물 수정 · MCLZ26'), findsOneWidget);
+
+    // 월물만 시간을 다르게 줄 수 있고, 서머타임 전환 때 함께 옮겨진다.
+    final monthOpen = find.widgetWithText(TextField, '07:00');
+    await tester.enterText(monthOpen, '07:30');
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '월물 저장'));
+    await tester.pumpAndSettle();
+    final z26 = mcl.months.firstWhere((m) => m.code == 'MCLZ26');
+    expect(z26.sessionOpen, '07:30');
+    expect(mcl.openOf(z26), '07:30');
+    expect(mockActivities.first.text, 'MCLZ26 장 시작 07:00 → 07:30');
+
+    await tester.tap(find.text('미국 서머타임 종료하기'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '적용'));
+    await tester.pumpAndSettle();
+    expect(z26.sessionOpen, '08:30');
+    expect(mcl.sessionOpen, '08:00');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('운영 정리: 상세 상담 선택, 임시 비밀번호, 필터, 체결 금액 고정, 전환일 알림', (tester) async {
+    await openMenu(tester, '대시보드');
+    expect(find.text('미국 서머타임 종료 D-2 · 종목 마스터에서 전환하세요'), findsOneWidget);
+
+    // 지난 주문 금액은 체결 당시 승수로 고정된다.
+    final before = orderTotals().first.filledAmount;
+    mockSymbols.firstWhere((s) => s.productCode == '101').tickValue = 25000;
+    expect(orderTotals().first.filledAmount, before);
+
+    // 다섯 번째 월물부터는 순번으로 나온다.
+    final mcl = mockSymbols.firstWhere((s) => s.productCode == 'MCL');
+    mcl.months.add(ContractMonth('MCLK27', '202705', DateTime(2027, 4, 20)));
+    expect(mcl.monthLabel(mcl.months.last), '5번째 월물');
+
+    // 회원 상세에서 상담 경로와 유형을 고른다.
+    await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('uptrend99'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButton<ConsultChannel>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('이메일').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '상담·문의 내용을 남겨 두세요'), '메일 문의');
+    await tester.tap(find.widgetWithText(FilledButton, '추가'));
+    await tester.pumpAndSettle();
+    expect(mockConsultations.first.channel, ConsultChannel.email);
+    await tester.tap(find.byTooltip('닫기'));
+    await tester.pumpAndSettle();
+
+    // 상담은 경로로 거르고 내용을 눌러 전체를 본다.
+    await tester.tap(find.widgetWithText(ChoiceChip, '상담 이력'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('전체 경로').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('카카오톡').last);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('총 1건'), findsOneWidget);
+    await tester.tap(find.textContaining('갭 상승 진입 잡이'));
+    await tester.pumpAndSettle();
+    expect(find.text('상담 #5 · risingkang'), findsOneWidget);
+
+    // 비밀번호를 초기화하면 임시 비밀번호가 한 번 보이고 기록에는 남지 않는다.
+    await tester.tap(find.widgetWithText(ListTile, '관리자'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '계정 관리'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('비밀번호 초기화').at(1));
+    await tester.pumpAndSettle();
+    expect(find.text('이운영 임시 비밀번호'), findsOneWidget);
+    expect(find.text('이 화면에서 한 번만 보입니다. 본인에게 전달하세요.'), findsOneWidget);
+    expect(mockActivities.first.text, '이운영 비밀번호 초기화');
+
+    // 활동 기록을 처리자로 거른다.
+    await tester.tap(find.widgetWithText(ChoiceChip, '활동 기록'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('전체 처리자').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('박상담').last);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('총 2건'), findsOneWidget);
+
+    // 장애는 내용을 눌러 상세를 본다.
+    await tester.tap(find.widgetWithText(ListTile, '시스템 상태'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('잔고 불일치 감지'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('잡 1개를 정지했습니다'), findsOneWidget);
+    expect(find.textContaining('마지막 보고'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('종목 마스터: 형식이 틀린 휴식 구간은 일괄 적용할 수 없다', (tester) async {
+    await openMenu(tester, '종목 마스터');
+    await tester.tap(find.byType(Checkbox).at(1));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilterChip, '휴식 구간'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '12:00-13:00'), '점심');
+    await tester.pumpAndSettle();
+    expect(find.text('휴식 구간은 12:00-13:00 형식으로 입력하세요.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -641,7 +1014,9 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '보내기'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(ListTile, '회원 모니터링'));
+    await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ChoiceChip, '알림'));
     await tester.pumpAndSettle();
@@ -717,6 +1092,17 @@ void main() {
     await tester.tap(find.widgetWithText(ListTile, '신호 관리'));
     await tester.pumpAndSettle();
     expect(find.text('숨기기'), findsNothing);
+    await tester.tap(find.widgetWithText(ListTile, '종목 마스터'));
+    await tester.pumpAndSettle();
+    expect(find.text('상품 추가'), findsNothing);
+    expect(find.byTooltip('수정'), findsNothing);
+    expect(find.text('미국 서머타임 적용 중'), findsOneWidget); // 상태는 보인다
+    expect(find.text('미국 서머타임 종료하기'), findsNothing);
+    expect(find.byType(Checkbox), findsNothing); // 일괄 적용도 없다
+    await tester.tap(find.text('코스피200'));
+    await tester.pumpAndSettle();
+    expect(find.text('101Z6'), findsOneWidget); // 월물 조회는 된다
+    expect(find.text('월물 추가'), findsNothing);
     await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('uptrend99'));
@@ -767,6 +1153,33 @@ void main() {
     await tester.tap(find.text('모니터링').at(4)); // 승인 대기 회원은 버튼이 없다
     await tester.pumpAndSettle();
     expect(find.text('uptrend99 워커'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('회원 관리: 메뉴 하나에서 목록과 모니터링을 오가고 모니터링에서 회원을 처리한다', (tester) async {
+    await openMembers(tester);
+    expect(find.widgetWithText(ListTile, '회원 모니터링'), findsNothing); // 메뉴가 합쳐졌다
+    expect(find.text('가입 승인을 기다리는 회원이 3명 있습니다.'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
+    await tester.pumpAndSettle();
+    expect(find.text('고객 로그 · 전체'), findsOneWidget);
+
+    await tester.tap(find.text('회원 정보·처리'));
+    await tester.pumpAndSettle();
+    expect(find.text('휴면 전환'), findsOneWidget);
+    await tester.tap(find.text('휴면 전환'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '휴면 전환'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('닫기'));
+    await tester.pumpAndSettle();
+    expect(mockMembers.firstWhere((m) => m.username == 'risingkang').status, MemberStatus.dormant);
+    expect(find.text('휴면'), findsWidgets); // 닫으면 모니터링 목록에도 바로 반영된다
+
+    await tester.tap(find.widgetWithText(ChoiceChip, '회원 목록'));
+    await tester.pumpAndSettle();
+    expect(find.text('가입 승인을 기다리는 회원이 3명 있습니다.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

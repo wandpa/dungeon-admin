@@ -120,25 +120,25 @@ class AccountOrder {
   final String? message;
 
   String get sideLabel => switch (side) {
-        'buy' => '매수',
-        'sell' => '매도',
-        _ => '',
-      };
+    'buy' => '매수',
+    'sell' => '매도',
+    _ => '',
+  };
 
   /// 체결 금액: 체결가 × 체결수량 × 계약승수.
   double get filledAmount => (avgFillPrice ?? 0) * filledQty * multiplier;
 
   /// 앱 계좌 화면과 같은 표기.
   String get statusLabel => switch (status) {
-        'submitted' => '전송',
-        'accepted' => '접수',
-        'partial' => '부분체결',
-        'filled' => '체결완료',
-        'rejected' => '거부',
-        'failed' => '실패',
-        'cancelled' => '취소',
-        _ => status,
-      };
+    'submitted' => '전송',
+    'accepted' => '접수',
+    'partial' => '부분체결',
+    'filled' => '체결완료',
+    'rejected' => '거부',
+    'failed' => '실패',
+    'cancelled' => '취소',
+    _ => status,
+  };
 
   /// 앱 거래 내역의 갈래. 체결수량이 조금이라도 있으면 체결이다.
   bool get isFilled => filledQty > 0;
@@ -199,9 +199,9 @@ final pushGroups = <PushGroup>[
 
 /// 푸시 대상이 될 수 있는 회원. 승인 전 회원은 앱을 쓴 적이 없어 뺀다.
 List<Member> pushableMembers() => [
-      for (final m in mockMembers)
-        if (m.status != MemberStatus.pending) m,
-    ];
+  for (final m in mockMembers)
+    if (m.status != MemberStatus.pending) m,
+];
 
 /// 푸시를 받을 수 없는 이유. 받을 수 있으면 null. 사용자가 거부한 회원에게는 보내지 않는다.
 String? pushBlockReason(Member m) {
@@ -258,8 +258,7 @@ List<MemberIssue> issuesOf(Member m) {
   return [
     if (m.status == MemberStatus.suspended)
       MemberIssue(MemberIssueKind.memberStatus, '이용 정지: ${m.suspendReason ?? '-'}'),
-    if (errors.isNotEmpty)
-      MemberIssue(MemberIssueKind.worker, '오류 워커 ${errors.length}', workerId: errors.first.id),
+    if (errors.isNotEmpty) MemberIssue(MemberIssueKind.worker, '오류 워커 ${errors.length}', workerId: errors.first.id),
     if (limited.isNotEmpty)
       MemberIssue(MemberIssueKind.worker, '한도 종료 워커 ${limited.length}', workerId: limited.first.id),
     if (waiting > 0) MemberIssue(MemberIssueKind.waitingOrders, '미체결 주문 $waiting'),
@@ -273,23 +272,23 @@ List<MemberAccount> accountsOf(int memberId) => _accounts[memberId] ?? const [];
 
 /// [accountName] 을 주면 그 계좌, 없으면 전체 계좌의 포지션.
 List<AccountPosition> positionsOf(int memberId, {String? accountName}) => [
-      for (final w in workersOf(memberId))
-        for (final j in w.jobs)
-          if (j.position != null && (accountName == null || j.accountName == accountName))
-            AccountPosition(
-              symbolCode: w.symbolCode,
-              symbolName: w.symbolName,
-              currency: w.currency,
-              qtyUnit: w.qtyUnit,
-              accountName: j.accountName,
-              position: j.position!,
-              currentPrice: w.currentPrice,
-              workerId: w.id,
-              jobName: j.name,
-            ),
-      for (final p in _manualPositions[memberId] ?? const <AccountPosition>[])
-        if (accountName == null || p.accountName == accountName) p,
-    ];
+  for (final w in workersOf(memberId))
+    for (final j in w.jobs)
+      if (j.position != null && (accountName == null || j.accountName == accountName))
+        AccountPosition(
+          symbolCode: w.symbolCode,
+          symbolName: w.symbolName,
+          currency: w.currency,
+          qtyUnit: w.qtyUnit,
+          accountName: j.accountName,
+          position: j.position!,
+          currentPrice: w.currentPrice,
+          workerId: w.id,
+          jobName: j.name,
+        ),
+  for (final p in _manualPositions[memberId] ?? const <AccountPosition>[])
+    if (accountName == null || p.accountName == accountName) p,
+];
 
 /// 잡 회차의 이벤트로 주문 목록을 만든다. 최신 주문이 앞에 온다.
 List<AccountOrder> ordersOf(int memberId, {String? accountName}) {
@@ -312,7 +311,7 @@ List<AccountOrder> ordersOf(int memberId, {String? accountName}) {
               jobName: j.name,
               workerId: w.id,
               currency: w.currency,
-              multiplier: _multipliers[w.symbolCode] ?? 1,
+              multiplier: c.multiplier,
               isPaper: j.isPaper,
               avgFillPrice: price,
               message: message,
@@ -335,9 +334,6 @@ List<AccountOrder> ordersOf(int memberId, {String? accountName}) {
   }
   return orders..sort((a, b) => b.at.compareTo(a.at));
 }
-
-/// 샘플 종목의 계약승수. 실제로는 서버가 체결 건마다 준다.
-const _multipliers = {'MCLZ26': 100.0, 'MGCZ26': 10.0, 'NQZ26': 20.0, '101Z6': 250000.0, 'HSIZ26': 50.0, 'FESXZ26': 10.0};
 
 /// 막대 한 줄.
 class BarRow {
@@ -384,7 +380,10 @@ CompanyStats companyStats({int topSymbols = 8}) {
   // 앱의 전략 묶음에 해당한다. 샘플에서는 회원별로 서로 다른 전략 설정 수를 센다.
   var strategyCount = 0;
   for (final m in mockMembers) {
-    strategyCount += {for (final w in workersOf(m.id)) for (final j in w.jobs) j.strategy}.length;
+    strategyCount += {
+      for (final w in workersOf(m.id))
+        for (final j in w.jobs) j.strategy,
+    }.length;
   }
 
   final symbols = <String, ({String name, int jobs, int workers, Set<int> members})>{};
@@ -475,11 +474,11 @@ Map<String, double> realizedPnlOf(int memberId, {String? accountName}) {
 }
 
 NotificationState notificationStateOf(Member m) => switch (m.id) {
-      1020 => NotificationState(pushAllowed: m.pushAgreed, onServer: false),
-      1018 => NotificationState(pushAllowed: m.pushAgreed, permitted: false, hasToken: false, onServer: false),
-      1017 => NotificationState(pushAllowed: m.pushAgreed, sound: false, banner: false),
-      _ => NotificationState(pushAllowed: m.pushAgreed),
-    };
+  1020 => NotificationState(pushAllowed: m.pushAgreed, onServer: false),
+  1018 => NotificationState(pushAllowed: m.pushAgreed, permitted: false, hasToken: false, onServer: false),
+  1017 => NotificationState(pushAllowed: m.pushAgreed, sound: false, banner: false),
+  _ => NotificationState(pushAllowed: m.pushAgreed),
+};
 
 /// 체결·거부 이벤트로 알림 이력을 만든다. 최신 알림이 앞에 오고 최근 2건은 안 읽음으로 둔다.
 /// [accountName] 을 주면 그 계좌의 알림만 준다.
@@ -524,42 +523,147 @@ final _snapshot = DateTime(2026, 10, 30, 10, 45);
 
 final _accounts = <int, List<MemberAccount>>{
   1024: [
-    MemberAccount('해외선물 메인', '50123401', '해외선물', 'USD',
-        deposit: 18420.5, orderableCash: 9310.25, totalEval: 3240, snapshotAt: _snapshot),
-    MemberAccount('해외선물 서브', '50123405', '해외선물', 'USD',
-        deposit: 4300, orderableCash: 4300, totalEval: 0, snapshotAt: _snapshot),
-    MemberAccount('국내선물 메인', '50123402', '국내선물', 'KRW',
-        deposit: 42000000, orderableCash: 18500000, totalEval: 113250000, snapshotAt: _snapshot),
-    MemberAccount('국내주식 연습', '50123403', '국내주식', 'KRW',
-        deposit: 8200000, orderableCash: 8200000, totalEval: 1795000, snapshotAt: _snapshot, isPaper: true),
-    MemberAccount('해외주식 메인', '50123404', '해외주식', 'USD',
-        deposit: 6200, orderableCash: 6200, totalEval: 0, snapshotAt: _snapshot),
+    MemberAccount(
+      '해외선물 메인',
+      '50123401',
+      '해외선물',
+      'USD',
+      deposit: 18420.5,
+      orderableCash: 9310.25,
+      totalEval: 3240,
+      snapshotAt: _snapshot,
+    ),
+    MemberAccount(
+      '해외선물 서브',
+      '50123405',
+      '해외선물',
+      'USD',
+      deposit: 4300,
+      orderableCash: 4300,
+      totalEval: 0,
+      snapshotAt: _snapshot,
+    ),
+    MemberAccount(
+      '국내선물 메인',
+      '50123402',
+      '국내선물',
+      'KRW',
+      deposit: 42000000,
+      orderableCash: 18500000,
+      totalEval: 113250000,
+      snapshotAt: _snapshot,
+    ),
+    MemberAccount(
+      '국내주식 연습',
+      '50123403',
+      '국내주식',
+      'KRW',
+      deposit: 8200000,
+      orderableCash: 8200000,
+      totalEval: 1795000,
+      snapshotAt: _snapshot,
+      isPaper: true,
+    ),
+    MemberAccount(
+      '해외주식 메인',
+      '50123404',
+      '해외주식',
+      'USD',
+      deposit: 6200,
+      orderableCash: 6200,
+      totalEval: 0,
+      snapshotAt: _snapshot,
+    ),
   ],
   1023: [
-    MemberAccount('국내주식 메인', '50456701', '국내주식', 'KRW',
-        deposit: 12800000, orderableCash: 11900000, totalEval: 1255000, snapshotAt: _snapshot),
-    MemberAccount('해외주식 메인', '50456702', '해외주식', 'USD',
-        deposit: 4100, orderableCash: 4100, totalEval: 0, snapshotAt: _snapshot),
+    MemberAccount(
+      '국내주식 메인',
+      '50456701',
+      '국내주식',
+      'KRW',
+      deposit: 12800000,
+      orderableCash: 11900000,
+      totalEval: 1255000,
+      snapshotAt: _snapshot,
+    ),
+    MemberAccount(
+      '해외주식 메인',
+      '50456702',
+      '해외주식',
+      'USD',
+      deposit: 4100,
+      orderableCash: 4100,
+      totalEval: 0,
+      snapshotAt: _snapshot,
+    ),
   ],
   1020: [
-    MemberAccount('해외선물 메인', '50789001', '해외선물', 'USD',
-        deposit: 26150, orderableCash: 22400, totalEval: 0, snapshotAt: _snapshot),
-    MemberAccount('해외주식 메인', '50789002', '해외주식', 'USD',
-        deposit: 9800, orderableCash: 6680, totalEval: 2212.5, snapshotAt: _snapshot),
+    MemberAccount(
+      '해외선물 메인',
+      '50789001',
+      '해외선물',
+      'USD',
+      deposit: 26150,
+      orderableCash: 22400,
+      totalEval: 0,
+      snapshotAt: _snapshot,
+    ),
+    MemberAccount(
+      '해외주식 메인',
+      '50789002',
+      '해외주식',
+      'USD',
+      deposit: 9800,
+      orderableCash: 6680,
+      totalEval: 2212.5,
+      snapshotAt: _snapshot,
+    ),
   ],
   1019: [
-    MemberAccount('해외선물 메인', '50321001', '해외선물', 'USD',
-        deposit: 3100, orderableCash: 3100, totalEval: 0, snapshotAt: DateTime(2026, 10, 22, 10, 0)),
-    MemberAccount('해외주식 메인', '50321002', '해외주식', 'USD',
-        deposit: 1500, orderableCash: 1500, totalEval: 0, snapshotAt: DateTime(2026, 10, 22, 10, 0)),
+    MemberAccount(
+      '해외선물 메인',
+      '50321001',
+      '해외선물',
+      'USD',
+      deposit: 3100,
+      orderableCash: 3100,
+      totalEval: 0,
+      snapshotAt: DateTime(2026, 10, 22, 10, 0),
+    ),
+    MemberAccount(
+      '해외주식 메인',
+      '50321002',
+      '해외주식',
+      'USD',
+      deposit: 1500,
+      orderableCash: 1500,
+      totalEval: 0,
+      snapshotAt: DateTime(2026, 10, 22, 10, 0),
+    ),
   ],
   1017: [
-    MemberAccount('해외선물 메인', '50654301', '해외선물', 'USD',
-        deposit: 15900, orderableCash: 12300, totalEval: 57420, snapshotAt: _snapshot),
+    MemberAccount(
+      '해외선물 메인',
+      '50654301',
+      '해외선물',
+      'USD',
+      deposit: 15900,
+      orderableCash: 12300,
+      totalEval: 57420,
+      snapshotAt: _snapshot,
+    ),
   ],
   1016: [
-    MemberAccount('국내주식 메인', '50987601', '국내주식', 'KRW',
-        deposit: 5400000, orderableCash: 4800000, totalEval: 495500, snapshotAt: _snapshot),
+    MemberAccount(
+      '국내주식 메인',
+      '50987601',
+      '국내주식',
+      'KRW',
+      deposit: 5400000,
+      orderableCash: 4800000,
+      totalEval: 495500,
+      snapshotAt: _snapshot,
+    ),
   ],
 };
 

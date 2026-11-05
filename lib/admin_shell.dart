@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 
 import 'mock_admin.dart';
+import 'mock_system.dart';
 import 'pages/admin_users_page.dart';
-import 'pages/consultations_page.dart';
 import 'pages/dashboard_page.dart';
 import 'pages/member_monitor_page.dart';
-import 'pages/members_page.dart';
+import 'pages/members_hub_page.dart';
 import 'pages/notices_page.dart';
 import 'pages/push_page.dart';
 import 'pages/signals_page.dart';
+import 'pages/symbol_master_page.dart';
+import 'pages/system_page.dart';
 import 'theme.dart';
 
 class _Menu {
@@ -21,12 +23,12 @@ class _Menu {
 
 const _menus = [
   _Menu('대시보드', Icons.space_dashboard_outlined, DashboardPage()),
-  _Menu('회원 관리', Icons.people_outline, MembersPage()),
-  _Menu('회원 모니터링', Icons.monitor_heart_outlined, MemberMonitorPage()),
-  _Menu('상담 이력', Icons.support_agent, ConsultationsPage()),
+  _Menu('회원 관리', Icons.people_outline, MembersHubPage()),
+  _Menu('종목 마스터', Icons.schedule, SymbolMasterPage()),
   _Menu('신호 관리', Icons.show_chart, SignalsPage()),
   _Menu('푸시 알림', Icons.notifications_outlined, PushPage()),
   _Menu('공지사항', Icons.campaign_outlined, NoticesPage()),
+  _Menu('시스템 상태', Icons.monitor_outlined, SystemPage()),
   _Menu('관리자', Icons.admin_panel_settings_outlined, AdminUsersPage(), permission: AdminPermission.viewActivity),
 ];
 
@@ -54,20 +56,24 @@ class _AdminShellState extends State<AdminShell> {
     super.initState();
     memberMonitorRequest.addListener(_openMonitor);
     pushTargetRequest.addListener(_openPush);
+    systemPageRequest.addListener(_openSystem);
   }
 
   @override
   void dispose() {
     memberMonitorRequest.removeListener(_openMonitor);
     pushTargetRequest.removeListener(_openPush);
+    systemPageRequest.removeListener(_openSystem);
     super.dispose();
   }
 
   /// 다른 화면의 요청으로 메뉴를 옮긴다. 대상은 열린 화면이 요청값을 읽어 고른다.
   void _openMonitor() {
     if (memberMonitorRequest.value == null) return;
-    _select(_visible.indexWhere((m) => m.page is MemberMonitorPage));
+    _select(_visible.indexWhere((m) => m.page is MembersHubPage));
   }
+
+  void _openSystem() => _select(_visible.indexWhere((m) => m.page is SystemPage));
 
   void _openPush() {
     if (pushTargetRequest.value == null) return;
@@ -89,12 +95,7 @@ class _AdminShellState extends State<AdminShell> {
     );
 
     return Scaffold(
-      appBar: wide
-          ? null
-          : AppBar(
-              backgroundColor: AppColors.surfaceSoft,
-              title: Text(menus[index].label),
-            ),
+      appBar: wide ? null : AppBar(backgroundColor: AppColors.surfaceSoft, title: Text(menus[index].label)),
       drawer: wide ? null : Drawer(backgroundColor: AppColors.surfaceSoft, child: sidebar),
       body: Row(
         children: [
@@ -161,10 +162,7 @@ class _Sidebar extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(admin.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                          Text(
-                            admin.role.label,
-                            style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
-                          ),
+                          Text(admin.role.label, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
                         ],
                       ),
                     ),
@@ -174,10 +172,7 @@ class _Sidebar extends StatelessWidget {
               ),
             const Padding(
               padding: EdgeInsets.fromLTRB(20, 4, 20, 20),
-              child: Text(
-                '샘플 데이터 · API 연결 전',
-                style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
-              ),
+              child: Text('샘플 데이터 · API 연결 전', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
             ),
           ],
         ),

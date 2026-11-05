@@ -5,8 +5,8 @@
 library;
 
 enum WorkerStatus {
-  running('실행 중'),
-  stopped('중지'),
+  running('가동중'),
+  stopped('중지됨'),
   error('오류');
 
   const WorkerStatus(this.label);
@@ -99,52 +99,66 @@ class WorkerPnlLimit {
   bool get isTick => unit == 'tick';
 
   String get periodLabel => switch (period) {
-        'day' => '일 · 매일 장 시작 10분 전',
-        'week' => '주 · 월요일 장 시작 10분 전',
-        'month' => '월 · 첫 거래일 장 시작 10분 전',
-        _ => '초기화 없음',
-      };
+    'day' => '일 · 매일 장 시작 10분 전',
+    'week' => '주 · 월요일 장 시작 10분 전',
+    'month' => '월 · 첫 거래일 장 시작 10분 전',
+    _ => '초기화 없음',
+  };
 
   String get accumTitle => switch (period) {
-        'day' => '오늘 누적 손익',
-        'week' => '이번 주 누적 손익',
-        'month' => '이번 달 누적 손익',
-        _ => '누적 손익',
-      };
+    'day' => '오늘 누적 손익',
+    'week' => '이번 주 누적 손익',
+    'month' => '이번 달 누적 손익',
+    _ => '누적 손익',
+  };
 }
 
-/// 전략 설정. 잡의 현재 설정과 회차 시작 시점의 스냅샷에 같이 쓴다.
+/// 앱 잡 화면의 자리. 앱은 실행 슬롯, 중지됨, 대기열, 종료로 나눈다.
+enum JobSlot { running, stopped, queued, finished }
+
+/// 앱 전략 화면의 설정. 잡의 현재 설정과 회차 시작 시점의 스냅샷에 같이 쓴다.
+/// 실제로는 잡의 templateParams 에서 만든다.
 class JobStrategy {
   const JobStrategy(
     this.templateId, {
     required this.qty,
     this.stopLossPct,
     this.takeProfitPct,
+    this.stopLossUnit = '%',
+    this.takeProfitUnit = '%',
     this.trailingStop,
     this.orderType = '시장가',
     this.entrySettings = const {},
+    this.conditions = const {},
+    this.entryMode,
   });
 
   final String templateId;
   final double qty;
   final double? stopLossPct;
   final double? takeProfitPct;
-  final String? trailingStop; // null 이면 사용 안 함
+  final String stopLossUnit; // 틱 · 포인트 · %
+  final String takeProfitUnit;
+  final Map<String, String>? trailingStop; // 추종 폭·추종 회차·동작 마디. null 이면 사용 안 함
   final String orderType;
 
-  /// 전략마다 다른 진입 항목(돌파기준·신호 주기 등). 실제로는 templateParams 에서 만든다.
+  /// 전략마다 다른 진입 항목(돌파기준·평가 시점·신호 주기 등).
   final Map<String, String> entrySettings;
+
+  /// 지표 조합의 신호 조건. 키는 OR 묶음, 값은 그 안의 AND 조건.
+  final Map<String, List<String>> conditions;
+  final String? entryMode; // 지표 조합의 진입 방식
 
   /// 앱 strategyTemplateLabel 과 같은 표기.
   String get label => switch (templateId) {
-        'breakout' => '돌파',
-        'candle_direction_breakout' => '캔들 방향',
-        'first_fill_breakout' => '선입파 돌파',
-        'gap_trading_breakout' => '갭 트레이딩',
-        'indicator_combination' => '지표 조합',
-        'trailing_entry' => '트레일링 진입',
-        _ => templateId,
-      };
+    'breakout' => '돌파',
+    'candle_direction_breakout' => '캔들 방향',
+    'first_fill_breakout' => '선입파 돌파',
+    'gap_trading_breakout' => '갭 트레이딩',
+    'indicator_combination' => '지표 조합',
+    'trailing_entry' => '트레일링 진입',
+    _ => templateId,
+  };
 }
 
 class WorkerJob {
@@ -179,26 +193,28 @@ class WorkerJob {
   bool get isAlert => mode == 'alert';
 
   /// 앱 finishedJobStatuses 에 삭제 종료(terminated)를 더한 값. 나머지는 현재 잡이다.
-  bool get isFinished => const {
-        'closed',
-        'cancelled',
-        'failed',
-        'done',
-        'error',
-        'abnormal_terminated',
-        'terminated',
-      }.contains(status);
+  bool get isFinished =>
+      const {'closed', 'cancelled', 'failed', 'done', 'error', 'abnormal_terminated', 'terminated'}.contains(status);
 
   bool get isShort => entrySide == 'sell';
+
+  /// 앱 잡 목록과 같은 분류. 시작 전 잡은 대기열, 꺼진 잡은 중지됨이다.
+  JobSlot get slot {
+    if (isFinished) return JobSlot.finished;
+    if (const {'monitoring', 'submitted', 'bought', 'sent', 'running'}.contains(status)) {
+      return isActive ? JobSlot.running : JobSlot.stopped;
+    }
+    return JobSlot.queued;
+  }
 
   double get realizedPnl => cycles.fold(0, (sum, c) => sum + (c.realizedPnl ?? 0));
 
   /// 거부된 주문의 사유.
   List<String> get rejectReasons => [
-        for (final c in cycles)
-          for (final e in c.events)
-            if (e.type == 'order_rejected') e.message ?? '주문 거부',
-      ];
+    for (final c in cycles)
+      for (final e in c.events)
+        if (e.type == 'order_rejected') e.message ?? '주문 거부',
+  ];
 
   /// 앱 jobStatusLabel 과 같은 표기. 스위치를 내렸는데 보유가 남으면 "중지됨(보유중)".
   String get statusLabel {
@@ -222,10 +238,10 @@ class WorkerJob {
   }
 
   String get entrySideLabel => switch (entrySide) {
-        'buy' => '매수',
-        'sell' => '매도',
-        _ => '양방향',
-      };
+    'buy' => '매수',
+    'sell' => '매도',
+    _ => '양방향',
+  };
 }
 
 class JobPosition {
@@ -239,17 +255,17 @@ class JobPosition {
   /// 평가손익. 앱과 같이 (현재가 − 진입가) × 수량 × 승수이고 매도 보유는 부호가 반대다.
   /// 방향을 모르면 null.
   double? pnlAt(double price) => switch (side) {
-        'long' => (price - entryPrice) * size * multiplier,
-        'short' => (entryPrice - price) * size * multiplier,
-        _ => null,
-      };
+    'long' => (price - entryPrice) * size * multiplier,
+    'short' => (entryPrice - price) * size * multiplier,
+    _ => null,
+  };
 
   /// 앱과 같이 방향이 비면 롱으로 치지 않고 그대로 드러낸다.
   String get sideLabel => switch (side) {
-        'long' => '매수',
-        'short' => '매도',
-        _ => '방향 없음',
-      };
+    'long' => '매수',
+    'short' => '매도',
+    _ => '방향 없음',
+  };
 }
 
 /// 잡의 회차 하나. 앱 "이력" 화면의 회차 카드와 타임라인에 해당한다.
@@ -258,6 +274,7 @@ class JobCycle {
     required this.cycleNo,
     required this.status,
     required this.strategy,
+    this.multiplier = 1,
     this.filledBuyQty,
     this.avgBuyPrice,
     this.filledSellQty,
@@ -271,6 +288,7 @@ class JobCycle {
   final int cycleNo;
   final String status; // open | closed | sold_elsewhere | cancelled
   final JobStrategy? strategy; // null 이면 앱과 같이 "설정 정보 없음"
+  final double multiplier; // 체결 당시 계약승수. 나중에 종목 값을 바꿔도 지난 주문은 그대로다
   final double? filledBuyQty;
   final double? avgBuyPrice;
   final double? filledSellQty;
@@ -281,12 +299,12 @@ class JobCycle {
   final List<JobEvent> events; // 시간순
 
   String get statusLabel => switch (status) {
-        'open' => '진행중',
-        'closed' => '종료',
-        'sold_elsewhere' => '타 매체 매도',
-        'cancelled' => '취소됨',
-        _ => status,
-      };
+    'open' => '진행중',
+    'closed' => '종료',
+    'sold_elsewhere' => '타 매체 매도',
+    'cancelled' => '취소됨',
+    _ => status,
+  };
 }
 
 class JobEvent {
@@ -300,10 +318,10 @@ class JobEvent {
   final String? message;
 
   String get sideLabel => switch (side) {
-        'buy' => '매수',
-        'sell' => '매도',
-        _ => '',
-      };
+    'buy' => '매수',
+    'sell' => '매도',
+    _ => '',
+  };
 }
 
 enum CustomerLogCategory {
@@ -329,16 +347,16 @@ List<MemberWorker> workersOf(int memberId) => _workers[memberId] ?? const [];
 
 /// 최신 로그가 앞에 온다. [workerId] 를 주면 그 워커, [jobName] 까지 주면 그 잡의 로그만 준다.
 List<CustomerLog> customerLogsOf(int memberId, {int? workerId, String? jobName}) => [
-      for (final l in _logs[memberId] ?? const <CustomerLog>[])
-        if ((workerId == null || l.workerId == workerId) && (jobName == null || l.jobName == jobName)) l,
-    ]..sort((a, b) => b.at.compareTo(a.at));
+  for (final l in _logs[memberId] ?? const <CustomerLog>[])
+    if ((workerId == null || l.workerId == workerId) && (jobName == null || l.jobName == jobName)) l,
+]..sort((a, b) => b.at.compareTo(a.at));
 
 /// 신호 → 주문 → 체결 순서의 진입 이벤트.
 List<JobEvent> _entry(DateTime filledAt, String side, double qty, double price) => [
-      JobEvent(filledAt.subtract(const Duration(seconds: 3)), 'alert_fired', side: side, qty: qty, message: '조건 충족'),
-      JobEvent(filledAt.subtract(const Duration(seconds: 2)), 'order_submitted', side: side, qty: qty),
-      JobEvent(filledAt, 'fill', side: side, qty: qty, price: price),
-    ];
+  JobEvent(filledAt.subtract(const Duration(seconds: 3)), 'alert_fired', side: side, qty: qty, message: '조건 충족'),
+  JobEvent(filledAt.subtract(const Duration(seconds: 2)), 'order_submitted', side: side, qty: qty),
+  JobEvent(filledAt, 'fill', side: side, qty: qty, price: price),
+];
 
 /// 진입부터 청산까지 끝난 회차. 손익은 체결가·수량·승수로 계산한다.
 JobCycle _closedCycle(
@@ -364,11 +382,18 @@ JobCycle _closedCycle(
     filledSellQty: qty,
     avgSellPrice: sell,
     realizedPnl: (sell - buy) * qty * multiplier,
+    multiplier: multiplier,
     openedAt: openedAt,
     closedAt: closedAt,
     events: [
       ..._entry(openedAt, entrySide, qty, short ? sell : buy),
-      JobEvent(closedAt.subtract(const Duration(seconds: 2)), 'order_submitted', side: exitSide, qty: qty, message: exitMessage),
+      JobEvent(
+        closedAt.subtract(const Duration(seconds: 2)),
+        'order_submitted',
+        side: exitSide,
+        qty: qty,
+        message: exitMessage,
+      ),
       JobEvent(closedAt, 'fill', side: exitSide, qty: qty, price: short ? buy : sell),
       JobEvent(closedAt, 'cycle_closed'),
     ],
@@ -388,20 +413,19 @@ MemberWorker _worker(
   WorkerJob job, {
   bool autoClose = false,
   WorkerPnlLimit? pnlLimit,
-}) =>
-    MemberWorker(
-      id: id,
-      symbolCode: symbolCode,
-      symbolName: symbolName,
-      marketType: marketType,
-      status: status,
-      insertedAt: insertedAt,
-      currency: currency,
-      currentPrice: currentPrice,
-      autoCloseOnMarketEnd: autoClose,
-      pnlLimit: pnlLimit,
-      jobs: [job],
-    );
+}) => MemberWorker(
+  id: id,
+  symbolCode: symbolCode,
+  symbolName: symbolName,
+  marketType: marketType,
+  status: status,
+  insertedAt: insertedAt,
+  currency: currency,
+  currentPrice: currentPrice,
+  autoCloseOnMarketEnd: autoClose,
+  pnlLimit: pnlLimit,
+  jobs: [job],
+);
 
 /// 체결 없이 조건을 기다리는 잡.
 WorkerJob _waitingJob(String name, JobStrategy strategy, String accountName, {String status = 'monitoring'}) =>
@@ -428,9 +452,14 @@ WorkerJob _holdingJob(
     repeatCurrent: 1,
     repeatCount: 2,
     position: JobPosition(
-        side: short ? 'short' : 'long', size: strategy.qty, entryPrice: entryPrice, multiplier: multiplier),
+      side: short ? 'short' : 'long',
+      size: strategy.qty,
+      entryPrice: entryPrice,
+      multiplier: multiplier,
+    ),
     cycles: [
       JobCycle(
+        multiplier: multiplier,
         cycleNo: 1,
         status: 'open',
         strategy: strategy,
@@ -445,55 +474,102 @@ WorkerJob _holdingJob(
   );
 }
 
-const _indexFut = JobStrategy('breakout', qty: 1, stopLossPct: 0.8, takeProfitPct: 1.6, entrySettings: {
-  '돌파기준': '일봉시가 대비 +0.5%',
-  '신호 주기': '5분봉',
-});
-const _stockSwing = JobStrategy('candle_direction_breakout', qty: 5, stopLossPct: 2, takeProfitPct: 5, entrySettings: {
-  '캔들 방향': '양봉만',
-  '신호 주기': '15분봉',
-  '진입 판정': '봉 완성 시',
-});
-const _gold = JobStrategy('trailing_entry', qty: 1, stopLossPct: 1, entrySettings: {
-  '진입선': '현재가 대비 -30틱',
-  '되돌림': '10틱',
-});
+const _indexFut = JobStrategy(
+  'breakout',
+  qty: 1,
+  stopLossPct: 40,
+  stopLossUnit: '틱',
+  takeProfitPct: 80,
+  takeProfitUnit: '틱',
+  entrySettings: {'돌파기준': '일봉시가 대비', '돌파가격': '+20틱', '평가 시점': '봉 완성 시', '신호 주기': '5분'},
+);
+const _stockSwing = JobStrategy(
+  'candle_direction_breakout',
+  qty: 5,
+  stopLossPct: 2,
+  takeProfitPct: 5,
+  entrySettings: {'거래 방향': '양봉만', '신호 주기': '15분', '직전봉 등락률': '0.5% 이상'},
+);
+const _gold = JobStrategy(
+  'trailing_entry',
+  qty: 1,
+  stopLossPct: 30,
+  stopLossUnit: '틱',
+  trailingStop: {'추종 폭': '15틱', '추종 회차': '연속 추적'},
+  entrySettings: {'거래 방향': '매수', '신호 주기': '3분', '진입 간격': '10틱'},
+);
 
-const _mclBreakout = JobStrategy('breakout', qty: 2, stopLossPct: 1, takeProfitPct: 2, orderType: '지정가', entrySettings: {
-  '돌파기준': '현재가 대비 +10틱',
-  '신호 주기': '5분봉',
-  '진입 판정': '실시간',
-});
-const _mclBreakoutSmall = JobStrategy('breakout', qty: 1, stopLossPct: 0.7, entrySettings: {
-  '돌파기준': '가격 100.50',
-  '신호 주기': '1분봉',
-  '진입 판정': '실시간',
-});
-const _mclAlert = JobStrategy('indicator_combination', qty: 0, entrySettings: {
-  '지표 조건': 'RSI(14) 70 이상 AND 볼린저밴드 상단 이탈',
-  '신호 주기': '15분봉',
-});
-const _mclGap = JobStrategy('gap_trading_breakout', qty: 1, stopLossPct: 1.5, takeProfitPct: 3, entrySettings: {
-  '갭 방향': '갭상승',
-  '갭 기준': '0.5% 이상',
-});
-const _samsung = JobStrategy('candle_direction_breakout', qty: 10, stopLossPct: 2, takeProfitPct: 4, entrySettings: {
-  '캔들 방향': '양봉만',
-  '신호 주기': '1분봉',
-  '진입 판정': '봉 완성 시',
-});
-const _hynix = JobStrategy('trailing_entry', qty: 3, stopLossPct: 2.5, trailingStop: '1.5% · 추종 회차 무한', entrySettings: {
-  '진입선': '현재가 대비 -2%',
-  '되돌림': '0.5%',
-});
-const _nq = JobStrategy('first_fill_breakout', qty: 1, stopLossPct: 0.5, takeProfitPct: 1, entrySettings: {
-  '최초 진입': '즉시 진입',
-  '돌파 폭': '최초체결가 ±20틱',
-});
-const _nvda = JobStrategy('indicator_combination', qty: 5, stopLossPct: 3, takeProfitPct: 6, entrySettings: {
-  '지표 조건': '이동평균 5 > 20 AND RSI(14) 50 이상',
-  '신호 주기': '일봉',
-});
+const _mclBreakout = JobStrategy(
+  'breakout',
+  qty: 2,
+  stopLossPct: 25,
+  stopLossUnit: '틱',
+  takeProfitPct: 50,
+  takeProfitUnit: '틱',
+  orderType: '지정가',
+  entrySettings: {'돌파기준': '현재가 대비', '돌파가격': '+10틱', '평가 시점': '실시간'},
+);
+const _mclBreakoutSmall = JobStrategy(
+  'breakout',
+  qty: 1,
+  stopLossPct: 20,
+  stopLossUnit: '틱',
+  entrySettings: {'돌파기준': '가격', '돌파가격': '100.50', '평가 시점': '실시간'},
+);
+const _mclAlert = JobStrategy(
+  'indicator_combination',
+  qty: 0,
+  entryMode: '봉 완성 시',
+  entrySettings: {'신호 주기': '15분'},
+  conditions: {
+    '매도 OR 1': ['RSI(14) 70 이상', '볼린저밴드(20, 2) 상단 이탈'],
+    '매도 OR 2': ['SMA(5) < SMA(20)'],
+  },
+);
+const _mclGap = JobStrategy(
+  'gap_trading_breakout',
+  qty: 1,
+  stopLossPct: 30,
+  stopLossUnit: '틱',
+  takeProfitPct: 60,
+  takeProfitUnit: '틱',
+  entrySettings: {'거래 방향': '갭상승', '갭 크기': '15틱', '신호 봉(갭 감지용)': '1분'},
+);
+const _samsung = JobStrategy(
+  'candle_direction_breakout',
+  qty: 10,
+  stopLossPct: 2,
+  takeProfitPct: 4,
+  entrySettings: {'거래 방향': '양봉만', '신호 주기': '1분', '직전봉 등락률': '1% 이상'},
+);
+const _hynix = JobStrategy(
+  'trailing_entry',
+  qty: 3,
+  stopLossPct: 2.5,
+  trailingStop: {'추종 폭': '1.5%', '추종 회차': '2회', '동작 마디': '1회차 2% · 2회차 4%'},
+  entrySettings: {'거래 방향': '매수', '신호 주기': '5분', '진입 간격': '3틱'},
+);
+const _nq = JobStrategy(
+  'first_fill_breakout',
+  qty: 1,
+  stopLossPct: 2,
+  stopLossUnit: '포인트',
+  takeProfitPct: 4,
+  takeProfitUnit: '포인트',
+  entrySettings: {'거래 방향': '매도', '신호 주기': '1분', '평가 시점': '실시간'},
+);
+const _nvda = JobStrategy(
+  'indicator_combination',
+  qty: 5,
+  stopLossPct: 3,
+  takeProfitPct: 6,
+  entryMode: '실시간',
+  entrySettings: {'신호 주기': '일봉'},
+  conditions: {
+    '매수 OR 1': ['SMA(5) > SMA(20)', 'RSI(14) 50 이상'],
+    '매수청산 OR 1': ['RSI(14) 75 이상'],
+  },
+);
 
 final _workers = <int, List<MemberWorker>>{
   1024: [
@@ -507,8 +583,7 @@ final _workers = <int, List<MemberWorker>>{
       currency: 'USD',
       currentPrice: 101.10,
       autoCloseOnMarketEnd: true,
-      pnlLimit: const WorkerPnlLimit(
-          period: 'day', profitTarget: 500, lossLimit: 300, accumAmount: 140, accumCount: 2),
+      pnlLimit: const WorkerPnlLimit(period: 'day', profitTarget: 500, lossLimit: 300, accumAmount: 140, accumCount: 2),
       jobs: [
         WorkerJob(
           name: '돌파 매수 전략',
@@ -521,6 +596,7 @@ final _workers = <int, List<MemberWorker>>{
           position: const JobPosition(side: 'long', size: 2, entryPrice: 100.75, multiplier: 100),
           cycles: [
             JobCycle(
+              multiplier: 100,
               cycleNo: 3,
               status: 'open',
               strategy: _mclBreakout,
@@ -529,18 +605,24 @@ final _workers = <int, List<MemberWorker>>{
               openedAt: DateTime(2026, 10, 30, 10, 2, 41),
               events: _entry(DateTime(2026, 10, 30, 10, 2, 41), 'buy', 2, 100.75),
             ),
-            _closedCycle(2, _mclBreakout,
-                openedAt: DateTime(2026, 10, 30, 3, 18, 7),
-                buy: 100.40,
-                closedAt: DateTime(2026, 10, 30, 6, 40, 52),
-                sell: 100.60,
-                multiplier: 100),
-            _closedCycle(1, _mclBreakout,
-                openedAt: DateTime(2026, 10, 29, 22, 5, 30),
-                buy: 100.10,
-                closedAt: DateTime(2026, 10, 30, 1, 12, 15),
-                sell: 100.60,
-                multiplier: 100),
+            _closedCycle(
+              2,
+              _mclBreakout,
+              openedAt: DateTime(2026, 10, 30, 3, 18, 7),
+              buy: 100.40,
+              closedAt: DateTime(2026, 10, 30, 6, 40, 52),
+              sell: 100.60,
+              multiplier: 100,
+            ),
+            _closedCycle(
+              1,
+              _mclBreakout,
+              openedAt: DateTime(2026, 10, 29, 22, 5, 30),
+              buy: 100.10,
+              closedAt: DateTime(2026, 10, 30, 1, 12, 15),
+              sell: 100.60,
+              multiplier: 100,
+            ),
           ],
         ),
         const WorkerJob(
@@ -617,40 +699,99 @@ final _workers = <int, List<MemberWorker>>{
         ),
       ],
     ),
-    _worker(507, 'NQZ26', '나스닥100 12월물', '해외선물', 'USD', 23415.25, WorkerStatus.running,
-        DateTime(2026, 10, 29, 22, 0), _waitingJob('고점 돌파', _indexFut, '해외선물 메인'),
-        autoClose: true, pnlLimit: const WorkerPnlLimit(period: 'day', lossLimit: 500)),
-    _worker(508, '101Z6', '코스피200 12월물', '국내선물', 'KRW', 453, WorkerStatus.running,
-        DateTime(2026, 10, 30, 8, 45),
-        _holdingJob('장 초반 돌파', _indexFut, '국내선물 메인',
-            filledAt: DateTime(2026, 10, 30, 9, 2, 48), entryPrice: 452.1, multiplier: 250000),
-        autoClose: true),
-    _worker(509, 'HSIZ26', '항셍지수 12월물', '해외선물', 'HKD', 25950, WorkerStatus.running,
-        DateTime(2026, 10, 30, 9, 20),
-        _holdingJob('고점 이탈 매도', _indexFut, '해외선물 메인',
-            filledAt: DateTime(2026, 10, 30, 10, 31, 2), entryPrice: 26000, multiplier: 50, short: true),
-        autoClose: true),
-    _worker(510, 'MGCZ26', '마이크로 금 12월물', '해외선물', 'USD', 2752, WorkerStatus.running,
-        DateTime(2026, 10, 29, 21, 58),
-        WorkerJob(
-          name: '금 트레일링 진입',
-          status: 'monitoring',
-          accountName: '해외선물 메인',
-          isPaper: false,
-          strategy: _gold,
-          repeatCurrent: 1,
-          repeatCount: 3,
-          cycles: [
-            _closedCycle(1, _gold,
-                openedAt: DateTime(2026, 10, 30, 0, 12, 40),
-                buy: 2740,
-                closedAt: DateTime(2026, 10, 30, 4, 31, 5),
-                sell: 2755,
-                multiplier: 10),
-          ],
-        )),
-    _worker(511, 'TSLA', '테슬라', '해외주식', 'USD', 442.5, WorkerStatus.stopped, DateTime(2026, 10, 28, 23, 10),
-        _waitingJob('캔들 방향 추종', _stockSwing, '해외주식 메인', status: 'waiting')),
+    _worker(
+      507,
+      'NQZ26',
+      '나스닥100 12월물',
+      '해외선물',
+      'USD',
+      23415.25,
+      WorkerStatus.running,
+      DateTime(2026, 10, 29, 22, 0),
+      _waitingJob('고점 돌파', _indexFut, '해외선물 메인'),
+      autoClose: true,
+      pnlLimit: const WorkerPnlLimit(period: 'day', lossLimit: 500),
+    ),
+    _worker(
+      508,
+      '101Z6',
+      '코스피200 12월물',
+      '국내선물',
+      'KRW',
+      453,
+      WorkerStatus.running,
+      DateTime(2026, 10, 30, 8, 45),
+      _holdingJob(
+        '장 초반 돌파',
+        _indexFut,
+        '국내선물 메인',
+        filledAt: DateTime(2026, 10, 30, 9, 2, 48),
+        entryPrice: 452.1,
+        multiplier: 250000,
+      ),
+      autoClose: true,
+    ),
+    _worker(
+      509,
+      'HSIZ26',
+      '항셍지수 12월물',
+      '해외선물',
+      'HKD',
+      25950,
+      WorkerStatus.running,
+      DateTime(2026, 10, 30, 9, 20),
+      _holdingJob(
+        '고점 이탈 매도',
+        _indexFut,
+        '해외선물 메인',
+        filledAt: DateTime(2026, 10, 30, 10, 31, 2),
+        entryPrice: 26000,
+        multiplier: 50,
+        short: true,
+      ),
+      autoClose: true,
+    ),
+    _worker(
+      510,
+      'MGCZ26',
+      '마이크로 금 12월물',
+      '해외선물',
+      'USD',
+      2752,
+      WorkerStatus.running,
+      DateTime(2026, 10, 29, 21, 58),
+      WorkerJob(
+        name: '금 트레일링 진입',
+        status: 'monitoring',
+        accountName: '해외선물 메인',
+        isPaper: false,
+        strategy: _gold,
+        repeatCurrent: 1,
+        repeatCount: 3,
+        cycles: [
+          _closedCycle(
+            1,
+            _gold,
+            openedAt: DateTime(2026, 10, 30, 0, 12, 40),
+            buy: 2740,
+            closedAt: DateTime(2026, 10, 30, 4, 31, 5),
+            sell: 2755,
+            multiplier: 10,
+          ),
+        ],
+      ),
+    ),
+    _worker(
+      511,
+      'TSLA',
+      '테슬라',
+      '해외주식',
+      'USD',
+      442.5,
+      WorkerStatus.stopped,
+      DateTime(2026, 10, 28, 23, 10),
+      _waitingJob('캔들 방향 추종', _stockSwing, '해외주식 메인', status: 'waiting'),
+    ),
   ],
   1023: [
     MemberWorker(
@@ -672,23 +813,44 @@ final _workers = <int, List<MemberWorker>>{
           strategy: _hynix,
           repeatCount: 3,
         ),
-        WorkerJob(
-          name: '추세 추종',
-          status: 'waiting',
-          accountName: '국내주식 메인',
-          isPaper: false,
-          strategy: _hynix,
-        ),
+        WorkerJob(name: '추세 추종', status: 'waiting', accountName: '국내주식 메인', isPaper: false, strategy: _hynix),
+        WorkerJob(name: '장 마감 전 정리', status: 'waiting', accountName: '국내주식 메인', isPaper: false, strategy: _samsung),
       ],
     ),
-    _worker(512, '005380', '현대차', '국내주식', 'KRW', 251000, WorkerStatus.running, DateTime(2026, 10, 30, 8, 59),
-        _holdingJob('갭 상승 추종', _stockSwing, '국내주식 메인',
-            filledAt: DateTime(2026, 10, 30, 9, 4, 22), entryPrice: 249500),
-        autoClose: true),
-    _worker(513, '035720', '카카오', '국내주식', 'KRW', 41250, WorkerStatus.stopped, DateTime(2026, 10, 29, 15, 40),
-        _waitingJob('눌림목 매수', _stockSwing, '국내주식 메인', status: 'waiting')),
-    _worker(514, 'NVDA', '엔비디아', '해외주식', 'USD', 214.37, WorkerStatus.running, DateTime(2026, 10, 29, 23, 5),
-        _waitingJob('지표 조합 매수', _nvda, '해외주식 메인')),
+    _worker(
+      512,
+      '005380',
+      '현대차',
+      '국내주식',
+      'KRW',
+      251000,
+      WorkerStatus.running,
+      DateTime(2026, 10, 30, 8, 59),
+      _holdingJob('갭 상승 추종', _stockSwing, '국내주식 메인', filledAt: DateTime(2026, 10, 30, 9, 4, 22), entryPrice: 249500),
+      autoClose: true,
+    ),
+    _worker(
+      513,
+      '035720',
+      '카카오',
+      '국내주식',
+      'KRW',
+      41250,
+      WorkerStatus.stopped,
+      DateTime(2026, 10, 29, 15, 40),
+      _waitingJob('눌림목 매수', _stockSwing, '국내주식 메인', status: 'waiting'),
+    ),
+    _worker(
+      514,
+      'NVDA',
+      '엔비디아',
+      '해외주식',
+      'USD',
+      214.37,
+      WorkerStatus.running,
+      DateTime(2026, 10, 29, 23, 5),
+      _waitingJob('지표 조합 매수', _nvda, '해외주식 메인'),
+    ),
   ],
   1020: [
     MemberWorker(
@@ -702,7 +864,13 @@ final _workers = <int, List<MemberWorker>>{
       currentPrice: 23402.5,
       errorMessage: '브로커 잔고와 서버 포지션이 일치하지 않아 잡을 정지했습니다.',
       pnlLimit: const WorkerPnlLimit(
-          period: 'week', unit: 'tick', lossLimit: 400, accumAmount: -625, accumTicks: -125, accumCount: 1),
+        period: 'week',
+        unit: 'tick',
+        lossLimit: 400,
+        accumAmount: -625,
+        accumTicks: -125,
+        accumCount: 1,
+      ),
       jobs: [
         WorkerJob(
           name: '고점 이탈 매도',
@@ -715,6 +883,7 @@ final _workers = <int, List<MemberWorker>>{
           repeatCount: 3,
           cycles: [
             JobCycle(
+              multiplier: 20,
               cycleNo: 2,
               status: 'sold_elsewhere',
               strategy: _nq,
@@ -727,13 +896,16 @@ final _workers = <int, List<MemberWorker>>{
                 JobEvent(DateTime(2026, 10, 30, 6, 58, 12), 'sold_elsewhere'),
               ],
             ),
-            _closedCycle(1, _nq,
-                openedAt: DateTime(2026, 10, 30, 1, 47, 6),
-                buy: 23402.5,
-                closedAt: DateTime(2026, 10, 30, 2, 14, 51),
-                sell: 23371.25,
-                multiplier: 20,
-                short: true),
+            _closedCycle(
+              1,
+              _nq,
+              openedAt: DateTime(2026, 10, 30, 1, 47, 6),
+              buy: 23402.5,
+              closedAt: DateTime(2026, 10, 30, 2, 14, 51),
+              sell: 23371.25,
+              multiplier: 20,
+              short: true,
+            ),
           ],
         ),
       ],
@@ -771,11 +943,28 @@ final _workers = <int, List<MemberWorker>>{
         ),
       ],
     ),
-    _worker(515, 'TSLA', '테슬라', '해외주식', 'USD', 442.5, WorkerStatus.running, DateTime(2026, 10, 28, 22, 30),
-        _holdingJob('돌파 추종', _stockSwing, '해외주식 메인',
-            filledAt: DateTime(2026, 10, 29, 23, 41, 9), entryPrice: 438)),
-    _worker(516, 'MGCZ26', '마이크로 금 12월물', '해외선물', 'USD', 2752, WorkerStatus.stopped,
-        DateTime(2026, 10, 27, 21, 15), _waitingJob('금 트레일링 진입', _gold, '해외선물 메인', status: 'waiting')),
+    _worker(
+      515,
+      'TSLA',
+      '테슬라',
+      '해외주식',
+      'USD',
+      442.5,
+      WorkerStatus.running,
+      DateTime(2026, 10, 28, 22, 30),
+      _holdingJob('돌파 추종', _stockSwing, '해외주식 메인', filledAt: DateTime(2026, 10, 29, 23, 41, 9), entryPrice: 438),
+    ),
+    _worker(
+      516,
+      'MGCZ26',
+      '마이크로 금 12월물',
+      '해외선물',
+      'USD',
+      2752,
+      WorkerStatus.stopped,
+      DateTime(2026, 10, 27, 21, 15),
+      _waitingJob('금 트레일링 진입', _gold, '해외선물 메인', status: 'waiting'),
+    ),
   ],
   1017: [
     MemberWorker(
@@ -805,120 +994,450 @@ final _workers = <int, List<MemberWorker>>{
           repeatCurrent: 3,
           repeatCount: 3,
           cycles: [
-            _closedCycle(3, _mclBreakoutSmall,
-                openedAt: DateTime(2026, 10, 30, 4, 20, 33),
-                buy: 99.85,
-                closedAt: DateTime(2026, 10, 30, 5, 11, 58),
-                sell: 99.20,
-                multiplier: 100),
-            _closedCycle(2, _mclBreakoutSmall,
-                openedAt: DateTime(2026, 10, 30, 2, 2, 11),
-                buy: 100.10,
-                closedAt: DateTime(2026, 10, 30, 3, 40, 2),
-                sell: 99.30,
-                multiplier: 100),
-            _closedCycle(1, _mclBreakoutSmall,
-                openedAt: DateTime(2026, 10, 29, 23, 30, 45),
-                buy: 100.00,
-                closedAt: DateTime(2026, 10, 30, 1, 5, 29),
-                sell: 99.30,
-                multiplier: 100),
+            _closedCycle(
+              3,
+              _mclBreakoutSmall,
+              openedAt: DateTime(2026, 10, 30, 4, 20, 33),
+              buy: 99.85,
+              closedAt: DateTime(2026, 10, 30, 5, 11, 58),
+              sell: 99.20,
+              multiplier: 100,
+            ),
+            _closedCycle(
+              2,
+              _mclBreakoutSmall,
+              openedAt: DateTime(2026, 10, 30, 2, 2, 11),
+              buy: 100.10,
+              closedAt: DateTime(2026, 10, 30, 3, 40, 2),
+              sell: 99.30,
+              multiplier: 100,
+            ),
+            _closedCycle(
+              1,
+              _mclBreakoutSmall,
+              openedAt: DateTime(2026, 10, 29, 23, 30, 45),
+              buy: 100.00,
+              closedAt: DateTime(2026, 10, 30, 1, 5, 29),
+              sell: 99.30,
+              multiplier: 100,
+            ),
           ],
         ),
       ],
     ),
-    _worker(517, 'NQZ26', '나스닥100 12월물', '해외선물', 'USD', 23415.25, WorkerStatus.running,
-        DateTime(2026, 10, 29, 22, 20), _waitingJob('고점 돌파', _indexFut, '해외선물 메인'),
-        autoClose: true),
-    _worker(518, 'FESXZ26', '유로스톡스50 12월물', '해외선물', 'EUR', 5742, WorkerStatus.running,
-        DateTime(2026, 10, 29, 16, 5),
-        _holdingJob('장 초반 돌파', _indexFut, '해외선물 메인',
-            filledAt: DateTime(2026, 10, 30, 3, 12, 30), entryPrice: 5725, multiplier: 10)),
+    _worker(
+      517,
+      'NQZ26',
+      '나스닥100 12월물',
+      '해외선물',
+      'USD',
+      23415.25,
+      WorkerStatus.running,
+      DateTime(2026, 10, 29, 22, 20),
+      _waitingJob('고점 돌파', _indexFut, '해외선물 메인'),
+      autoClose: true,
+    ),
+    _worker(
+      518,
+      'FESXZ26',
+      '유로스톡스50 12월물',
+      '해외선물',
+      'EUR',
+      5742,
+      WorkerStatus.running,
+      DateTime(2026, 10, 29, 16, 5),
+      _holdingJob(
+        '장 초반 돌파',
+        _indexFut,
+        '해외선물 메인',
+        filledAt: DateTime(2026, 10, 30, 3, 12, 30),
+        entryPrice: 5725,
+        multiplier: 10,
+      ),
+    ),
   ],
   1016: [
-    _worker(519, '005930', '삼성전자', '국내주식', 'KRW', 99100, WorkerStatus.running, DateTime(2026, 10, 29, 8, 55),
-        _holdingJob('거래량 급증 매수', _stockSwing, '국내주식 메인',
-            filledAt: DateTime(2026, 10, 29, 9, 12, 44), entryPrice: 97800),
-        autoClose: true),
-    _worker(520, '000660', 'SK하이닉스', '국내주식', 'KRW', 312500, WorkerStatus.running, DateTime(2026, 10, 29, 8, 57),
-        _waitingJob('눌림목 반등', _hynix, '국내주식 메인')),
-    _worker(521, '035720', '카카오', '국내주식', 'KRW', 41250, WorkerStatus.stopped, DateTime(2026, 10, 28, 9, 30),
-        _waitingJob('캔들 방향 추종', _stockSwing, '국내주식 메인', status: 'waiting')),
+    _worker(
+      519,
+      '005930',
+      '삼성전자',
+      '국내주식',
+      'KRW',
+      99100,
+      WorkerStatus.running,
+      DateTime(2026, 10, 29, 8, 55),
+      _holdingJob('거래량 급증 매수', _stockSwing, '국내주식 메인', filledAt: DateTime(2026, 10, 29, 9, 12, 44), entryPrice: 97800),
+      autoClose: true,
+    ),
+    _worker(
+      520,
+      '000660',
+      'SK하이닉스',
+      '국내주식',
+      'KRW',
+      312500,
+      WorkerStatus.running,
+      DateTime(2026, 10, 29, 8, 57),
+      _waitingJob('눌림목 반등', _hynix, '국내주식 메인'),
+    ),
+    _worker(
+      521,
+      '035720',
+      '카카오',
+      '국내주식',
+      'KRW',
+      41250,
+      WorkerStatus.stopped,
+      DateTime(2026, 10, 28, 9, 30),
+      _waitingJob('캔들 방향 추종', _stockSwing, '국내주식 메인', status: 'waiting'),
+    ),
   ],
   1019: [
-    _worker(522, 'MCLZ26', '마이크로 WTI 원유 12월물', '해외선물', 'USD', 101.1, WorkerStatus.stopped,
-        DateTime(2026, 10, 21, 22, 0), _waitingJob('돌파 매수 전략', _mclBreakoutSmall, '해외선물 메인', status: 'waiting')),
-    _worker(523, 'NVDA', '엔비디아', '해외주식', 'USD', 214.37, WorkerStatus.stopped, DateTime(2026, 10, 21, 23, 15),
-        _waitingJob('지표 조합 매수', _nvda, '해외주식 메인', status: 'waiting')),
+    _worker(
+      522,
+      'MCLZ26',
+      '마이크로 WTI 원유 12월물',
+      '해외선물',
+      'USD',
+      101.1,
+      WorkerStatus.stopped,
+      DateTime(2026, 10, 21, 22, 0),
+      _waitingJob('돌파 매수 전략', _mclBreakoutSmall, '해외선물 메인', status: 'waiting'),
+    ),
+    _worker(
+      523,
+      'NVDA',
+      '엔비디아',
+      '해외주식',
+      'USD',
+      214.37,
+      WorkerStatus.stopped,
+      DateTime(2026, 10, 21, 23, 15),
+      _waitingJob('지표 조합 매수', _nvda, '해외주식 메인', status: 'waiting'),
+    ),
   ],
 };
 
 final _logs = <int, List<CustomerLog>>{
   1024: [
-    CustomerLog(DateTime(2026, 10, 29, 21, 52, 11), CustomerLogCategory.worker, '고점 이탈 알람 감시 시작',
-        workerId: 501, jobName: '고점 이탈 알람'),
-    CustomerLog(DateTime(2026, 10, 30, 10, 31, 2), CustomerLogCategory.order, '항셍지수 12월물 매도 1계약 체결 @26,000', workerId: 509, jobName: '고점 이탈 매도'),
-    CustomerLog(DateTime(2026, 10, 30, 9, 21, 8), CustomerLogCategory.worker, '항셍지수 12월물 워커 시작', workerId: 509, jobName: '고점 이탈 매도'),
-    CustomerLog(DateTime(2026, 10, 30, 9, 2, 48), CustomerLogCategory.order, '코스피200 12월물 매수 1계약 체결 @452.1', workerId: 508, jobName: '장 초반 돌파'),
-    CustomerLog(DateTime(2026, 10, 30, 8, 46, 3), CustomerLogCategory.worker, '코스피200 12월물 워커 시작', workerId: 508, jobName: '장 초반 돌파'),
-    CustomerLog(DateTime(2026, 10, 30, 4, 31, 5), CustomerLogCategory.order, '마이크로 금 12월물 매도 1계약 체결 (청산) @2,755', workerId: 510, jobName: '금 트레일링 진입'),
-    CustomerLog(DateTime(2026, 10, 30, 0, 12, 40), CustomerLogCategory.order, '마이크로 금 12월물 매수 1계약 체결 @2,740', workerId: 510, jobName: '금 트레일링 진입'),
-    CustomerLog(DateTime(2026, 10, 29, 22, 0, 44), CustomerLogCategory.worker, '나스닥100 12월물 워커 시작', workerId: 507, jobName: '고점 돌파'),
-    CustomerLog(DateTime(2026, 10, 29, 21, 59, 10), CustomerLogCategory.worker, '마이크로 금 12월물 워커 시작', workerId: 510, jobName: '금 트레일링 진입'),
-    CustomerLog(DateTime(2026, 10, 28, 23, 40, 17), CustomerLogCategory.worker, '테슬라 워커 중지', workerId: 511, jobName: '캔들 방향 추종'),
-    CustomerLog(DateTime(2026, 10, 28, 23, 12, 2), CustomerLogCategory.worker, '테슬라 워커 시작', workerId: 511, jobName: '캔들 방향 추종'),
-    CustomerLog(DateTime(2026, 10, 30, 10, 2, 41), CustomerLogCategory.order, '마이크로 WTI 원유 12월물 매수 2계약 체결 @100.75', workerId: 501, jobName: '돌파 매수 전략'),
-    CustomerLog(DateTime(2026, 10, 30, 10, 2, 39), CustomerLogCategory.order, '마이크로 WTI 원유 12월물 매수 2계약 접수 (돌파 매수 전략 3/5)', workerId: 501, jobName: '돌파 매수 전략'),
-    CustomerLog(DateTime(2026, 10, 30, 9, 40, 5), CustomerLogCategory.worker, '삼성전자 거래량 급증 매수 잡 스위치 끔 (보유 유지)', workerId: 502, jobName: '거래량 급증 매수'),
-    CustomerLog(DateTime(2026, 10, 30, 9, 39, 58), CustomerLogCategory.worker, '삼성전자 워커 중지', workerId: 502, jobName: '거래량 급증 매수'),
+    CustomerLog(
+      DateTime(2026, 10, 29, 21, 52, 11),
+      CustomerLogCategory.worker,
+      '고점 이탈 알람 감시 시작',
+      workerId: 501,
+      jobName: '고점 이탈 알람',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 30, 10, 31, 2),
+      CustomerLogCategory.order,
+      '항셍지수 12월물 매도 1계약 체결 @26,000',
+      workerId: 509,
+      jobName: '고점 이탈 매도',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 30, 9, 21, 8),
+      CustomerLogCategory.worker,
+      '항셍지수 12월물 워커 시작',
+      workerId: 509,
+      jobName: '고점 이탈 매도',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 30, 9, 2, 48),
+      CustomerLogCategory.order,
+      '코스피200 12월물 매수 1계약 체결 @452.1',
+      workerId: 508,
+      jobName: '장 초반 돌파',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 30, 8, 46, 3),
+      CustomerLogCategory.worker,
+      '코스피200 12월물 워커 시작',
+      workerId: 508,
+      jobName: '장 초반 돌파',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 30, 4, 31, 5),
+      CustomerLogCategory.order,
+      '마이크로 금 12월물 매도 1계약 체결 (청산) @2,755',
+      workerId: 510,
+      jobName: '금 트레일링 진입',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 30, 0, 12, 40),
+      CustomerLogCategory.order,
+      '마이크로 금 12월물 매수 1계약 체결 @2,740',
+      workerId: 510,
+      jobName: '금 트레일링 진입',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 29, 22, 0, 44),
+      CustomerLogCategory.worker,
+      '나스닥100 12월물 워커 시작',
+      workerId: 507,
+      jobName: '고점 돌파',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 29, 21, 59, 10),
+      CustomerLogCategory.worker,
+      '마이크로 금 12월물 워커 시작',
+      workerId: 510,
+      jobName: '금 트레일링 진입',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 28, 23, 40, 17),
+      CustomerLogCategory.worker,
+      '테슬라 워커 중지',
+      workerId: 511,
+      jobName: '캔들 방향 추종',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 28, 23, 12, 2),
+      CustomerLogCategory.worker,
+      '테슬라 워커 시작',
+      workerId: 511,
+      jobName: '캔들 방향 추종',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 30, 10, 2, 41),
+      CustomerLogCategory.order,
+      '마이크로 WTI 원유 12월물 매수 2계약 체결 @100.75',
+      workerId: 501,
+      jobName: '돌파 매수 전략',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 30, 10, 2, 39),
+      CustomerLogCategory.order,
+      '마이크로 WTI 원유 12월물 매수 2계약 접수 (돌파 매수 전략 3/5)',
+      workerId: 501,
+      jobName: '돌파 매수 전략',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 30, 9, 40, 5),
+      CustomerLogCategory.worker,
+      '삼성전자 거래량 급증 매수 잡 스위치 끔 (보유 유지)',
+      workerId: 502,
+      jobName: '거래량 급증 매수',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 30, 9, 39, 58),
+      CustomerLogCategory.worker,
+      '삼성전자 워커 중지',
+      workerId: 502,
+      jobName: '거래량 급증 매수',
+    ),
     CustomerLog(DateTime(2026, 10, 30, 9, 12, 7), CustomerLogCategory.access, 'Android 앱 로그인'),
-    CustomerLog(DateTime(2026, 10, 30, 8, 51, 12), CustomerLogCategory.worker, '삼성전자 워커 시작', workerId: 502, jobName: '거래량 급증 매수'),
-    CustomerLog(DateTime(2026, 10, 29, 21, 50, 6), CustomerLogCategory.error, '마이크로 WTI 원유 12월물 매수 거부 · 주문 가능 금액 부족', workerId: 501, jobName: '갭 상승 진입'),
-    CustomerLog(DateTime(2026, 10, 29, 21, 45, 30), CustomerLogCategory.worker, '마이크로 WTI 원유 12월물 워커 시작', workerId: 501),
+    CustomerLog(
+      DateTime(2026, 10, 30, 8, 51, 12),
+      CustomerLogCategory.worker,
+      '삼성전자 워커 시작',
+      workerId: 502,
+      jobName: '거래량 급증 매수',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 29, 21, 50, 6),
+      CustomerLogCategory.error,
+      '마이크로 WTI 원유 12월물 매수 거부 · 주문 가능 금액 부족',
+      workerId: 501,
+      jobName: '갭 상승 진입',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 29, 21, 45, 30),
+      CustomerLogCategory.worker,
+      '마이크로 WTI 원유 12월물 워커 시작',
+      workerId: 501,
+    ),
     CustomerLog(DateTime(2026, 10, 29, 21, 31, 2), CustomerLogCategory.access, 'Android 앱 로그인'),
   ],
   1023: [
-    CustomerLog(DateTime(2026, 10, 30, 9, 0, 5), CustomerLogCategory.worker, '눌림목 반등 감시 시작',
-        workerId: 503, jobName: '눌림목 반등'),
-    CustomerLog(DateTime(2026, 10, 30, 9, 0, 6), CustomerLogCategory.worker, '추세 추종 대기열 등록',
-        workerId: 503, jobName: '추세 추종'),
-    CustomerLog(DateTime(2026, 10, 30, 9, 4, 22), CustomerLogCategory.order, '현대차 매수 5주 체결 @249,500', workerId: 512, jobName: '갭 상승 추종'),
-    CustomerLog(DateTime(2026, 10, 30, 9, 0, 15), CustomerLogCategory.worker, '현대차 워커 시작', workerId: 512, jobName: '갭 상승 추종'),
-    CustomerLog(DateTime(2026, 10, 29, 23, 6, 31), CustomerLogCategory.worker, '엔비디아 워커 시작', workerId: 514, jobName: '지표 조합 매수'),
-    CustomerLog(DateTime(2026, 10, 29, 15, 45, 9), CustomerLogCategory.worker, '카카오 워커 중지', workerId: 513, jobName: '눌림목 매수'),
+    CustomerLog(
+      DateTime(2026, 10, 30, 9, 0, 5),
+      CustomerLogCategory.worker,
+      '눌림목 반등 감시 시작',
+      workerId: 503,
+      jobName: '눌림목 반등',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 30, 9, 0, 6),
+      CustomerLogCategory.worker,
+      '추세 추종 대기열 등록',
+      workerId: 503,
+      jobName: '추세 추종',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 30, 9, 4, 22),
+      CustomerLogCategory.order,
+      '현대차 매수 5주 체결 @249,500',
+      workerId: 512,
+      jobName: '갭 상승 추종',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 30, 9, 0, 15),
+      CustomerLogCategory.worker,
+      '현대차 워커 시작',
+      workerId: 512,
+      jobName: '갭 상승 추종',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 29, 23, 6, 31),
+      CustomerLogCategory.worker,
+      '엔비디아 워커 시작',
+      workerId: 514,
+      jobName: '지표 조합 매수',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 29, 15, 45, 9),
+      CustomerLogCategory.worker,
+      '카카오 워커 중지',
+      workerId: 513,
+      jobName: '눌림목 매수',
+    ),
     CustomerLog(DateTime(2026, 10, 30, 9, 0, 3), CustomerLogCategory.worker, 'SK하이닉스 워커 시작', workerId: 503),
     CustomerLog(DateTime(2026, 10, 30, 8, 55, 19), CustomerLogCategory.access, 'iOS 앱 로그인'),
   ],
   1020: [
-    CustomerLog(DateTime(2026, 10, 29, 23, 41, 9), CustomerLogCategory.order, '테슬라 매수 5주 체결 @438', workerId: 515, jobName: '돌파 추종'),
-    CustomerLog(DateTime(2026, 10, 28, 22, 31, 20), CustomerLogCategory.worker, '테슬라 워커 시작', workerId: 515, jobName: '돌파 추종'),
-    CustomerLog(DateTime(2026, 10, 27, 23, 50, 41), CustomerLogCategory.worker, '마이크로 금 12월물 워커 중지', workerId: 516, jobName: '금 트레일링 진입'),
-    CustomerLog(DateTime(2026, 10, 30, 7, 21, 18), CustomerLogCategory.order, '엔비디아 매수 5주 접수 (지표 조합 매수 1/2)', workerId: 505, jobName: '지표 조합 매수'),
+    CustomerLog(
+      DateTime(2026, 10, 29, 23, 41, 9),
+      CustomerLogCategory.order,
+      '테슬라 매수 5주 체결 @438',
+      workerId: 515,
+      jobName: '돌파 추종',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 28, 22, 31, 20),
+      CustomerLogCategory.worker,
+      '테슬라 워커 시작',
+      workerId: 515,
+      jobName: '돌파 추종',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 27, 23, 50, 41),
+      CustomerLogCategory.worker,
+      '마이크로 금 12월물 워커 중지',
+      workerId: 516,
+      jobName: '금 트레일링 진입',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 30, 7, 21, 18),
+      CustomerLogCategory.order,
+      '엔비디아 매수 5주 접수 (지표 조합 매수 1/2)',
+      workerId: 505,
+      jobName: '지표 조합 매수',
+    ),
     CustomerLog(DateTime(2026, 10, 30, 7, 3, 44), CustomerLogCategory.access, 'Android 앱 로그인'),
-    CustomerLog(DateTime(2026, 10, 30, 6, 58, 12), CustomerLogCategory.error, '나스닥100 12월물 잔고 불일치 감지, 고점 이탈 매도 잡 비정상종료', workerId: 504, jobName: '고점 이탈 매도'),
-    CustomerLog(DateTime(2026, 10, 30, 5, 32, 10), CustomerLogCategory.order, '나스닥100 12월물 매도 1계약 체결 @23,410', workerId: 504, jobName: '고점 이탈 매도'),
-    CustomerLog(DateTime(2026, 10, 30, 2, 14, 51), CustomerLogCategory.order, '나스닥100 12월물 매수 1계약 체결 (청산) @23,402.5', workerId: 504, jobName: '고점 이탈 매도'),
-    CustomerLog(DateTime(2026, 10, 30, 1, 47, 6), CustomerLogCategory.order, '나스닥100 12월물 매도 1계약 체결 @23,371.25', workerId: 504, jobName: '고점 이탈 매도'),
+    CustomerLog(
+      DateTime(2026, 10, 30, 6, 58, 12),
+      CustomerLogCategory.error,
+      '나스닥100 12월물 잔고 불일치 감지, 고점 이탈 매도 잡 비정상종료',
+      workerId: 504,
+      jobName: '고점 이탈 매도',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 30, 5, 32, 10),
+      CustomerLogCategory.order,
+      '나스닥100 12월물 매도 1계약 체결 @23,410',
+      workerId: 504,
+      jobName: '고점 이탈 매도',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 30, 2, 14, 51),
+      CustomerLogCategory.order,
+      '나스닥100 12월물 매수 1계약 체결 (청산) @23,402.5',
+      workerId: 504,
+      jobName: '고점 이탈 매도',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 30, 1, 47, 6),
+      CustomerLogCategory.order,
+      '나스닥100 12월물 매도 1계약 체결 @23,371.25',
+      workerId: 504,
+      jobName: '고점 이탈 매도',
+    ),
     CustomerLog(DateTime(2026, 10, 29, 22, 12, 33), CustomerLogCategory.access, '앱에서 주문 알림 설정 변경'),
   ],
   1016: [
-    CustomerLog(DateTime(2026, 10, 29, 8, 58, 40), CustomerLogCategory.worker, 'SK하이닉스 워커 시작', workerId: 520, jobName: '눌림목 반등'),
-    CustomerLog(DateTime(2026, 10, 28, 10, 14, 5), CustomerLogCategory.worker, '카카오 워커 중지', workerId: 521, jobName: '캔들 방향 추종'),
+    CustomerLog(
+      DateTime(2026, 10, 29, 8, 58, 40),
+      CustomerLogCategory.worker,
+      'SK하이닉스 워커 시작',
+      workerId: 520,
+      jobName: '눌림목 반등',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 28, 10, 14, 5),
+      CustomerLogCategory.worker,
+      '카카오 워커 중지',
+      workerId: 521,
+      jobName: '캔들 방향 추종',
+    ),
     CustomerLog(DateTime(2026, 10, 29, 15, 20, 11), CustomerLogCategory.access, 'iOS 앱 로그인'),
-    CustomerLog(DateTime(2026, 10, 29, 9, 12, 44), CustomerLogCategory.order, '삼성전자 매수 5주 체결 @97,800', workerId: 519, jobName: '거래량 급증 매수'),
-    CustomerLog(DateTime(2026, 10, 29, 8, 58, 2), CustomerLogCategory.worker, '삼성전자 워커 시작', workerId: 519, jobName: '거래량 급증 매수'),
+    CustomerLog(
+      DateTime(2026, 10, 29, 9, 12, 44),
+      CustomerLogCategory.order,
+      '삼성전자 매수 5주 체결 @97,800',
+      workerId: 519,
+      jobName: '거래량 급증 매수',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 29, 8, 58, 2),
+      CustomerLogCategory.worker,
+      '삼성전자 워커 시작',
+      workerId: 519,
+      jobName: '거래량 급증 매수',
+    ),
   ],
   1017: [
-    CustomerLog(DateTime(2026, 10, 30, 3, 12, 30), CustomerLogCategory.order, '유로스톡스50 12월물 매수 1계약 체결 @5,725', workerId: 518, jobName: '장 초반 돌파'),
-    CustomerLog(DateTime(2026, 10, 29, 22, 21, 12), CustomerLogCategory.worker, '나스닥100 12월물 워커 시작', workerId: 517, jobName: '고점 돌파'),
-    CustomerLog(DateTime(2026, 10, 29, 16, 6, 3), CustomerLogCategory.worker, '유로스톡스50 12월물 워커 시작', workerId: 518, jobName: '장 초반 돌파'),
+    CustomerLog(
+      DateTime(2026, 10, 30, 3, 12, 30),
+      CustomerLogCategory.order,
+      '유로스톡스50 12월물 매수 1계약 체결 @5,725',
+      workerId: 518,
+      jobName: '장 초반 돌파',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 29, 22, 21, 12),
+      CustomerLogCategory.worker,
+      '나스닥100 12월물 워커 시작',
+      workerId: 517,
+      jobName: '고점 돌파',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 29, 16, 6, 3),
+      CustomerLogCategory.worker,
+      '유로스톡스50 12월물 워커 시작',
+      workerId: 518,
+      jobName: '장 초반 돌파',
+    ),
     CustomerLog(DateTime(2026, 10, 30, 6, 47, 29), CustomerLogCategory.access, 'Android 앱 로그인'),
-    CustomerLog(DateTime(2026, 10, 30, 5, 12, 0), CustomerLogCategory.worker, '마이크로 WTI 원유 12월물 손실 한도 도달로 워커 종료', workerId: 506, jobName: '돌파 매수 전략'),
-    CustomerLog(DateTime(2026, 10, 30, 5, 11, 58), CustomerLogCategory.order, '마이크로 WTI 원유 12월물 매도 1계약 체결 (청산) @99.20', workerId: 506, jobName: '돌파 매수 전략'),
+    CustomerLog(
+      DateTime(2026, 10, 30, 5, 12, 0),
+      CustomerLogCategory.worker,
+      '마이크로 WTI 원유 12월물 손실 한도 도달로 워커 종료',
+      workerId: 506,
+      jobName: '돌파 매수 전략',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 30, 5, 11, 58),
+      CustomerLogCategory.order,
+      '마이크로 WTI 원유 12월물 매도 1계약 체결 (청산) @99.20',
+      workerId: 506,
+      jobName: '돌파 매수 전략',
+    ),
   ],
   1019: [
     CustomerLog(DateTime(2026, 10, 22, 10, 0, 12), CustomerLogCategory.access, 'Android 앱 로그인'),
-    CustomerLog(DateTime(2026, 10, 21, 23, 40, 2), CustomerLogCategory.worker, '엔비디아 워커 중지', workerId: 523, jobName: '지표 조합 매수'),
-    CustomerLog(DateTime(2026, 10, 21, 22, 30, 51), CustomerLogCategory.worker, '마이크로 WTI 원유 12월물 워커 중지', workerId: 522, jobName: '돌파 매수 전략'),
+    CustomerLog(
+      DateTime(2026, 10, 21, 23, 40, 2),
+      CustomerLogCategory.worker,
+      '엔비디아 워커 중지',
+      workerId: 523,
+      jobName: '지표 조합 매수',
+    ),
+    CustomerLog(
+      DateTime(2026, 10, 21, 22, 30, 51),
+      CustomerLogCategory.worker,
+      '마이크로 WTI 원유 12월물 워커 중지',
+      workerId: 522,
+      jobName: '돌파 매수 전략',
+    ),
   ],
 };

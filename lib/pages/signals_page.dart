@@ -95,19 +95,11 @@ class _SignalsPageState extends State<SignalsPage> {
                   ],
                 ),
                 Text(s.alertName),
-                StatusBadge(
-                  s.side == 'buy' ? '매수' : '매도',
-                  color: s.side == 'buy' ? AppColors.up : AppColors.down,
-                ),
+                StatusBadge(s.side == 'buy' ? '매수' : '매도', color: s.side == 'buy' ? AppColors.up : AppColors.down),
                 Text(formatNumber(s.price)),
                 canHide
-                    ? TextButton(
-                        onPressed: () => _toggleHidden(s),
-                        child: Text(s.hidden ? '다시 보이기' : '숨기기'),
-                      )
-                    : (s.hidden
-                          ? const StatusBadge('숨김', color: AppColors.textTertiary)
-                          : const SizedBox.shrink()),
+                    ? TextButton(onPressed: () => _toggleHidden(s), child: Text(s.hidden ? '다시 보이기' : '숨기기'))
+                    : (s.hidden ? const StatusBadge('숨김', color: AppColors.textTertiary) : const SizedBox.shrink()),
               ],
           ],
         ),

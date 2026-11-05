@@ -4,11 +4,12 @@ enum _MonitorTab { workers, accounts, notifications }
 
 /// 선택한 회원의 모드와 화면 탭. 패널들 위에 늘 보인다.
 class _MemberBar extends StatelessWidget {
-  const _MemberBar({required this.member, required this.tab, required this.onTabChanged});
+  const _MemberBar({required this.member, required this.tab, required this.onTabChanged, required this.onDetail});
 
   final Member? member;
   final _MonitorTab tab;
   final ValueChanged<_MonitorTab> onTabChanged;
+  final VoidCallback onDetail;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +44,7 @@ class _MemberBar extends StatelessWidget {
                 },
               ),
               Text(m.device, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+              TextButton(onPressed: onDetail, child: const Text('회원 정보·처리')),
             ],
           ),
         Wrap(
@@ -297,19 +299,17 @@ class _AccountFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget chip(String label, String? name) => ChoiceChip(
-      label: Text(label, style: const TextStyle(fontSize: 12)),
-      visualDensity: VisualDensity.compact,
-      selected: selected == name,
-      onSelected: (_) => onSelect(name),
-    );
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      children: [
-        chip('전체 계좌', null),
-        for (final a in accounts) chip('${a.name} ${a.maskedCano}${a.isPaper ? ' 모의' : ''}', a.name),
+    return DropdownButton<String?>(
+      value: selected,
+      isDense: true,
+      underline: const SizedBox.shrink(),
+      style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+      items: [
+        const DropdownMenuItem<String?>(child: Text('전체 계좌')),
+        for (final a in accounts)
+          DropdownMenuItem<String?>(value: a.name, child: Text('${a.name} ${a.maskedCano}${a.isPaper ? ' 모의' : ''}')),
       ],
+      onChanged: onSelect,
     );
   }
 }

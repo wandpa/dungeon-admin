@@ -24,6 +24,8 @@ class _MemberDetailDialog extends StatefulWidget {
 class _MemberDetailDialogState extends State<_MemberDetailDialog> {
   final _memo = TextEditingController();
   bool _showEmail = false;
+  ConsultChannel _channel = ConsultChannel.phone;
+  ConsultType _type = ConsultType.order;
 
   Member get m => widget.member;
 
@@ -67,7 +69,7 @@ class _MemberDetailDialogState extends State<_MemberDetailDialog> {
   void _addMemo() {
     final text = _memo.text.trim();
     if (text.isEmpty) return;
-    setState(() => addConsultation(m, ConsultChannel.other, ConsultType.other, text));
+    setState(() => addConsultation(m, _channel, _type, text));
     _memo.clear();
   }
 
@@ -117,6 +119,25 @@ class _MemberDetailDialogState extends State<_MemberDetailDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Row(
+                      children: [
+                        DropdownButton<ConsultChannel>(
+                          value: _channel,
+                          underline: const SizedBox.shrink(),
+                          items: [
+                            for (final c in ConsultChannel.values) DropdownMenuItem(value: c, child: Text(c.label)),
+                          ],
+                          onChanged: (c) => setState(() => _channel = c ?? _channel),
+                        ),
+                        const SizedBox(width: 12),
+                        DropdownButton<ConsultType>(
+                          value: _type,
+                          underline: const SizedBox.shrink(),
+                          items: [for (final t in ConsultType.values) DropdownMenuItem(value: t, child: Text(t.label))],
+                          onChanged: (t) => setState(() => _type = t ?? _type),
+                        ),
+                      ],
+                    ),
                     Row(
                       children: [
                         Expanded(
