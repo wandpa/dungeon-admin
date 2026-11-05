@@ -1,11 +1,10 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 
 import '../mock_accounts.dart';
 import '../mock_admin.dart';
 import '../mock_consultations.dart';
 import '../mock_data.dart';
+import '../mock_symbols.dart';
 import '../mock_workers.dart';
 import '../theme.dart';
 import '../widgets/admin_page.dart';
@@ -14,8 +13,8 @@ import 'member_detail_dialog.dart';
 import 'members_page.dart' show memberStatusColor;
 
 part 'member_monitor_accounts.dart';
-
-const _minWideHeight = 1040.0;
+part 'member_monitor_app_view.dart';
+part 'member_monitor_trades.dart';
 
 /// 다른 화면에서 이 회원을 모니터링으로 열어 달라는 요청. [issue] 를 주면 그 문제 위치로 간다.
 class MonitorRequest {
@@ -78,18 +77,11 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
     super.dispose();
   }
 
-  /// 화면이 낮아 상세 패널이 아래로 밀려 있으면 보이도록 내려 준다.
-  void _selectJob(WorkerJob job) {
-    setState(() => _job = job);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scroll.hasClients || _scroll.position.maxScrollExtent <= 0) return;
-      _scroll.animateTo(
-        _scroll.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-      );
-    });
-  }
+  /// 잡을 고르면 잡 내역으로 넘어간다.
+  void _selectJob(WorkerJob job) => setState(() {
+    _job = job;
+    _tab = _MonitorTab.jobDetail;
+  });
 
   CustomerLogCategory? _logCategory; // null 이면 전체
 
@@ -141,7 +133,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
     _orderFilter = _OrderFilter.all;
     switch (issue.kind) {
       case MemberIssueKind.worker:
-        _tab = _MonitorTab.workers;
+        _tab = _MonitorTab.jobs;
         _workerId = issue.workerId;
       case MemberIssueKind.waitingOrders:
         _tab = _MonitorTab.accounts;
@@ -150,7 +142,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
         _tab = _MonitorTab.accounts;
         _orderFilter = _OrderFilter.rejected;
       case MemberIssueKind.manualPositions:
-        _tab = _MonitorTab.accounts;
+        _tab = _MonitorTab.positions;
       case MemberIssueKind.notification:
         _tab = _MonitorTab.notifications;
       case MemberIssueKind.memberStatus:
@@ -166,7 +158,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
     if (worker == null) return;
     final job = worker.jobs.where((j) => j.name == jobName).firstOrNull;
     setState(() {
-      _tab = _MonitorTab.workers;
+      _tab = _MonitorTab.jobs;
       _accountName = null;
       _workerId = workerId;
       _job = null;
@@ -218,8 +210,10 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
     return '${day(r.start)} ~ ${day(r.end)}';
   }
 
+  /// 회원을 바꾸면 워커부터 다시 본다.
   void _selectMember(Member m) => setState(() {
     _memberId = m.id;
+    _tab = _MonitorTab.workers;
     _workerId = null;
     _job = null;
     _logCategory = null;
@@ -271,9 +265,11 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
       member: member,
       workers: workers,
       selected: worker,
+      // 워커를 고르면 그 워커의 잡으로 넘어간다.
       onSelect: (w) => setState(() {
         _workerId = w.id;
         _job = null;
+        _tab = _MonitorTab.jobs;
       }),
       onSelectAll: () => setState(() {
         _workerId = null;
@@ -344,12 +340,39 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
             positions: positions,
             orders: orders,
           );
-          final positionsPane = _PositionsPane(positions: positions, onOpen: (p) => _openWorker(p.workerId, p.jobName));
+          // 거래·포지션은 고른 워커·잡으로 좁힌다.
+          final scopedPositions = [
+            for (final x in positions)
+              if ((worker == null || x.workerId == worker.id) && (_job == null || x.jobName == _job!.name)) x,
+          ];
+          final scopedOrders = [
+            for (final x in orders)
+              if ((worker == null || x.workerId == worker.id) && (_job == null || x.jobName == _job!.name)) x,
+          ];
+          final scopeBar = _ScopeBar(
+            worker: worker,
+            job: _job,
+            onAll: () => setState(() {
+              _workerId = null;
+              _job = null;
+            }),
+            onWorker: () => setState(() => _job = null),
+          );
+          final positionsPane = _PositionsPane(
+            positions: scopedPositions,
+            onOpen: (p) => _openWorker(p.workerId, p.jobName),
+          );
           final ordersPane = _OrdersPane(
             orders: orders,
             filter: _orderFilter,
             onFilterChanged: (f) => setState(() => _orderFilter = f),
             onOpen: (o) => _openWorker(o.workerId, o.jobName),
+          );
+          final tradesPane = _TradesPane(
+            key: ValueKey('${member?.id}/$_accountName/${worker?.id}/${_job?.name}'),
+            positions: scopedPositions,
+            orders: scopedOrders,
+            onOpen: _openWorker,
           );
           final issueBar = member == null ? null : _IssueBar(issues: issuesOf(member), onOpen: _openIssue);
           final memoPane = member == null
@@ -386,27 +409,26 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
                 gap,
                 bar,
                 gap,
+                scopeBar,
+                gap,
                 ?issueBar,
                 gap,
                 if (accountBar != null) ...[accountBar, gap],
                 ...switch (_tab) {
-                  _MonitorTab.workers => [
-                    SizedBox(height: 340, child: workerPane),
+                  _MonitorTab.workers => [SizedBox(height: 520, child: workerPane)],
+                  _MonitorTab.jobs => [
+                    SizedBox(height: 420, child: jobsPane),
                     gap,
-                    SizedBox(height: 320, child: settingsPane),
-                    gap,
-                    SizedBox(height: 360, child: jobsPane),
-                    gap,
-                    SizedBox(height: 420, child: logPane),
-                    gap,
-                    SizedBox(height: 640, child: detailPane),
+                    SizedBox(height: 420, child: settingsPane),
                   ],
+                  _MonitorTab.jobDetail => [SizedBox(height: 720, child: detailPane)],
+                  _MonitorTab.trades => [SizedBox(height: 720, child: tradesPane)],
+                  _MonitorTab.positions => [SizedBox(height: 520, child: positionsPane)],
+                  _MonitorTab.logs => [SizedBox(height: 620, child: logPane)],
                   _MonitorTab.accounts => [
                     SizedBox(height: 320, child: accountsPane),
                     gap,
                     SizedBox(height: 280, child: summaryPane),
-                    gap,
-                    SizedBox(height: 320, child: positionsPane),
                     gap,
                     SizedBox(height: 420, child: ordersPane),
                   ],
@@ -421,36 +443,19 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
           }
 
           final body = switch (_tab) {
-            _MonitorTab.workers => Column(
+            _MonitorTab.workers => workerPane,
+            _MonitorTab.jobs => Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  flex: 3,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(flex: 3, child: workerPane),
-                      gap,
-                      Expanded(flex: 2, child: settingsPane),
-                    ],
-                  ),
-                ),
+                Expanded(flex: 3, child: jobsPane),
                 gap,
-                Expanded(
-                  flex: 3,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(flex: 3, child: jobsPane),
-                      gap,
-                      Expanded(flex: 2, child: logPane),
-                    ],
-                  ),
-                ),
-                gap,
-                Expanded(flex: 4, child: detailPane),
+                Expanded(flex: 2, child: settingsPane),
               ],
             ),
+            _MonitorTab.jobDetail => detailPane,
+            _MonitorTab.trades => tradesPane,
+            _MonitorTab.positions => positionsPane,
+            _MonitorTab.logs => logPane,
             _MonitorTab.accounts => Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -462,9 +467,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
                     children: [
                       SizedBox(height: 240, child: summaryPane),
                       gap,
-                      Expanded(flex: 2, child: positionsPane),
-                      gap,
-                      Expanded(flex: 3, child: ordersPane),
+                      Expanded(child: ordersPane),
                     ],
                   ),
                 ),
@@ -480,10 +483,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
             ),
           };
 
-          // 워커 탭은 패널이 세 줄이라 최소 높이를 두고 페이지를 스크롤한다.
-          final height = _tab == _MonitorTab.workers
-              ? max(constraints.maxHeight, _minWideHeight)
-              : constraints.maxHeight;
+          final height = constraints.maxHeight;
           return SingleChildScrollView(
             controller: _scroll,
             child: SizedBox(
@@ -517,7 +517,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
                                 spacing: 16,
                                 runSpacing: 6,
                                 crossAxisAlignment: WrapCrossAlignment.center,
-                                children: [?accountBar, ?issueBar],
+                                children: [scopeBar, ?accountBar, ?issueBar],
                               ),
                               const SizedBox(height: 8),
                               Expanded(child: body),
@@ -547,10 +547,7 @@ class _Header extends StatelessWidget {
       children: [
         Text('회원 모니터링', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
         SizedBox(height: 4),
-        Text(
-          '회원을 선택하면 사용자가 앱에서 보는 워커·잡, 계좌·주문, 알림을 탭으로 보고, 계좌를 고르면 그 계좌 기준으로 바뀝니다.',
-          style: TextStyle(color: AppColors.textTertiary),
-        ),
+        Text('워커 → 잡 → 잡 내역 → 거래 → 포지션 → 로그 순서로 봅니다.', style: TextStyle(color: AppColors.textTertiary)),
       ],
     );
   }
@@ -1042,52 +1039,6 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-/// 앱 워커 설정 시트와 같은 항목·문구. 사용 안 하는 값도 빼지 않고 그대로 보여 준다.
-class _WorkerSettings extends StatelessWidget {
-  const _WorkerSettings(this.worker);
-
-  final MemberWorker worker;
-
-  @override
-  Widget build(BuildContext context) {
-    final w = worker;
-    final limit = w.pnlLimit;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _OnOffRow('장 마감 시 자동 청산', w.autoCloseOnMarketEnd),
-        const Text(
-          '국내주식 15:25 · 해외선물 장 종료 2분 전에 시장가로 청산합니다.',
-          style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
-        ),
-        const SizedBox(height: 8),
-        _OnOffRow('누적 손익으로 워커 종료', limit != null),
-        if (limit != null) ...[
-          const SizedBox(height: 2),
-          _SettingRow('초기화 주기', limit.periodLabel),
-          _SettingRow('기준 단위', limit.isTick ? '틱' : '금액'),
-          _SettingRow(
-            '청산 수익 종료',
-            limit.profitTarget == null ? null : '+${_limitText(limit.profitTarget!, limit, w)} 이상',
-          ),
-          _SettingRow('청산 손실 종료', limit.lossLimit == null ? null : '−${_limitText(limit.lossLimit!, limit, w)} 이하'),
-          _SettingRow(
-            limit.accumTitle,
-            limit.isTick ? _signedTicks(limit.accumTicks) : _signedMoney(limit.accumAmount, w.currency),
-          ),
-          if (!limit.isTick) _SettingRow('평가 포함', _signedMoney(limit.accumAmount + w.unrealizedPnl, w.currency)),
-          _SettingRow('청산 횟수', '${limit.accumCount}회'),
-        ],
-      ],
-    );
-  }
-
-  static String _limitText(double v, WorkerPnlLimit limit, MemberWorker w) =>
-      limit.isTick ? '${_num(v)}틱' : '${_num(v)} ${w.currency}';
-
-  static String _signedTicks(double v) => '${v > 0 ? '+' : ''}${_num(v)}틱';
-}
-
 class _OnOffRow extends StatelessWidget {
   const _OnOffRow(this.label, this.on);
 
@@ -1105,36 +1056,6 @@ class _OnOffRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           StatusBadge(on ? 'ON' : 'OFF', color: on ? AppColors.success : AppColors.textTertiary),
-        ],
-      ),
-    );
-  }
-}
-
-/// 값이 null 이면 앱과 같이 흐린 글자로 '사용 안 함'.
-class _SettingRow extends StatelessWidget {
-  const _SettingRow(this.label, this.value);
-
-  final String label;
-  final String? value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 1),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(label, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
-          ),
-          Expanded(
-            child: Text(
-              value ?? '사용 안 함',
-              style: TextStyle(fontSize: 12, color: value == null ? AppColors.textTertiary : null),
-            ),
-          ),
         ],
       ),
     );
@@ -1338,7 +1259,10 @@ class _JobDetailPane extends StatelessWidget {
         if (unrealized != null) _Pnl('평가 손익', unrealized, w.currency),
       ],
     );
-    final settings = _JobSettings(j, w);
+    final settings = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [_JobSettings(j, w), const Divider(height: 24), _JobFills(j, w)],
+    );
     final history = _JobHistory(j, w);
 
     return _Pane(
@@ -1359,7 +1283,7 @@ class _JobDetailPane extends StatelessWidget {
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SizedBox(width: 300, child: SingleChildScrollView(child: settings)),
+                      SizedBox(width: 380, child: SingleChildScrollView(child: settings)),
                       const SizedBox(width: 16),
                       Expanded(child: SingleChildScrollView(child: history)),
                     ],
@@ -1371,232 +1295,6 @@ class _JobDetailPane extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-/// 건수 요약 + 체결 내역 + 회차별 이력.
-class _JobHistory extends StatelessWidget {
-  const _JobHistory(this.job, this.worker);
-
-  final WorkerJob job;
-  final MemberWorker worker;
-
-  @override
-  Widget build(BuildContext context) {
-    if (job.cycles.isEmpty) {
-      return const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionTitle('이력'),
-          Text('아직 이력이 없어요', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
-        ],
-      );
-    }
-    final events = job.cycles.expand((c) => c.events).toList();
-    int count(String type) => events.where((e) => e.type == type).length;
-    final fills = events.where((e) => e.type == 'fill').toList()..sort((a, b) => b.at.compareTo(a.at));
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _SectionTitle('체결 내역'),
-        Text(
-          '주문 ${count('order_submitted')}건 · 체결 ${count('fill')}건 · 거부 ${count('order_rejected')}건',
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 4),
-        if (fills.isEmpty)
-          const Text('아직 체결 내역이 없어요', style: TextStyle(color: AppColors.textTertiary, fontSize: 12))
-        else
-          for (final f in fills)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 1),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 136,
-                    child: Text(
-                      formatDateTime(f.at, seconds: true),
-                      style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 36,
-                    child: Text(
-                      f.sideLabel,
-                      style: TextStyle(fontSize: 12, color: f.side == 'buy' ? AppColors.up : AppColors.down),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      '${_num(f.qty ?? 0)}${worker.qtyUnit} @${_num(f.price ?? 0)}',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        const SizedBox(height: 12),
-        _SectionTitle('이력 ${job.cycles.length}회차'),
-        for (final c in job.cycles) _CycleCard(c, worker),
-      ],
-    );
-  }
-}
-
-/// 앱 잡 "설정 보기"(읽기 전용)와 같은 구성. 사용하지 않는 값도 '사용 안 함'으로 둔다.
-class _JobSettings extends StatelessWidget {
-  const _JobSettings(this.job, this.worker);
-
-  final WorkerJob job;
-  final MemberWorker worker;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = job.strategy;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('${s.label} (상세보기)', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 6),
-        const _SectionTitle('진입설정'),
-        _SettingRow('전략 이름', job.name),
-        _SettingRow('계좌', _jobAccount(job)),
-        if (job.isAlert)
-          const _SettingRow('주문', '알람 모드에서는 주문을 내지 않습니다')
-        else ...[
-          if (!s.entrySettings.containsKey('거래 방향')) _SettingRow('거래 방향', job.entrySideLabel),
-          _SettingRow('주문 유형', s.orderType),
-          _SettingRow('주문 수량', '${_num(s.qty)}${worker.qtyUnit}'),
-          _SettingRow('반복 횟수', '${job.repeatCount}회'),
-        ],
-        for (final MapEntry(:key, :value) in s.entrySettings.entries) _SettingRow(key, value),
-        if (s.entryMode != null) _SettingRow('진입 방식', s.entryMode),
-        if (s.conditions.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          const _SectionTitle('신호 조건'),
-          for (final MapEntry(key: group, value: all) in s.conditions.entries)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(group, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                  for (final (i, c) in all.indexed)
-                    Text('${i == 0 ? '   ' : 'AND '}$c', style: const TextStyle(fontSize: 12)),
-                ],
-              ),
-            ),
-        ],
-        if (!job.isAlert) ...[
-          const SizedBox(height: 10),
-          const _SectionTitle('청산설정'),
-          _SettingRow('손절', s.stopLossPct == null ? null : '${_num(s.stopLossPct!)}${s.stopLossUnit}'),
-          _SettingRow('익절', s.takeProfitPct == null ? null : '${_num(s.takeProfitPct!)}${s.takeProfitUnit}'),
-          if (s.trailingStop == null)
-            const _SettingRow('트레일링 스탑', null)
-          else
-            for (final MapEntry(:key, :value) in s.trailingStop!.entries) _SettingRow(key, value),
-        ],
-      ],
-    );
-  }
-}
-
-/// 앱 이력 화면의 전략 설정 표기. 값이 없는 손절·익절은 빼지 않고 '사용 안 함'으로 둔다.
-Map<String, String> _strategyFacts(JobStrategy s, MemberWorker w) => {
-  '주문 수량': '${_num(s.qty)}${w.qtyUnit}',
-  '손절': s.stopLossPct == null ? '사용 안 함' : '${_num(s.stopLossPct!)}${s.stopLossUnit}',
-  '청산(익절)': s.takeProfitPct == null ? '사용 안 함' : '${_num(s.takeProfitPct!)}${s.takeProfitUnit}',
-};
-
-/// 앱 이력 화면의 회차 카드 + 타임라인.
-class _CycleCard extends StatelessWidget {
-  const _CycleCard(this.cycle, this.worker);
-
-  final JobCycle cycle;
-  final MemberWorker worker;
-
-  String _fill(double? qty, double? price) =>
-      qty == null || price == null ? '-' : '${_num(qty)}${worker.qtyUnit} @${_num(price)}';
-
-  @override
-  Widget build(BuildContext context) {
-    final c = cycle;
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(top: 6),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(8)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 10,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text('${c.cycleNo}회차', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-              StatusBadge(c.statusLabel, color: c.status == 'open' ? AppColors.success : AppColors.textTertiary),
-              if (c.realizedPnl != null) _Pnl('실현손익', c.realizedPnl!, worker.currency),
-            ],
-          ),
-          const SizedBox(height: 4),
-          _Facts({
-            '매수': _fill(c.filledBuyQty, c.avgBuyPrice),
-            '매도': _fill(c.filledSellQty, c.avgSellPrice),
-            if (c.openedAt != null) '시작': formatDateTime(c.openedAt!, seconds: true),
-            if (c.closedAt != null) '종료': formatDateTime(c.closedAt!, seconds: true),
-          }),
-          const SizedBox(height: 3),
-          if (c.strategy == null)
-            const Text('설정 정보 없음', style: TextStyle(color: AppColors.textTertiary, fontSize: 12))
-          else
-            _Facts({'전략': c.strategy!.label, ..._strategyFacts(c.strategy!, worker)}),
-          const Divider(height: 14),
-          for (final e in c.events)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 1),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 136,
-                    child: Text(
-                      formatDateTime(e.at, seconds: true),
-                      style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      _eventLabel(e),
-                      style: TextStyle(fontSize: 12, color: e.type == 'order_rejected' ? AppColors.up : null),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  /// 앱 타임라인과 같은 문구.
-  String _eventLabel(JobEvent e) {
-    final side = e.sideLabel;
-    final qty = e.qty == null ? '' : ' ${_num(e.qty!)}${worker.qtyUnit}';
-    final at = e.price == null ? '' : ' @${_num(e.price!)}';
-    final msg = e.message == null ? '' : ' · ${e.message}';
-    return switch (e.type) {
-      'alert_fired' => '$side 신호 발생$qty$msg',
-      'order_submitted' => '$side주문$qty$at$msg',
-      'order_accepted' => '접수됨',
-      'fill' => '체결$qty$at',
-      'order_rejected' => '${side.isEmpty ? '주문' : side} 거부$msg',
-      'order_cancelled' => '주문 취소',
-      'cycle_closed' => '사이클 종료',
-      'sold_elsewhere' => '타 매체 매도됨',
-      _ => e.type,
-    };
   }
 }
 

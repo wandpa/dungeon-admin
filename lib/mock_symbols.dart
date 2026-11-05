@@ -163,6 +163,14 @@ void resetMockSymbols() {
     ..addAll(_seedSymbols());
 }
 
+/// 틱 크기. 선물 월물이 아니면(주식) null 이다.
+double? tickSizeOf(String code) {
+  for (final s in mockSymbols) {
+    if (s.months.any((m) => m.code == code)) return s.tickSize;
+  }
+  return null;
+}
+
 /// 이 월물을 쓰는 워커 수.
 int workersOnMonth(String code) {
   var count = 0;

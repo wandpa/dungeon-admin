@@ -270,6 +270,21 @@ List<MemberIssue> issuesOf(Member m) {
 
 List<MemberAccount> accountsOf(int memberId) => _accounts[memberId] ?? const [];
 
+/// 회원과 함께 묶은 포지션.
+class MemberPosition {
+  const MemberPosition(this.member, this.position, this.isPaper);
+  final Member member;
+  final AccountPosition position;
+  final bool isPaper;
+}
+
+/// 전체 회원의 포지션. 승인 전 회원은 포지션이 없다.
+List<MemberPosition> allMemberPositions() => [
+  for (final m in mockMembers)
+    for (final p in positionsOf(m.id))
+      MemberPosition(m, p, accountsOf(m.id).any((a) => a.name == p.accountName && a.isPaper)),
+];
+
 /// [accountName] 을 주면 그 계좌, 없으면 전체 계좌의 포지션.
 List<AccountPosition> positionsOf(int memberId, {String? accountName}) => [
   for (final w in workersOf(memberId))

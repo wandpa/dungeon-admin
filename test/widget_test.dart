@@ -8,6 +8,12 @@ import 'package:dungeon_admin/mock_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+/// 회원 모니터링의 흐름 탭으로 옮긴다. 로그 화면의 같은 이름 칩보다 위쪽 탭이 먼저다.
+Future<void> flowTab(WidgetTester tester, String label) async {
+  await tester.tap(find.widgetWithText(ChoiceChip, label).first);
+  await tester.pumpAndSettle();
+}
+
 Future<void> pickAccount(WidgetTester tester, String label) async {
   await tester.tap(find.byType(DropdownButton<String?>));
   await tester.pumpAndSettle();
@@ -69,7 +75,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('회원 모니터링: 워커를 선택하면 설정과 잡이 따로 나오고, 잡에서 이력과 설정을 본다', (tester) async {
+  testWidgets('회원 모니터링: 워커 → 잡 → 잡 내역 → 거래 → 포지션 → 로그 순서로 이어진다', (tester) async {
     tester.view.physicalSize = const Size(1400, 3000); // 내용이 스크롤 없이 다 만들어지게
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -79,50 +85,32 @@ void main() {
     await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
     await tester.pumpAndSettle();
 
-    // 처음에는 워커가 있는 첫 회원의 워커 전체가 목록으로 나오고 로그도 전체다.
+    // 처음에는 워커 목록만 크게 나온다. 승인 대기 회원은 목록에 없다.
+    for (final label in ['워커', '잡', '잡 내역', '거래', '포지션', '로그', '계좌', '알림']) {
+      expect(find.widgetWithText(ChoiceChip, label), findsOneWidget, reason: label);
+    }
     expect(find.text('risingkang 워커'), findsOneWidget);
-    expect(find.text('newbie_slime'), findsNothing); // 승인 대기 회원은 목록에 없다
+    expect(find.text('newbie_slime'), findsNothing);
     expect(find.textContaining('실행 5 / 7'), findsOneWidget);
     expect(find.text('테슬라 (TSLA)'), findsOneWidget);
-    expect(find.text('+7,000 KRW'), findsOneWidget); // 선택하지 않은 워커의 손익도 목록에 보인다
-    expect(find.text('고객 로그 · 전체'), findsOneWidget);
-    expect(find.text('워커를 선택하세요.'), findsNWidgets(2));
-    expect(find.text('Android 앱 로그인'), findsWidgets);
-    expect(find.text('삼성전자 워커 시작'), findsOneWidget);
+    expect(find.text('+7,000 KRW'), findsOneWidget);
 
-    // 워커를 누르면 그 워커의 설정·잡·로그만 나온다.
+    // 워커를 누르면 잡으로 넘어가고 위치가 표시된다. 워커 설정도 같이 나온다.
     await tester.tap(find.text('마이크로 WTI 원유 12월물 (MCLZ26)'));
     await tester.pumpAndSettle();
-    expect(find.text('고객 로그 · 마이크로 WTI 원유 12월물'), findsOneWidget);
-    expect(find.text('마이크로 WTI 원유 12월물 워커 시작'), findsOneWidget);
-    expect(find.text('삼성전자 워커 시작'), findsNothing);
-    expect(find.text('Android 앱 로그인'), findsNothing);
-
-    // 워커 제목(탭)을 누르면 전체 로그로 돌아오고, 다시 워커를 고를 수 있다.
-    await tester.tap(find.text('risingkang 워커'));
-    await tester.pumpAndSettle();
-    expect(find.text('고객 로그 · 전체'), findsOneWidget);
-    expect(find.text('삼성전자 워커 시작'), findsOneWidget);
-    await tester.tap(find.text('마이크로 WTI 원유 12월물 (MCLZ26)'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('마이크로 WTI 원유 12월물 워커 설정'), findsOneWidget);
     expect(find.text('마이크로 WTI 원유 12월물 잡'), findsOneWidget);
-    expect(find.text('돌파 매수 전략'), findsOneWidget);
-    expect(find.text('거래량 급증 매수'), findsNothing);
-
-    // 사용자가 설정한 값이 앱과 같은 항목으로 보인다.
+    expect(find.text('마이크로 WTI 원유 12월물 워커 설정'), findsOneWidget);
+    expect(find.text('전체 워커'), findsOneWidget);
+    expect(find.text('마이크로 WTI 원유 12월물'), findsOneWidget);
     expect(find.text('장 마감 시 자동 청산'), findsOneWidget);
     expect(find.text('누적 손익으로 워커 종료'), findsOneWidget);
     expect(find.text('일 · 매일 장 시작 10분 전'), findsOneWidget);
-    expect(find.text('+500 USD 이상'), findsOneWidget);
-    expect(find.text('−300 USD 이하'), findsOneWidget);
-    expect(find.text('오늘 누적 손익'), findsOneWidget);
-    expect(find.text('+210 USD'), findsOneWidget); // 실현 140 + 평가 70
+    expect(find.text('+\$500 이상'), findsOneWidget);
+    expect(find.text('−\$300 이하'), findsOneWidget);
+    expect(find.text('오늘 누적 손익 · 청산 2회'), findsOneWidget);
+    expect(find.textContaining('평가 포함 +\$210'), findsOneWidget); // 실현 140 + 평가 70
 
-    // 잡을 선택하면 팝업 없이 아래 패널에 설정과 체결·이력이 다 나온다.
-    expect(find.text('잡을 선택하세요.'), findsOneWidget);
-    expect(find.text('1회차'), findsNothing);
+    // 잡을 누르면 잡 내역으로 넘어간다. 팝업 없이 설정과 이력이 함께 나온다.
     await tester.tap(find.text('돌파 매수 전략'));
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsNothing);
@@ -136,63 +124,68 @@ void main() {
     expect(find.text('체결 내역'), findsOneWidget);
     expect(find.text('주문 5건 · 체결 5건 · 거부 0건'), findsOneWidget);
     expect(find.text('1회차'), findsOneWidget);
-    expect(find.text('+100 USD'), findsOneWidget); // 회차 손익 합이 잡 실현손익이다
-    expect(find.text('+40 USD'), findsOneWidget);
+    expect(find.text('실현손익 +\$100'), findsOneWidget); // 회차 손익 합이 잡 실현손익이다
+    expect(find.text('실현손익 +\$40'), findsOneWidget);
+    expect(find.text('체결 2계약 @\$100.75'), findsOneWidget); // 앱과 같은 표기
+    expect(find.textContaining('10/30 10:02:41'), findsWidgets);
     expect(find.text('사이클 종료'), findsNWidgets(2));
 
-    // 잡을 선택하면 고객 로그도 그 잡의 로그로 바뀐다.
+    // 거래·포지션·로그는 고른 잡으로 좁혀진다.
+    await flowTab(tester, '거래');
+    expect(find.text('마이크로 WTI 원유 12월물 (MCLZ26)'), findsOneWidget);
+    expect(find.text('삼성전자 (005930)'), findsNothing);
+    await flowTab(tester, '포지션');
+    expect(find.text('보유 포지션 1'), findsOneWidget);
+    await flowTab(tester, '로그');
     expect(find.text('고객 로그 · 돌파 매수 전략'), findsOneWidget);
     expect(find.text('마이크로 WTI 원유 12월물 매수 2계약 체결 @100.75'), findsOneWidget);
-    expect(find.text('마이크로 WTI 원유 12월물 워커 시작'), findsNothing);
     expect(find.text('고점 이탈 알람 감시 시작'), findsNothing);
 
+    // 위치를 누르면 범위가 풀린다.
+    await tester.tap(find.text('마이크로 WTI 원유 12월물'));
+    await tester.pumpAndSettle();
+    expect(find.text('고객 로그 · 마이크로 WTI 원유 12월물'), findsOneWidget);
+    expect(find.text('마이크로 WTI 원유 12월물 워커 시작'), findsOneWidget);
+    await tester.tap(find.text('전체 워커'));
+    await tester.pumpAndSettle();
+    expect(find.text('고객 로그 · 전체'), findsOneWidget);
+    expect(find.text('삼성전자 워커 시작'), findsOneWidget);
+    expect(find.text('Android 앱 로그인'), findsWidgets);
+
     // 알람 잡도 설정을 볼 수 있다.
+    await flowTab(tester, '워커');
+    await tester.tap(find.text('마이크로 WTI 원유 12월물 (MCLZ26)'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('고점 이탈 알람'));
     await tester.pumpAndSettle();
-    expect(find.text('알람 모드에서는 주문을 내지 않습니다'), findsOneWidget);
     expect(find.text('신호 조건'), findsOneWidget);
-    expect(find.text('매도 OR 1'), findsOneWidget);
     expect(find.text('AND 볼린저밴드(20, 2) 상단 이탈'), findsOneWidget);
-    expect(find.text('봉 완성 시'), findsOneWidget); // 진입 방식
     expect(find.text('아직 이력이 없어요'), findsOneWidget);
-    expect(find.text('고객 로그 · 고점 이탈 알람'), findsOneWidget);
-    expect(find.text('고점 이탈 알람 감시 시작'), findsOneWidget);
-    expect(find.text('마이크로 WTI 원유 12월물 매수 2계약 체결 @100.75'), findsNothing);
 
     // 끝난 잡은 종료된 전략 탭에 있고, 카드와 상세에서 거부 사유를 볼 수 있다.
-    expect(find.text('갭 상승 진입'), findsNothing);
+    await flowTab(tester, '잡');
     await tester.tap(find.text('종료된 전략 1'));
     await tester.pumpAndSettle();
     expect(find.text('돌파 매수 전략'), findsNothing);
-    expect(find.text('잡을 선택하세요.'), findsOneWidget); // 탭을 바꾸면 상세도 비운다
-    expect(find.text('고객 로그 · 마이크로 WTI 원유 12월물'), findsOneWidget); // 로그는 워커 단위로 돌아온다
     expect(find.text('주문 가능 금액 부족'), findsOneWidget);
     await tester.tap(find.text('갭 상승 진입'));
     await tester.pumpAndSettle();
     expect(find.text('갭 트레이딩 (상세보기)'), findsOneWidget);
     expect(find.text('매수 거부 · 주문 가능 금액 부족'), findsOneWidget);
 
-    // 다른 워커를 고르면 설정과 잡이 함께 바뀌고 열어 둔 내용은 닫힌다.
-    await tester.tap(find.text('삼성전자 (005930)'));
-    await tester.pumpAndSettle();
-    expect(find.text('삼성전자 잡'), findsOneWidget);
-    expect(find.text('거래량 급증 매수'), findsOneWidget);
-    expect(find.text('현재 잡 1'), findsOneWidget); // 탭도 현재 잡으로 돌아온다
-    expect(find.text('잡을 선택하세요.'), findsOneWidget);
-
-    // 틱 기준, 쓰지 않는 수익 종료, 비정상종료가 그대로 드러난다.
+    // 회원을 바꾸면 워커부터 다시 시작한다. 틱 기준과 비정상종료가 그대로 드러난다.
     await tester.tap(find.text('uptrend99'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('나스닥100 12월물 (NQZ26)'));
     await tester.pumpAndSettle();
     expect(find.text('−400틱 이하'), findsOneWidget);
-    expect(find.text('-125틱'), findsOneWidget);
+    expect(find.textContaining('-125틱'), findsOneWidget);
     expect(find.text('사용 안 함'), findsWidgets);
     await tester.tap(find.text('종료된 전략 1'));
     await tester.pumpAndSettle();
     expect(find.text('비정상종료'), findsOneWidget);
-
-    await tester.tap(find.widgetWithText(ChoiceChip, '오류'));
+    await flowTab(tester, '로그');
+    await tester.tap(find.widgetWithText(ChoiceChip, '오류').last);
     await tester.pumpAndSettle();
     expect(find.textContaining('잔고 불일치 감지'), findsOneWidget);
     expect(find.text('Android 앱 로그인'), findsNothing);
@@ -200,13 +193,17 @@ void main() {
     await tester.tap(find.text('f_rank_trader'));
     await tester.pumpAndSettle();
     expect(find.text('등록한 워커가 없습니다.'), findsOneWidget);
+    await flowTab(tester, '잡');
     expect(find.text('워커를 선택하세요.'), findsNWidgets(2));
+    await flowTab(tester, '잡 내역');
+    expect(find.text('잡을 선택하세요.'), findsOneWidget);
+    await flowTab(tester, '로그');
     expect(find.text('로그가 없습니다.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('회원 모니터링: 모드와 계좌·주문, 알림을 탭으로 본다', (tester) async {
-    tester.view.physicalSize = const Size(1400, 3000);
+  testWidgets('회원 모니터링: 모드와 포지션, 계좌, 알림을 탭으로 본다', (tester) async {
+    tester.view.physicalSize = const Size(1400, 3000); // 내용이 스크롤 없이 다 만들어지게
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const AdminApp());
@@ -216,15 +213,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('실매매'), findsOneWidget);
-    await tester.tap(find.widgetWithText(ChoiceChip, '계좌·주문'));
-    await tester.pumpAndSettle();
 
-    // 전체 계좌: 잡 포지션과 수동 포지션, 체결·미체결·거부 주문이 다 나온다.
-    expect(find.text('계좌 5개'), findsOneWidget);
-    expect(find.text('통화별 총자산'), findsOneWidget);
+    // 포지션: 잡 포지션과 수동 포지션이 함께 나온다.
+    await flowTab(tester, '포지션');
     expect(find.text('보유 포지션 5'), findsOneWidget);
     expect(find.text('수동'), findsOneWidget);
     expect(find.textContaining('LG에너지솔루션'), findsOneWidget);
+
+    // 계좌: 잔고와 주문 내역.
+    await flowTab(tester, '계좌');
+    expect(find.text('계좌 5개'), findsOneWidget);
+    expect(find.text('통화별 총자산'), findsOneWidget);
     expect(find.text('거부 1'), findsOneWidget);
     expect(find.text('미체결 0'), findsOneWidget);
     expect(find.text('주문 가능 금액 부족'), findsOneWidget);
@@ -238,29 +237,26 @@ void main() {
     expect(find.text('해외주식 · ****3404 · KIS'), findsOneWidget);
     await tester.tap(find.text('국내주식 연습'));
     await tester.pumpAndSettle();
-    expect(find.text('보유 포지션 2'), findsOneWidget);
     expect(find.text('주문 내역'), findsOneWidget);
-    expect(find.text('전체 2'), findsNothing);
+    await flowTab(tester, '포지션');
+    expect(find.text('보유 포지션 2'), findsOneWidget);
 
     // 알림: 진단에서 막힌 곳이 앱 문구로 보인다.
     await tester.tap(find.text('uptrend99'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ChoiceChip, '알림'));
-    await tester.pumpAndSettle();
+    await flowTab(tester, '알림');
     expect(find.text('푸시 알림 허용'), findsOneWidget);
     expect(find.text('푸시가 나갈 곳이 없습니다'), findsOneWidget);
     expect(find.text('읽지 않음 2'), findsOneWidget);
     expect(find.textContaining('나스닥100 12월물 매도 체결'), findsWidgets);
 
-    // 워커·잡 탭으로 돌아올 수 있다.
-    await tester.tap(find.widgetWithText(ChoiceChip, '워커·잡'));
-    await tester.pumpAndSettle();
+    await flowTab(tester, '워커');
     expect(find.text('uptrend99 워커'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('회원 모니터링: 계좌를 고르면 워커·잡·로그·알림이 그 계좌 기준으로 바뀐다', (tester) async {
-    tester.view.physicalSize = const Size(1400, 3000);
+    tester.view.physicalSize = const Size(1400, 3000); // 내용이 스크롤 없이 다 만들어지게
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const AdminApp());
@@ -273,22 +269,22 @@ void main() {
     expect(find.text('돌파 매수 전략'), findsOneWidget);
     expect(find.text('눌림목 소액 매수'), findsOneWidget); // 한 워커에 계좌가 다른 잡이 섞여 있다
 
-    // 서브 계좌: 그 계좌를 쓰는 워커와 잡만 남고 다른 계좌의 손익은 빠진다.
+    // 서브 계좌: 그 계좌의 잡만 남는다. 워커 전체 기준인 누적 손익은 그대로다.
     await pickAccount(tester, '해외선물 서브 ****3405');
     expect(find.text('눌림목 소액 매수'), findsOneWidget);
     expect(find.text('돌파 매수 전략'), findsNothing);
+    expect(find.textContaining('+\$140'), findsOneWidget);
+    expect(find.textContaining('평가 포함 +\$210'), findsOneWidget);
+    await flowTab(tester, '워커');
     expect(find.text('삼성전자 (005930)'), findsNothing);
     expect(find.textContaining('실행 1 / 1'), findsOneWidget);
-    expect(find.text('+140 USD'), findsOneWidget); // 워커 전체 기준인 누적 손익 한 곳에만 남는다
-    expect(find.text('+210 USD'), findsOneWidget); // 평가 포함도 워커 전체 기준이다
+    await flowTab(tester, '로그');
     expect(find.text('Android 앱 로그인'), findsNothing);
 
     // 메인 계좌: 체결 로그가 나오고, 고른 계좌는 알림 탭에도 그대로 적용된다.
     await pickAccount(tester, '해외선물 메인 ****3401');
-    expect(find.text('돌파 매수 전략'), findsOneWidget);
     expect(find.text('마이크로 WTI 원유 12월물 매수 2계약 체결 @100.75'), findsOneWidget);
-    await tester.tap(find.widgetWithText(ChoiceChip, '알림'));
-    await tester.pumpAndSettle();
+    await flowTab(tester, '알림');
     expect(find.textContaining('삼성전자 매수 체결'), findsNothing);
     expect(find.textContaining('마이크로 금 12월물 매도 체결'), findsOneWidget);
     await pickAccount(tester, '전체 계좌');
@@ -680,11 +676,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('중지됨'), findsWidgets);
     expect(find.text('꺼져 있어 매매하지 않습니다'), findsOneWidget);
+    await flowTab(tester, '워커');
     await tester.tap(find.text('마이크로 WTI 원유 12월물 (MCLZ26)'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('돌파 매수 전략'));
     await tester.pumpAndSettle();
-    expect(find.text('25틱'), findsOneWidget);
+    expect(find.text('-25'), findsOneWidget); // 앱처럼 손절은 음수, 단위는 Tick
+    expect(find.text('Tick'), findsWidgets);
     expect(find.text('평가 시점'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -998,6 +996,63 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('회원 포지션: 전체 회원 포지션을 보고 거른 뒤 회원 계좌로 이동한다', (tester) async {
+    await openMenu(tester, '회원 관리');
+    await tester.tap(find.widgetWithText(ChoiceChip, '회원 포지션'));
+    await tester.pumpAndSettle();
+    expect(find.text('전체 9'), findsOneWidget);
+    expect(find.text('수동 1'), findsOneWidget);
+    expect(find.text('LG에너지솔루션'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilterChip, '수동 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('삼성전자'), findsNothing);
+    await tester.tap(find.widgetWithText(FilterChip, '전체 9'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.widgetWithText(TextField, '회원·종목 검색'), 'tank');
+    await tester.pumpAndSettle();
+    expect(find.text('samsung_tank'), findsOneWidget);
+    expect(find.text('LG에너지솔루션'), findsNothing);
+
+    await tester.tap(find.text('samsung_tank'));
+    await tester.pumpAndSettle();
+    expect(find.text('보유 포지션 1'), findsOneWidget); // 그 회원의 계좌·주문 탭
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('거래: 앱 내역처럼 보유와 주문을 함께 보고 거른다', (tester) async {
+    await openMenu(tester, '회원 모니터링');
+    await tester.tap(find.widgetWithText(ChoiceChip, '거래'));
+    await tester.pumpAndSettle();
+
+    // 보유 포지션 카드: 현재가·매입가·보유수량, 손익과 틱.
+    expect(find.text('마이크로 WTI 원유 12월물 (MCLZ26)'), findsOneWidget);
+    expect(find.text('\$101.1'), findsOneWidget);
+    expect(find.text('\$100.75'), findsWidgets);
+    expect(find.text('+\$70'), findsOneWidget);
+    expect(find.text('+35T'), findsOneWidget);
+    expect(find.text('보유수량'), findsWidgets);
+    expect(find.text('매도수량'), findsOneWidget); // 항셍은 매도 보유
+
+    await tester.tap(find.widgetWithText(ChoiceChip, '보유'));
+    await tester.pumpAndSettle();
+    expect(find.text('매수거부'), findsNothing);
+    expect(find.text('보유수량'), findsWidgets);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, '거부'));
+    await tester.pumpAndSettle();
+    expect(find.text('매수거부'), findsOneWidget);
+    expect(find.text('주문 가능 금액 부족'), findsOneWidget);
+    expect(find.text('보유수량'), findsNothing);
+
+    // 주문을 누르면 그 잡으로 간다.
+    await tester.tap(find.text('매수거부'));
+    await tester.pumpAndSettle();
+    expect(find.text('갭 상승 진입 상세'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('푸시: 보낸 알림이 회원의 알림 이력에 남는다', (tester) async {
     await openMenu(tester, '푸시 알림');
     await tester.tap(find.widgetWithText(ChoiceChip, '사용자 검색'));
@@ -1026,6 +1081,7 @@ void main() {
 
   testWidgets('고객 로그: 검색·기간으로 찾고 눌러서 잡으로 이동한다', (tester) async {
     await openMenu(tester, '회원 모니터링');
+    await flowTab(tester, '로그');
     await tester.enterText(find.widgetWithText(TextField, '로그 검색'), '삼성전자');
     await tester.pumpAndSettle();
     expect(find.text('삼성전자 워커 시작'), findsOneWidget);
@@ -1044,12 +1100,13 @@ void main() {
     await tester.tap(find.textContaining('주문 가능 금액 부족'));
     await tester.pumpAndSettle();
     expect(find.text('갭 상승 진입 상세'), findsOneWidget);
+    await flowTab(tester, '로그');
     expect(find.text('고객 로그 · 갭 상승 진입'), findsOneWidget);
-    expect(find.text('고점 이탈 알람'), findsNothing);
+    await flowTab(tester, '잡');
+    expect(find.text('고점 이탈 알람'), findsNothing); // 종료된 전략 탭이 열려 있다
 
     // 주문을 눌러도 그 잡으로 간다.
-    await tester.tap(find.widgetWithText(ChoiceChip, '계좌·주문'));
-    await tester.pumpAndSettle();
+    await flowTab(tester, '계좌');
     await tester.tap(find.textContaining('코스피200 12월물 매수'));
     await tester.pumpAndSettle();
     expect(find.text('장 초반 돌파 상세'), findsOneWidget);
@@ -1163,7 +1220,7 @@ void main() {
 
     await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
     await tester.pumpAndSettle();
-    expect(find.text('고객 로그 · 전체'), findsOneWidget);
+    expect(find.text('risingkang 워커'), findsOneWidget);
 
     await tester.tap(find.text('회원 정보·처리'));
     await tester.pumpAndSettle();

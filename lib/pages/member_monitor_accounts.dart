@@ -1,6 +1,51 @@
 part of 'member_monitor_page.dart';
 
-enum _MonitorTab { workers, accounts, notifications }
+/// 고객 상담 흐름 순서: 워커 → 잡 → 잡 내역 → 거래 → 포지션 → 로그. 계좌와 알림은 뒤에 둔다.
+enum _MonitorTab {
+  workers('워커'),
+  jobs('잡'),
+  jobDetail('잡 내역'),
+  trades('거래'),
+  positions('포지션'),
+  logs('로그'),
+  accounts('계좌'),
+  notifications('알림');
+
+  const _MonitorTab(this.label);
+  final String label;
+}
+
+/// 지금 보고 있는 범위. 누르면 그 단계로 돌아간다.
+class _ScopeBar extends StatelessWidget {
+  const _ScopeBar({required this.worker, required this.job, required this.onAll, required this.onWorker});
+
+  final MemberWorker? worker;
+  final WorkerJob? job;
+  final VoidCallback onAll;
+  final VoidCallback onWorker;
+
+  @override
+  Widget build(BuildContext context) {
+    final w = worker, j = job;
+    Widget step(String label, VoidCallback? onTap) => TextButton(
+      style: TextButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+      ),
+      onPressed: onTap,
+      child: Text(label, style: const TextStyle(fontSize: 13)),
+    );
+    const arrow = Icon(Icons.chevron_right, size: 16, color: AppColors.textTertiary);
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        step('전체 워커', w == null ? null : onAll),
+        if (w != null) ...[arrow, step(w.symbolName, j == null ? null : onWorker)],
+        if (j != null) ...[arrow, step(j.name, null)],
+      ],
+    );
+  }
+}
 
 /// 선택한 회원의 모드와 화면 탭. 패널들 위에 늘 보인다.
 class _MemberBar extends StatelessWidget {
@@ -47,15 +92,7 @@ class _MemberBar extends StatelessWidget {
               TextButton(onPressed: onDetail, child: const Text('회원 정보·처리')),
             ],
           ),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            chip(_MonitorTab.workers, '워커·잡'),
-            chip(_MonitorTab.accounts, '계좌·주문'),
-            chip(_MonitorTab.notifications, '알림'),
-          ],
-        ),
+        Wrap(spacing: 6, runSpacing: 6, children: [for (final t in _MonitorTab.values) chip(t, t.label)]),
       ],
     );
   }

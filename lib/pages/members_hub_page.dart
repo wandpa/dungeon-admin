@@ -2,18 +2,20 @@ import 'package:flutter/material.dart';
 
 import 'consultations_page.dart';
 import 'member_monitor_page.dart';
+import 'member_positions_page.dart';
 import 'members_page.dart';
 
 enum _Tab {
   list('회원 목록'),
   monitor('회원 모니터링'),
+  positions('회원 포지션'),
   consultations('상담 이력');
 
   const _Tab(this.label);
   final String label;
 }
 
-/// 회원 관리 메뉴. 회원 목록, 앱 화면을 함께 보는 모니터링, 상담 이력을 한곳에서 본다.
+/// 회원 관리 메뉴. 회원 목록, 모니터링, 전체 회원 포지션, 상담 이력을 한곳에서 본다.
 class MembersHubPage extends StatefulWidget {
   const MembersHubPage({super.key});
 
@@ -65,6 +67,7 @@ class _MembersHubPageState extends State<MembersHubPage> {
           child: switch (_tab) {
             _Tab.list => const MembersPage(),
             _Tab.monitor => const MemberMonitorPage(),
+            _Tab.positions => const MemberPositionsPage(),
             _Tab.consultations => const ConsultationsPage(),
           },
         ),
