@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../file_download.dart';
+import '../mock_admin.dart';
 import '../mock_data.dart';
 import '../theme.dart';
 import '../widgets/admin_page.dart';
 import 'member_actions.dart';
 import 'member_detail_dialog.dart';
+import 'member_monitor_page.dart' show MonitorRequest, memberMonitorRequest;
 
 class MembersPage extends StatefulWidget {
   const MembersPage({super.key});
@@ -60,6 +63,33 @@ class _MembersPageState extends State<MembersPage> {
     showMessage(context, '${targets.length}명을 ${approve ? '승인' : '거절'}했습니다.');
   }
 
+  /// 지금 필터의 회원을 CSV 로 내려받는다. 이메일은 화면과 같이 가린다.
+  void _export(List<Member> members) {
+    String cell(String v) {
+      // 엑셀이 값을 수식으로 실행하지 않게 막는다.
+      final safe = RegExp(r'^[=+\-@]').hasMatch(v) ? "'$v" : v;
+      return '"${safe.replaceAll('"', '""')}"';
+    }
+
+    final rows = [
+      ['번호', '아이디', '이메일', '가입일', '최근 접속', '상태'],
+      for (final m in members)
+        [
+          '${m.id}',
+          m.username,
+          maskEmail(m.email),
+          formatDateTime(m.joinedAt),
+          m.lastLoginAt == null ? '' : formatDateTime(m.lastLoginAt!),
+          m.status.label,
+        ],
+    ];
+    final now = DateTime.now();
+    final stamp = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    downloadCsv('members_$stamp.csv', rows.map((r) => r.map(cell).join(',')).join('\r\n'));
+    logActivity(ActivityKind.member, '회원 ${members.length}명 내보내기');
+    showMessage(context, '${members.length}명을 내보냈습니다.');
+  }
+
   Future<void> _openDetail(Member m) async {
     await showMemberDetail(context, m);
     if (mounted) setState(() => _selectedIds.removeWhere((id) => !mockMembers.any((m) => m.id == id)));
@@ -72,7 +102,7 @@ class _MembersPageState extends State<MembersPage> {
     final page = _page.clamp(0, pageCount - 1);
     final visible = filtered.skip(page * _pageSize).take(_pageSize).toList();
     final pending = _count(MemberStatus.pending);
-    final selectable = _status == MemberStatus.pending;
+    final selectable = _status == MemberStatus.pending && can(AdminPermission.memberActions);
     final statuses = <MemberStatus?>[null, ...MemberStatus.values];
 
     return AdminPage(
@@ -80,7 +110,7 @@ class _MembersPageState extends State<MembersPage> {
       description: '가입 회원을 조회하고 승인·정지·탈퇴를 처리합니다.',
       actions: [
         OutlinedButton.icon(
-          onPressed: () => showNotConnected(context),
+          onPressed: can(AdminPermission.exportMembers) ? () => _export(filtered) : null,
           icon: const Icon(Icons.download, size: 18),
           label: const Text('엑셀 내보내기'),
         ),
@@ -141,7 +171,15 @@ class _MembersPageState extends State<MembersPage> {
                 Text(formatDateTime(m.joinedAt)),
                 Text(m.lastLoginAt == null ? '-' : formatDateTime(m.lastLoginAt!)),
                 StatusBadge(m.status.label, color: memberStatusColor(m.status)),
-                TextButton(onPressed: () => _openDetail(m), child: const Text('상세')),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextButton(onPressed: () => _openDetail(m), child: const Text('상세')),
+                    // 승인 전 회원은 로그인한 적이 없어 모니터링할 내용이 없다.
+                    if (m.status != MemberStatus.pending)
+                      TextButton(onPressed: () => memberMonitorRequest.value = MonitorRequest(m.id), child: const Text('모니터링')),
+                  ],
+                ),
               ],
           ],
         ),

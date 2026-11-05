@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'member_monitor_page.dart' show MonitorRequest, memberMonitorRequest;
+
+import '../mock_accounts.dart';
 import '../mock_data.dart';
 import '../theme.dart';
 import '../widgets/admin_page.dart';
@@ -14,7 +17,7 @@ class DashboardPage extends StatelessWidget {
 
     return AdminPage(
       title: '대시보드',
-      description: '오늘의 던전 현황을 한눈에 봅니다.',
+      description: '오늘의 던전 현황과 회사 전체 전략·잡·주문을 한눈에 봅니다.',
       children: [
         Wrap(
           spacing: 16,
@@ -30,11 +33,13 @@ class DashboardPage extends StatelessWidget {
             ),
           ],
         ),
+        const _IssuePanel(),
+        const _OperationSection(),
         Panel(
           title: '최근 신호',
           child: Column(
             children: [
-              for (final s in mockSignals.take(5))
+              for (final s in mockSignals.where((s) => !s.hidden).take(5))
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: StatusBadge(
@@ -80,12 +85,318 @@ class DashboardPage extends StatelessWidget {
   }
 }
 
+/// 회사 전체에서 지금 확인이 필요한 회원. 워커 문제를 맨 위로 올린다.
+class _IssuePanel extends StatelessWidget {
+  const _IssuePanel();
+
+  static const _limit = 8;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = [
+      for (final m in pushableMembers())
+        if (issuesOf(m).isNotEmpty) (member: m, issues: issuesOf(m)),
+    ];
+    int rank(List<MemberIssue> issues) => issues.any((i) => i.kind == MemberIssueKind.worker) ? 0 : 1;
+    rows.sort((a, b) {
+      final byKind = rank(a.issues).compareTo(rank(b.issues));
+      return byKind != 0 ? byKind : b.issues.length.compareTo(a.issues.length);
+    });
+    final total = rows.fold(0, (n, r) => n + r.issues.length);
+    return Panel(
+      title: rows.isEmpty ? '확인이 필요한 회원 없음' : '확인이 필요한 회원 ${rows.length}명 · 문제 $total건',
+      child: rows.isEmpty
+          ? const Text('지금 확인할 문제가 없습니다.', style: TextStyle(color: AppColors.textTertiary))
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final r in rows.take(_limit))
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 140,
+                          child: TextButton(
+                            style: TextButton.styleFrom(
+                              alignment: Alignment.centerLeft,
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                            ),
+                            onPressed: () => memberMonitorRequest.value = MonitorRequest(r.member.id),
+                            child: Text(r.member.username, overflow: TextOverflow.ellipsis),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              for (final i in r.issues)
+                                ActionChip(
+                                  label: Text(i.label, style: const TextStyle(fontSize: 12, color: AppColors.warning)),
+                                  visualDensity: VisualDensity.compact,
+                                  side: const BorderSide(color: AppColors.warning),
+                                  onPressed: () => memberMonitorRequest.value = MonitorRequest(r.member.id, issue: i),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (rows.length > _limit)
+                  Text('외 ${rows.length - _limit}명', style: const TextStyle(color: AppColors.textTertiary)),
+              ],
+            ),
+    );
+  }
+}
+
+enum _Period {
+  today('오늘'),
+  week('7일'),
+  all('전체');
+
+  const _Period(this.label);
+  final String label;
+
+  /// 샘플 데이터의 마지막 날을 오늘로 본다. API 를 붙이면 실제 날짜로 바꾼다.
+  DateTime? get since => switch (this) {
+    _Period.today => DateTime(2026, 10, 30),
+    _Period.week => DateTime(2026, 10, 24),
+    _Period.all => null,
+  };
+}
+
+/// 회사 전체 운영 현황: 전략·잡·포지션 지표와 주문 금액, 종목별·전략별 잡 수.
+class _OperationSection extends StatefulWidget {
+  const _OperationSection();
+
+  @override
+  State<_OperationSection> createState() => _OperationSectionState();
+}
+
+class _OperationSectionState extends State<_OperationSection> {
+  _Period _period = _Period.today;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = companyStats();
+    final totals = orderTotals(since: _period.since);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: [
+            _StatTile(
+              label: '전체 전략',
+              value: formatNumber(s.strategyCount),
+              icon: Icons.account_tree_outlined,
+              sub: '회원별 전략 합계',
+            ),
+            _StatTile(
+              label: '현재 잡',
+              value: formatNumber(s.currentJobs),
+              icon: Icons.task_alt,
+              sub: '종료 ${s.finishedJobs}개',
+            ),
+            _StatTile(
+              label: '실행 중 워커',
+              value: formatNumber(s.runningWorkers),
+              icon: Icons.smart_toy_outlined,
+              sub: '전체 ${s.workers}개 · 오류 ${s.errorWorkers}개',
+            ),
+            _StatTile(
+              label: '보유 포지션',
+              value: formatNumber(s.positions),
+              icon: Icons.account_balance_wallet_outlined,
+              sub: '수동 ${s.manualPositions}건 포함',
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('회원 전체 주문 금액', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                      SizedBox(height: 2),
+                      Text(
+                        '실전 계좌 체결 기준 · 체결가 × 수량 × 계약승수 · 모의 계좌 제외',
+                        style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (final p in _Period.values)
+                        ChoiceChip(
+                          label: Text(p.label, style: const TextStyle(fontSize: 12)),
+                          visualDensity: VisualDensity.compact,
+                          selected: p == _period,
+                          onSelected: (_) => setState(() => _period = p),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (totals.isEmpty)
+                const Text('이 기간의 주문이 없습니다.', style: TextStyle(color: AppColors.textTertiary))
+              else
+                Wrap(
+                  spacing: 32,
+                  runSpacing: 16,
+                  children: [for (final t in totals) _CurrencyTotal(t)],
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final symbols = _BarPanel(title: '종목별 현재 잡', rows: s.jobsBySymbol);
+            final strategies = _BarPanel(title: '전략별 현재 잡', rows: s.jobsByStrategy);
+            if (constraints.maxWidth < 760) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [symbols, const SizedBox(height: 16), strategies],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 3, child: symbols),
+                const SizedBox(width: 16),
+                Expanded(flex: 2, child: strategies),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+/// 통화 하나의 주문 합계. 통화가 다르면 더할 수 없어 따로 보여 준다.
+class _CurrencyTotal extends StatelessWidget {
+  const _CurrencyTotal(this.total);
+
+  final OrderTotal total;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = total;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('${t.currency} 체결 금액', style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+        const SizedBox(height: 2),
+        Text(_amount(t.filledAmount), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 2),
+        Text(
+          '주문 ${t.orders}건 · 체결 ${t.filled}건 · 미체결 ${t.waiting}건 · 거부 ${t.rejected}건',
+          style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+        ),
+        Text(
+          '매수 ${_amount(t.buyAmount)} · 매도 ${_amount(t.sellAmount)}',
+          style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+        ),
+      ],
+    );
+  }
+}
+
+String _amount(double v) => formatNumber(v.round());
+
+/// 많은 순서의 가로 막대. 값은 막대 옆에 쓰고, 마우스를 올리면 자세한 내용을 보여 준다.
+class _BarPanel extends StatelessWidget {
+  const _BarPanel({required this.title, required this.rows});
+
+  final String title;
+  final List<BarRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxValue = rows.fold(0, (m, r) => r.value > m ? r.value : m);
+    return Panel(
+      title: title,
+      child: rows.isEmpty
+          ? const Text('현재 잡이 없습니다.', style: TextStyle(color: AppColors.textTertiary))
+          : Column(
+              children: [
+                for (final r in rows)
+                  Tooltip(
+                    message: r.detail,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 170,
+                            child: Text(
+                              r.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: FractionallySizedBox(
+                                widthFactor: r.value / maxValue,
+                                child: Container(
+                                  height: 10,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.accent,
+                                    borderRadius: BorderRadius.horizontal(right: Radius.circular(4)),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          SizedBox(
+                            width: 28,
+                            child: Text(
+                              '${r.value}',
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
 class _StatTile extends StatelessWidget {
-  const _StatTile({required this.label, required this.value, required this.icon});
+  const _StatTile({required this.label, required this.value, required this.icon, this.sub});
 
   final String label;
   final String value;
   final IconData icon;
+  final String? sub;
 
   @override
   Widget build(BuildContext context) {
@@ -103,6 +414,7 @@ class _StatTile extends StatelessWidget {
                   Text(label, style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
                   const SizedBox(height: 4),
                   Text(value, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
+                  if (sub != null) Text(sub!, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
                 ],
               ),
             ),
