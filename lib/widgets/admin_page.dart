@@ -342,6 +342,24 @@ class StatusBadge extends StatelessWidget {
 }
 
 /// 아직 API 가 없는 버튼을 눌렀을 때 안내.
+/// 테스트 DB 연결 중인데 아직 샘플로 보여 주는 화면의 안내.
+class SampleNotice extends StatelessWidget {
+  const SampleNotice(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    decoration: BoxDecoration(
+      color: AppColors.warning.withValues(alpha: 0.1),
+      border: Border.all(color: AppColors.warning),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Text(text, style: const TextStyle(color: AppColors.warning, fontSize: 13, fontWeight: FontWeight.w600)),
+  );
+}
+
 void showNotConnected(BuildContext context) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()

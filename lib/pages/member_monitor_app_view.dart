@@ -1071,16 +1071,7 @@ class _CycleCardState extends State<_CycleCard> {
   }
 }
 
-String? _exitLabel(String? reason) => switch (reason) {
-  'take_profit' => '익절',
-  'stop_loss' => '손절',
-  'trailing' => '트레일링',
-  'signal' => '신호 청산',
-  'pnl_limit' => '누적 손익 종료',
-  null => null,
-  final other when RegExp(r'^[a-z_]+$').hasMatch(other) => '청산', // 영어 코드를 그대로 보이지 않는다
-  final other => other,
-};
+String? _exitLabel(String? reason) => liveExitLabel(reason);
 
 /// 앱 잡 시트의 체결 내역에 건수 요약을 더한 것. 한 줄이 한 회차다.
 class _JobFills extends StatelessWidget {

@@ -189,8 +189,8 @@ class _MembersPageState extends State<MembersPage> {
           ),
         AdminTable(
           // 버튼이 화면 밖으로 밀리지 않게 맨 왼쪽에 둔다. 테스트 DB 회원은 차단할 수 없어 끝 칸이 없다.
-          columns: ['보기', '번호', '아이디', '이메일', '가입일', '최근 접속', '상태', if (canBlock) ''],
-          buttonColumns: {0, if (canBlock) 7},
+          columns: ['보기', '번호', '아이디', '이름', '등급', '이메일', '가입일', '최근 접속', '상태', if (canBlock) ''],
+          buttonColumns: {0, if (canBlock) 9},
           // 줄을 누르면 상세, 두 번 누르면 그 회원의 워커 목록이다. 승인 전 회원은 워커가 없다.
           onRowTap: (i) => _openDetail(visible[i]),
           highlightedRow: open == null ? null : visible.indexOf(open),
@@ -230,6 +230,8 @@ class _MembersPageState extends State<MembersPage> {
                   onDoubleTap: m.status == MemberStatus.pending ? null : () => _openMonitor(m),
                   child: Text(m.username, style: const TextStyle(fontWeight: FontWeight.w600)),
                 ),
+                Text(m.maskedName ?? '-'),
+                Text(m.gradeLabel ?? '-'),
                 Text(m.shownEmail),
                 Text(formatDateTime(m.joinedAt)),
                 Text(m.lastLoginAt == null ? '-' : formatDateTime(m.lastLoginAt!)),

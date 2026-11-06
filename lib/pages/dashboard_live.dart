@@ -29,6 +29,8 @@ List<BarRow> _bars(List<Map<String, dynamic>> rows) => [
 ];
 
 /// 테스트 DB 대시보드. API 에 없는 값은 '-' 로 둔다.
+String _grade(Object? tier) => tier is int && tier >= 1 && tier <= memberGrades.length ? memberGrades[tier - 1] : '-';
+
 class LiveDashboardPage extends StatelessWidget {
   const LiveDashboardPage({super.key});
 
@@ -52,12 +54,14 @@ class LiveDashboardPage extends StatelessWidget {
           ],
         );
         Widget members = AdminTable(
-          columns: const ['최근 가입 회원', '이메일', '가입일'],
+          columns: const ['최근 가입 회원', '이름', '등급', '이메일', '가입일'],
           emptyText: '최근 가입 회원이 없습니다.',
           rows: [
             for (final m in recent)
               [
                 Text(m['username'] as String? ?? '-', style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(m['maskedName'] as String? ?? '-'),
+                Text(_grade(m['tier'])),
                 Text(m['maskedEmail'] as String? ?? '-'),
                 Text(formatDateTime(liveTime(m['joinedAt'])!)),
               ],

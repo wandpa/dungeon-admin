@@ -460,6 +460,15 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
       onOpen: (l) => _openWorker(l.workerId, l.jobName),
       category: _logCategory,
       onCategoryChanged: (c) => setState(() => _logCategory = c),
+      more: member == null || !member.isLive
+          ? null
+          : liveMoreLogs(member, workerId: worker?.id, jobId: _job?.liveId),
+      onMore: member == null
+          ? null
+          : () async {
+              await loadMoreLiveLogs(member, workerId: worker?.id, jobId: _job?.liveId);
+              if (mounted) setState(() {});
+            },
     );
 
     return Padding(
@@ -552,12 +561,26 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
             filter: _orderFilter,
             onFilterChanged: (f) => setState(() => _orderFilter = f),
             onOpen: (o) => _openWorker(o.workerId, o.jobName),
+            more: member == null || !member.isLive ? null : liveMoreOrders(member),
+            onMore: member == null
+                ? null
+                : () async {
+                    await loadMoreLiveOrders(member);
+                    if (mounted) setState(() {});
+                  },
           );
           final tradesPane = _TradesPane(
             key: ValueKey('${member?.id}/$_accountName/${worker?.id}/${_job?.name}'),
             positions: scopedPositions,
             orders: scopedOrders,
             onOpen: _openWorker,
+            more: member == null || !member.isLive ? null : liveMoreOrders(member),
+            onMore: member == null
+                ? null
+                : () async {
+                    await loadMoreLiveOrders(member);
+                    if (mounted) setState(() {});
+                  },
           );
           // 테스트 DB 회원은 받기 전에 '문제 없음'으로 보이지 않게 한다.
           final issueBar = member == null || (member.isLive && !isLiveLoaded(member))
@@ -1138,7 +1161,7 @@ class _Pnl extends StatelessWidget {
 }
 
 /// 워커 목록. 한 줄씩 표처럼 보여 주고, 누르면 아래 패널이 그 워커로 바뀐다.
-class _WorkersPane extends StatelessWidget {
+class _WorkersPane extends StatefulWidget {
   const _WorkersPane({
     required this.member,
     required this.workers,
@@ -1153,11 +1176,21 @@ class _WorkersPane extends StatelessWidget {
   final ValueChanged<MemberWorker> onSelect;
   final VoidCallback onSelectAll;
 
+  @override
+  State<_WorkersPane> createState() => _WorkersPaneState();
+}
+
+class _WorkersPaneState extends State<_WorkersPane> {
+  static const _kinds = [('real', '실전'), ('paper', '모의'), ('alert', '알람')];
+
+  final _checked = {for (final (key, _) in _kinds) key}; // 체크한 워커 종류
+
   /// 실전과 모의는 합치지 않는다. 값은 실현+평가 손익이고, 통화가 다르면 통화별로 보여 준다.
-  String _totals({required bool paper}) {
+  String _totals(List<MemberWorker> workers, {required bool paper}) {
     final sums = <String, double>{};
     for (final w in workers) {
-      for (final j in w.jobs.where((j) => j.isPaper == paper)) {
+      // 알람 잡은 주문을 내지 않아 어느 쪽에도 넣지 않는다.
+      for (final j in w.jobs.where((j) => !j.isAlert && j.isPaper == paper)) {
         final pnl = j.realizedPnl + (j.position?.pnlAt(w.currentPrice) ?? 0);
         sums.update(w.currency, (v) => v + pnl, ifAbsent: () => pnl);
       }
@@ -1165,19 +1198,55 @@ class _WorkersPane extends StatelessWidget {
     return sums.entries.map((e) => _signedMoney(e.value, e.key)).join(' · ');
   }
 
+  /// 종류별 체크박스. 여러 개를 함께 고를 수 있다.
+  Widget _kindFilter() => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+    child: Wrap(
+      spacing: 12,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        for (final (key, label) in _kinds)
+          InkWell(
+            onTap: () => setState(() => _checked.contains(key) ? _checked.remove(key) : _checked.add(key)),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IgnorePointer(
+                  child: Checkbox(
+                    value: _checked.contains(key),
+                    visualDensity: VisualDensity.compact,
+                    onChanged: (_) {},
+                  ),
+                ),
+                Text(
+                  '$label ${widget.workers.where((w) => w.kindKey == key).length}',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
+    final member = widget.member;
+    final selected = widget.selected;
+    final all = widget.workers;
+    final live = useLiveData.value && all.isNotEmpty;
+    final workers = live ? [for (final w in all) if (_checked.contains(w.kindKey)) w] : all;
     final running = workers.where((w) => w.status == WorkerStatus.running).length;
-    final real = _totals(paper: false);
-    final paper = _totals(paper: true);
+    final real = _totals(workers, paper: false);
+    final paper = _totals(workers, paper: true);
     // 오류 워커를 맨 위로 올린다.
     final sorted = [
       ...workers.where((w) => w.status == WorkerStatus.error),
       ...workers.where((w) => w.status != WorkerStatus.error),
     ];
     return _Pane(
-      title: member == null ? '워커' : '${member!.username} 워커',
-      onTitleTap: onSelectAll,
+      title: member == null ? '워커' : '${member.username} 워커',
+      onTitleTap: widget.onSelectAll,
       titleActive: selected == null,
       trailing: workers.isEmpty
           ? null
@@ -1185,14 +1254,23 @@ class _WorkersPane extends StatelessWidget {
               '실행 $running / ${workers.length} · 실현+평가 실전 ${real.isEmpty ? '-' : real}${paper.isEmpty ? '' : ' · 모의 $paper'}',
               style: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
             ),
-      child: workers.isEmpty
-          ? const _Empty('등록한 워커가 없습니다.')
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-              children: [
-                for (final w in sorted) _WorkerCard(w, selected: w.id == selected?.id, onTap: () => onSelect(w)),
-              ],
-            ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (live) _kindFilter(),
+          Expanded(
+            child: workers.isEmpty
+                ? _Empty(all.isEmpty ? '등록한 워커가 없습니다.' : '선택한 종류의 워커가 없습니다.')
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                    children: [
+                      for (final w in sorted)
+                        _WorkerCard(w, selected: w.id == selected?.id, onTap: () => widget.onSelect(w)),
+                    ],
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1460,7 +1538,14 @@ Color _jobStatusColor(WorkerJob job) => switch (job.status) {
   _ => AppColors.textTertiary,
 };
 
-String _jobAccount(WorkerJob job) => '${job.accountName} (${job.isPaper ? '모의' : '실전'})';
+String _jobAccount(WorkerJob job) {
+  final kind = job.isAlert
+      ? '알람'
+      : job.isPaper
+      ? '모의'
+      : '실전';
+  return '${job.accountName} ($kind)';
+}
 
 /// 선택한 잡의 상세. 앱은 설정·체결 내역·이력이 여러 화면으로 나뉘지만 상담용으로 한 패널에 모은다.
 class _JobDetailPane extends StatelessWidget {
@@ -1556,6 +1641,8 @@ class _CustomerLogPane extends StatelessWidget {
     required this.onOpen,
     required this.category,
     required this.onCategoryChanged,
+    this.more,
+    this.onMore,
   });
 
   final String title;
@@ -1567,6 +1654,8 @@ class _CustomerLogPane extends StatelessWidget {
   final List<CustomerLog> logs;
   final CustomerLogCategory? category;
   final ValueChanged<CustomerLogCategory?> onCategoryChanged;
+  final (int, int)? more; // 더 받을 수 있으면 (받은 건수, 전체 건수)
+  final Future<void> Function()? onMore;
 
   Color _color(CustomerLogCategory c) => switch (c) {
     CustomerLogCategory.access => AppColors.textTertiary,
@@ -1635,6 +1724,11 @@ class _CustomerLogPane extends StatelessWidget {
               ],
             ),
           ),
+          if (more != null && onMore != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _MoreButton('로그', more!, onMore!),
+            ),
           Expanded(
             child: visible.isEmpty
                 ? const _Empty('로그가 없습니다.')

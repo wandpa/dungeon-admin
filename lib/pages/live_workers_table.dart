@@ -9,18 +9,23 @@ import 'live_lists.dart';
 import 'live_view.dart';
 
 enum _Tab {
-  workers('워커'),
-  trades('거래'),
-  positions('포지션'),
-  logs('로그'),
-  accounts('계좌'),
-  signals('신호'),
-  strategies('전략'),
-  watchlist('관심종목'),
-  symbols('종목');
+  workers('워커', '/workers'),
+  alerts('알람', '/workers'),
+  trades('거래', '/orders'),
+  positions('포지션', '/positions'),
+  logs('로그', '/logs'),
+  accounts('계좌', '/accounts'),
+  signals('신호', '/signals'),
+  strategies('전략', '/templates'),
+  watchlist('관심종목', '/watchlist'),
+  symbols('종목', '/subscriptions');
 
-  const _Tab(this.label);
+  const _Tab(this.label, this.path);
   final String label;
+  final String path; // 전체 회원 경로
+
+  /// 계좌와 전략은 종목 조건이 없다.
+  bool get hasSymbolSearch => this != accounts && this != strategies;
 
   LiveListDef? get list => switch (this) {
     signals => liveSignalList,
@@ -31,7 +36,10 @@ enum _Tab {
   };
 }
 
-typedef _Row = (Member, Map<String, dynamic>);
+typedef _Row = Map<String, dynamic>;
+
+/// 한 쪽에 보여 줄 줄 수.
+const _pageSize = 50;
 
 String _text(Object? v) => v == null || v == '' ? '-' : '$v';
 
@@ -58,13 +66,31 @@ String _orderStatus(Object? s) => switch (s) {
   _ => _text(s),
 };
 
-enum _Status {
-  all('전체'),
-  running('가동중'),
-  stopped('중지됨');
+String _orderKind(Map<String, dynamic> o) => switch (o['kind']) {
+  'entry' => '진입',
+  'exit' => ['청산', ?liveExitLabel(o['exitReason'] as String?)].join(' · '),
+  _ => '-',
+};
 
-  const _Status(this.label);
+enum _OrderGroup {
+  filled('체결'),
+  waiting('대기'),
+  rejected('거부');
+
+  const _OrderGroup(this.label);
   final String label;
+}
+
+String _day(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+enum _Status {
+  all('전체', null),
+  running('가동중', 'running'),
+  stopped('중지됨', 'stopped');
+
+  const _Status(this.label, this.query);
+  final String label;
+  final String? query;
 }
 
 String _money(double v) => '${v > 0 ? '+' : ''}${formatNumber(v.round())}';
@@ -87,59 +113,102 @@ class LiveWorkersTable extends StatefulWidget {
 }
 
 class _LiveWorkersTableState extends State<LiveWorkersTable> {
+  final _debounce = SearchDebounce();
+  final _memberField = TextEditingController();
+  final _symbolField = TextEditingController(); // 종목 조건이 없는 탭을 다녀와도 글자가 남는다
   String _member = '';
   String _symbol = '';
   _Status _status = _Status.all;
   _Tab _tab = _Tab.workers;
+  int _page = 1;
+  DateTimeRange? _range; // 거래·로그 기간
+  _OrderGroup? _group;
+  String? _accountId;
+  CustomerLogCategory? _category;
+  Future<Map<String, dynamic>>? _accountList; // 계좌 조건에 쓴다
 
-  List<LiveWorkerRow> _filter(List<LiveWorkerRow> rows) {
-    final member = _member.trim().toLowerCase();
-    final symbol = _symbol.trim().toLowerCase();
-    return [
-      for (final r in rows)
-        if (r.username.toLowerCase().contains(member) &&
-            (r.symbolCode.toLowerCase().contains(symbol) || r.symbolName.toLowerCase().contains(symbol)) &&
-            (_status == _Status.all || r.running == (_status == _Status.running)))
-          r,
-    ];
+  @override
+  void dispose() {
+    _debounce.dispose();
+    _memberField.dispose();
+    _symbolField.dispose();
+    super.dispose();
   }
 
-  bool _matches(Member m, String text) =>
-      m.username.toLowerCase().contains(_member.trim().toLowerCase()) &&
-      text.toLowerCase().contains(_symbol.trim().toLowerCase());
+  void _update(VoidCallback change) => setState(() {
+    change();
+    _page = 1;
+  });
 
-  void _openMember(_Row row) => widget.onOpenMember?.call(row.$1.id);
+  /// 두 검색칸이 대기를 함께 쓰므로 입력이 멈추면 두 칸의 값을 같이 읽는다.
+  void _searchLater() => _debounce(() {
+    if (!mounted) return;
+    _update(() {
+      _member = _memberField.text;
+      _symbol = _symbolField.text;
+    });
+  });
 
-  Future<List<_Row>> _trades() async {
-    final rows = await liveRowsOfAllMembers('/orders?pageSize=$liveListLimit');
-    int at(_Row r) => liveTime(r.$2['orderedAt'])?.millisecondsSinceEpoch ?? 0;
-    return rows..sort((a, b) => at(b).compareTo(at(a)));
+  void _openMember(_Row row) => widget.onOpenMember?.call(liveIntId(row['memberId'] as String));
+
+  /// 지금 탭의 서버 조건.
+  Map<String, String> get _filters => {
+    if ((_tab == _Tab.trades || _tab == _Tab.logs) && _range != null) ...{
+      'from': _day(_range!.start),
+      'to': _day(_range!.end),
+    },
+    if (_tab == _Tab.trades && _group != null) 'group': _group!.name,
+    if (_tab == _Tab.trades && _accountId != null) 'accountId': _accountId!,
+    if (_tab == _Tab.logs && _category != null) 'category': _category!.name,
+    if (_tab == _Tab.alerts) 'kind': 'alert',
+  };
+
+  Future<Map<String, dynamic>> _load() {
+    final symbol = _tab.hasSymbolSearch ? _symbol : '';
+    return switch (_tab) {
+      _Tab.signals => liveAllList(
+        _tab.path,
+        member: _member,
+        symbol: symbol,
+        memberKey: 'member',
+        symbolKey: 'q',
+        page: _page,
+        pageSize: _pageSize,
+      ),
+      _Tab.logs => liveAllLogs(member: _member, symbol: symbol, filters: _filters, page: _page, pageSize: _pageSize),
+      _ => liveAllList(
+        _tab.path,
+        member: _member,
+        symbol: symbol,
+        status: _tab == _Tab.workers || _tab == _Tab.alerts ? _status.query : null,
+        filters: _filters,
+        page: _page,
+        pageSize: _pageSize,
+      ),
+    };
   }
 
-  /// 계좌에 최신 잔고를 붙인다.
-  Future<List<_Row>> _accounts() async {
-    final data = await Future.wait([liveRowsOfAllMembers('/accounts'), liveRowsOfAllMembers('/balances')]);
-    final balances = {for (final (_, b) in data[1]) b['accountId']: b};
-    return [
-      for (final (m, a) in data[0]) (m, {...a, ...?balances[a['accountId']]}),
-    ];
-  }
+  List<_Row> _items(Map<String, dynamic> body) => (body['items'] as List).cast<_Row>();
+
+  Widget _pager(Map<String, dynamic> body) => LivePager(
+    total: body['total'] as int? ?? 0,
+    page: _page,
+    pageSize: _pageSize,
+    onPage: (p) => setState(() => _page = p),
+  );
 
   Widget _tableOf(
-    List<_Row> rows,
+    Map<String, dynamic> body,
     List<String> columns,
-    String Function(Map<String, dynamic>) searchText,
-    List<Widget> Function(Map<String, dynamic>) cells,
-  ) {
-    final shown = [
-      for (final r in rows)
-        if (_matches(r.$1, searchText(r.$2))) r,
-    ];
+    List<Widget> Function(Map<String, dynamic>) cells, {
+    Widget? summary,
+  }) {
+    final rows = _items(body);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          '${formatNumber(shown.length)}건',
+          '${formatNumber(body['total'] as int? ?? 0)}건',
           style: const TextStyle(color: AppColors.textTertiary, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
@@ -147,45 +216,81 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
           columns: ['회원', ...columns],
           columnSpacing: 12,
           emptyText: '조건에 맞는 내역이 없습니다.',
-          onRowTap: (i) => _openMember(shown[i]),
+          onRowTap: (i) => _openMember(rows[i]),
           rows: [
-            for (final r in shown)
-              [Text(r.$1.username, style: const TextStyle(fontWeight: FontWeight.w600)), ...cells(r.$2)],
+            for (final r in rows)
+              [Text(_text(r['username']), style: const TextStyle(fontWeight: FontWeight.w600)), ...cells(r)],
           ],
         ),
+        if (summary != null) ...[const SizedBox(height: 8), summary],
+        _pager(body),
       ],
     );
   }
 
-  Widget _tradesTable(BuildContext context, List<_Row> rows) => _tableOf(
-    rows,
-    const ['시각', '계좌', '구분', '종목', '방향', '수량', '체결가', '통화', '상태', '잡'],
-    (o) => '${o['symbolCode']} ${o['symbolName']} ${o['jobName']}',
-    (o) => [
-      Text(_at(o['orderedAt'])),
-      Text(_text(o['accountName'])),
-      Text(o['isPaper'] == true ? '모의' : '실전'),
-      Text(_text(o['symbolName'])),
-      Text(
-        o['side'] == 'buy'
-            ? '매수'
-            : o['side'] == 'sell'
-            ? '매도'
-            : '-',
-        style: TextStyle(color: o['side'] == 'buy' ? AppColors.up : AppColors.down, fontWeight: FontWeight.w700),
-      ),
-      _right(Text('${_amount(o['filledQty'])}${_text(o['qtyUnit'])}')),
-      _right(Text(_amount(o['avgFillPrice']))),
-      Text(_text(o['currency'])),
-      Text(_orderStatus(o['status'])),
-      Text(_text(o['jobName'])),
-    ],
+  /// 조건 전체의 주문 합계. 실전과 모의, 통화를 나눠 보여 준다. 삭제된 워커의 주문까지 더한 값이다.
+  Widget _orderTotals(Map<String, dynamic> body) {
+    final totals = (body['totals'] as List? ?? const []).cast<_Row>();
+    return Wrap(
+      alignment: WrapAlignment.end,
+      spacing: 16,
+      children: [
+        if (totals.isNotEmpty)
+          const Text(
+            '합계(삭제된 워커 포함)',
+            style: TextStyle(color: AppColors.textTertiary, fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+        for (final t in totals)
+          Text(
+            '${t['isPaper'] == true ? '모의' : '실전'} ${_text(t['currency'])} · 주문 ${_amount(t['orders'])}건'
+            ' · 체결 ${_amount(t['filled'])}건 · 손익 ${_amount(t['realizedPnl'])}',
+            style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+          ),
+      ],
+    );
+  }
+
+  Widget _tradesTable(BuildContext context, Map<String, dynamic> body) => _tableOf(
+    body,
+    const ['시각', '계좌', '구분', '종목', '방향', '회차', '진입·청산', '수량', '체결가', '통화', '상태', '잡', '손익'],
+    (o) {
+      final pnl = liveDouble(o['realizedPnl']);
+      return [
+        Text(_at(o['orderedAt'])),
+        Text(_text(o['accountName'])),
+        Text(o['isPaper'] == true ? '모의' : '실전'),
+        Text(_text(o['symbolName'])),
+        Text(
+          o['side'] == 'buy'
+              ? '매수'
+              : o['side'] == 'sell'
+              ? '매도'
+              : '-',
+          style: TextStyle(color: o['side'] == 'buy' ? AppColors.up : AppColors.down, fontWeight: FontWeight.w700),
+        ),
+        _right(Text(_text(o['cycleNo']))),
+        Text(_orderKind(o)),
+        _right(Text('${_amount(o['filledQty'])}${_text(o['qtyUnit'])}')),
+        _right(Text(_amount(o['avgFillPrice']))),
+        Text(_text(o['currency'])),
+        Text(_orderStatus(o['status'])),
+        Text(_text(o['jobName'])),
+        _right(
+          pnl == null
+              ? const Text('-')
+              : Text(
+                  _money(pnl),
+                  style: TextStyle(color: _pnlColor(pnl), fontWeight: FontWeight.w700),
+                ),
+        ),
+      ];
+    },
+    summary: _orderTotals(body),
   );
 
-  Widget _positionsTable(BuildContext context, List<_Row> rows) => _tableOf(
-    rows,
+  Widget _positionsTable(BuildContext context, Map<String, dynamic> body) => _tableOf(
+    body,
     const ['계좌', '구분', '종목코드', '종목명', '방향', '수량', '평균가', '통화', '잡'],
-    (p) => '${p['symbolCode']} ${p['symbolName']} ${p['jobName']}',
     (p) => [
       Text(_text(p['accountName'])),
       Text(p['isPaper'] == true ? '모의' : '실전'),
@@ -202,10 +307,9 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
     ],
   );
 
-  Widget _logsTable(BuildContext context, List<_Row> rows) => _tableOf(
-    rows,
+  Widget _logsTable(BuildContext context, Map<String, dynamic> body) => _tableOf(
+    body,
     const ['시각', '분류', '내용'],
-    liveLogDetail,
     (l) => [
       Text(_at(l['at'])),
       Text(CustomerLogCategory.values.asNameMap()[l['category']]?.label ?? '-'),
@@ -213,14 +317,13 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
     ],
   );
 
-  Widget _accountsTable(BuildContext context, List<_Row> rows) => _tableOf(
-    rows,
+  Widget _accountsTable(BuildContext context, Map<String, dynamic> body) => _tableOf(
+    body,
     const ['계좌', '계좌번호', '구분', '시장', '증권사', '통화', '예수금', '총자산', '사용'],
-    (a) => '${a['accountName']} ${a['maskedAccountNumber']} ${a['marketType']}',
     (a) => [
       Text(_text(a['accountName'])),
       Text(_text(a['maskedAccountNumber'])),
-      Text(a['isPaper'] == true ? '모의' : '실전'),
+      Text(liveKindLabel(a['kind'])),
       Text(_text(a['marketType'])),
       Text(_text(a['brokerCode'])),
       Text(_text(a['currency'])),
@@ -233,12 +336,42 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
     ],
   );
 
-  Widget _search(String hint, ValueChanged<String> onChanged) => SizedBox(
+  Widget _search(String hint, TextEditingController controller) => SizedBox(
     width: 220,
     child: TextField(
-      onChanged: onChanged,
+      controller: controller,
+      onChanged: (_) => _searchLater(),
       decoration: InputDecoration(prefixIcon: const Icon(Icons.search, size: 20), hintText: hint),
     ),
+  );
+
+  Widget _dropdown<T>(String hint, T? value, List<(T, String)> items, ValueChanged<T?> onChanged) => DropdownButton<T?>(
+    value: value,
+    style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
+    items: [
+      DropdownMenuItem<T?>(child: Text(hint)),
+      for (final (v, label) in items) DropdownMenuItem<T?>(value: v, child: Text(label)),
+    ],
+    onChanged: (v) => _update(() {
+      onChanged(v);
+    }),
+  );
+
+  /// 계좌 조건. 목록을 받지 못해도 나머지 조건은 쓸 수 있다.
+  Widget _accountFilter() => FutureBuilder<Map<String, dynamic>>(
+    future: _accountList ??= liveAllList('/accounts', page: 1, pageSize: liveListLimit),
+    builder: (context, snapshot) {
+      final rows = ((snapshot.data?['items'] as List?) ?? const []).cast<_Row>();
+      return _dropdown<String>(
+        '전체 계좌',
+        _accountId,
+        [
+          for (final a in rows)
+            (a['accountId'] as String, '${_text(a['username'])} ${_text(a['accountName'])}(${_text(a['maskedAccountNumber'])})'),
+        ],
+        (v) => _accountId = v,
+      );
+    },
   );
 
   Widget _right(Widget child) => Align(alignment: Alignment.centerRight, child: child);
@@ -261,17 +394,14 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
           ),
   );
 
-  Widget _table(BuildContext context, List<LiveWorkerRow> all) {
-    final rows = _filter(all);
-    final totals = <String, double>{};
-    for (final r in rows) {
-      r.pnl.forEach((currency, v) => totals.update(currency, (t) => t + v, ifAbsent: () => v));
-    }
+  Widget _table(BuildContext context, Map<String, dynamic> body) {
+    final rows = [for (final w in _items(body)) liveWorkerRow(w)];
+    final totals = body['totals'] as Map<String, dynamic>? ?? const {};
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          '워커 ${rows.length}개 · 가동중 ${rows.where((r) => r.running).length}개',
+          '${_tab.label} ${body['total'] ?? rows.length}개 · 가동중 ${totals['running'] ?? '-'}개',
           style: const TextStyle(color: AppColors.textTertiary, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
@@ -285,7 +415,7 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
               [
                 Text(r.username, style: const TextStyle(fontWeight: FontWeight.w600)),
                 Text(r.accounts),
-                Text(r.paper == null ? '-' : (r.paper! ? '모의' : '실전')),
+                Text(r.kind),
                 Text(r.symbolCode, style: const TextStyle(fontWeight: FontWeight.w600)),
                 Text(r.symbolName),
                 Text(r.market),
@@ -299,21 +429,25 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
               ],
           ],
         ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            const Text('실현손익 합계  ', style: TextStyle(fontWeight: FontWeight.w700)),
-            _pnlText(totals),
-          ],
-        ),
+        // 알람은 주문을 내지 않아 손익이 없다.
+        if (_tab == _Tab.workers) ...[
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              const Text('실현손익 합계(활성 워커 기준)  ', style: TextStyle(fontWeight: FontWeight.w700)),
+              _pnlText(livePnl(totals['pnl'])),
+            ],
+          ),
+        ],
+        _pager(body),
       ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final key = ValueKey((_tab, liveStatus.value.revision));
+    final key = ValueKey((_tab, liveStatus.value.revision, _member, _symbol, _status, _page, _filters.toString()));
     return AdminPage(
       title: '전체 회원',
       description: '전체 회원의 내역을 봅니다. 줄을 누르면 그 회원을 엽니다.',
@@ -326,7 +460,7 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
                 label: Text(t.label),
                 visualDensity: VisualDensity.compact,
                 selected: t == _tab,
-                onSelected: (_) => setState(() => _tab = t),
+                onSelected: (_) => _update(() => _tab = t),
               ),
           ],
         ),
@@ -335,34 +469,46 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
           runSpacing: 8,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            _search('회원 아이디 검색', (v) => setState(() => _member = v)),
-            _search('종목코드·종목명 검색', (v) => setState(() => _symbol = v)),
-            if (_tab == _Tab.workers)
+            _search('회원 아이디 검색', _memberField),
+            if (_tab.hasSymbolSearch) _search('종목코드·종목명 검색', _symbolField),
+            if (_tab == _Tab.workers || _tab == _Tab.alerts)
               for (final s in _Status.values)
                 ChoiceChip(
                   label: Text(s.label),
                   visualDensity: VisualDensity.compact,
                   selected: s == _status,
-                  onSelected: (_) => setState(() => _status = s),
+                  onSelected: (_) => _update(() => _status = s),
                 ),
+            if (_tab == _Tab.trades || _tab == _Tab.logs)
+              DateRangeFilter(range: _range, onChanged: (r) => _update(() => _range = r)),
+            if (_tab == _Tab.trades) ...[
+              _dropdown<_OrderGroup>('전체 상태', _group, [for (final g in _OrderGroup.values) (g, g.label)], (v) => _group = v),
+              _accountFilter(),
+            ],
+            if (_tab == _Tab.logs)
+              _dropdown<CustomerLogCategory>(
+                '전체 분류',
+                _category,
+                [
+                  for (final c in CustomerLogCategory.values)
+                    if (c != CustomerLogCategory.access) (c, c.label), // 접속 기록은 아직 없다
+                ],
+                (v) => _category = v,
+              ),
           ],
         ),
-        switch (_tab) {
-          _Tab.workers => LiveLoader<List<LiveWorkerRow>>(key: key, load: liveAllWorkers, builder: _table),
-          _Tab.trades => LiveLoader<List<_Row>>(key: key, load: _trades, builder: _tradesTable),
-          _Tab.positions => LiveLoader<List<_Row>>(
-            key: key,
-            load: () => liveRowsOfAllMembers('/positions'),
-            builder: _positionsTable,
-          ),
-          _Tab.logs => LiveLoader<List<_Row>>(key: key, load: liveAllLogs, builder: _logsTable),
-          _Tab.accounts => LiveLoader<List<_Row>>(key: key, load: _accounts, builder: _accountsTable),
-          _ => LiveLoader<List<_Row>>(
-            key: key,
-            load: () => liveRowsOfAllMembers(_tab.list!.path),
-            builder: (context, rows) => _tableOf(rows, _tab.list!.columns, _tab.list!.searchText, _tab.list!.cells),
-          ),
-        },
+        LiveLoader<Map<String, dynamic>>(
+          key: key,
+          load: _load,
+          builder: switch (_tab) {
+            _Tab.workers || _Tab.alerts => _table,
+            _Tab.trades => _tradesTable,
+            _Tab.positions => _positionsTable,
+            _Tab.logs => _logsTable,
+            _Tab.accounts => _accountsTable,
+            _ => (context, body) => _tableOf(body, _tab.list!.columns, _tab.list!.cells),
+          },
+        ),
       ],
     );
   }

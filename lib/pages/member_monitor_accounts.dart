@@ -439,8 +439,16 @@ class _AccountsPane extends StatelessWidget {
                     '${a.marketType} · ${a.maskedCano} · ${a.brokerCode}',
                     a.name,
                     trailing: StatusBadge(
-                      a.isPaper ? '모의' : '실전',
-                      color: a.isPaper ? AppColors.down : AppColors.success,
+                      a.isAlert
+                          ? '알람'
+                          : a.isPaper
+                          ? '모의'
+                          : '실전',
+                      color: a.isAlert
+                          ? AppColors.warning
+                          : a.isPaper
+                          ? AppColors.down
+                          : AppColors.success,
                     ),
                   ),
               ],
@@ -507,7 +515,7 @@ class _AccountSummaryPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final held = accounts.where((a) => a.hasBalance).toList();
-    final real = held.where((a) => !a.isPaper).toList();
+    final real = held.where((a) => !a.isPaper && !a.isAlert).toList();
     final paper = held.where((a) => a.isPaper).toList();
     final snapshot = held.map((a) => a.snapshotAt).fold<DateTime?>(null, (l, t) => l == null || t.isAfter(l) ? t : l);
 
@@ -610,12 +618,21 @@ enum _OrderFilter {
 }
 
 class _OrdersPane extends StatelessWidget {
-  const _OrdersPane({required this.orders, required this.filter, required this.onFilterChanged, required this.onOpen});
+  const _OrdersPane({
+    required this.orders,
+    required this.filter,
+    required this.onFilterChanged,
+    required this.onOpen,
+    this.more,
+    this.onMore,
+  });
 
   final ValueChanged<AccountOrder> onOpen; // 주문을 누르면 그 잡으로 간다
   final List<AccountOrder> orders;
   final _OrderFilter filter;
   final ValueChanged<_OrderFilter> onFilterChanged;
+  final (int, int)? more; // 더 받을 수 있으면 (받은 건수, 전체 건수)
+  final Future<void> Function()? onMore;
 
   Color _statusColor(AccountOrder o) => o.isRejected || o.status == 'failed'
       ? AppColors.up
@@ -643,13 +660,14 @@ class _OrdersPane extends StatelessWidget {
             ),
         ],
       ),
-      child: visible.isEmpty
+      child: visible.isEmpty && more == null
           ? const _Empty('주문 내역이 없습니다.')
           : ListView.separated(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              itemCount: visible.length,
+              itemCount: visible.length + (more == null ? 0 : 1),
               separatorBuilder: (_, _) => const Divider(height: 12),
               itemBuilder: (context, i) {
+                if (i == visible.length) return _MoreButton('주문', more!, onMore!);
                 final o = visible[i];
                 return InkWell(
                   onTap: () => onOpen(o),

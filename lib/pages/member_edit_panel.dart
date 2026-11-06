@@ -6,7 +6,6 @@ import '../theme.dart';
 import '../widgets/admin_page.dart';
 
 /// 앱의 회원 등급(MembershipTier) 이름.
-const memberGrades = ['브론즈', '실버', '골드', '다이아', 'VIP'];
 
 /// 이름표 + 값 한 칸. [full] 이면 한 줄을 다 쓴다.
 class FormCell extends StatelessWidget {
@@ -86,7 +85,7 @@ class _MemberEditPanelState extends State<MemberEditPanel> {
   final _phone = TextEditingController();
   final _memo = TextEditingController();
   late final _blockReason = TextEditingController(text: widget.member.accessBlockReason);
-  String? _grade;
+  late String? _grade = widget.member.gradeLabel;
   DateTime? _startsOn;
   DateTime? _expiresOn;
   late bool _blocked = widget.member.accessBlocked;
@@ -107,7 +106,7 @@ class _MemberEditPanelState extends State<MemberEditPanel> {
     _phone.clear();
     _memo.clear();
     _blockReason.text = widget.member.accessBlockReason ?? '';
-    _grade = null;
+    _grade = widget.member.gradeLabel;
     _startsOn = null;
     _expiresOn = null;
     _blocked = widget.member.accessBlocked;
@@ -165,7 +164,8 @@ class _MemberEditPanelState extends State<MemberEditPanel> {
           FormGrid(
             cells: [
               ...widget.infoCells,
-              FormCell('이름', _text(_name)),
+              // 테스트 DB 이름은 가려져 오므로 고칠 값으로 쓰지 않는다.
+              FormCell('이름', widget.member.isLive ? Text(widget.member.maskedName ?? '-') : _text(_name)),
               FormCell('휴대폰', _text(_phone)),
               FormCell(
                 '회원등급',

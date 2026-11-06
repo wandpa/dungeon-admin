@@ -5,7 +5,6 @@ import '../mock_admin.dart';
 import '../mock_data.dart';
 import '../theme.dart';
 import '../widgets/admin_page.dart';
-import 'member_edit_panel.dart' show memberGrades;
 
 Color _statusColor(NoticeStatus s) => switch (s) {
   NoticeStatus.published => AppColors.success,
@@ -150,6 +149,7 @@ class _NoticesPageState extends State<NoticesPage> {
   }
 
   void _saveDraft() {
+    if (useLiveData.value) return showNotConnected(context); // 저장할 곳이 없다
     setState(() {
       _publishAt = null;
       _write(NoticeStatus.draft);
@@ -162,6 +162,7 @@ class _NoticesPageState extends State<NoticesPage> {
 
   /// 게시·예약. 사용자에게 보이게 되므로 확인을 받는다.
   Future<void> _publish() async {
+    if (useLiveData.value) return showNotConnected(context); // 저장할 곳이 없다
     final scheduled = _publishAt != null;
     final receivers = pushableMembers().where((m) => pushBlockReason(m) == null).toList();
     final title = _title.text.trim();
@@ -187,6 +188,7 @@ class _NoticesPageState extends State<NoticesPage> {
 
   /// 목록에서 바로 게시하거나 내린다.
   Future<void> _togglePublished(Notice n) async {
+    if (useLiveData.value) return showNotConnected(context); // 저장할 곳이 없다
     final live = n.status == NoticeStatus.published;
     final ok = await showConfirmDialog(
       context,
@@ -207,6 +209,7 @@ class _NoticesPageState extends State<NoticesPage> {
   }
 
   Future<void> _delete(Notice n) async {
+    if (useLiveData.value) return showNotConnected(context); // 저장할 곳이 없다
     final ok = await showConfirmDialog(
       context,
       title: '공지 삭제',
@@ -405,6 +408,7 @@ class _NoticesPageState extends State<NoticesPage> {
           ),
       ],
       children: [
+        if (useLiveData.value) const SampleNotice('샘플 공지입니다. 공지 API 연결 전이라 저장·게시되지 않고 회원에게 보이지 않습니다.'),
         if (_editing) _editor(),
         FilterBar(
           hint: '제목·내용 검색',
@@ -480,7 +484,7 @@ class _NoticesPageState extends State<NoticesPage> {
                       IconButton(
                         tooltip: n.pinned ? '고정 해제' : '상단 고정',
                         visualDensity: VisualDensity.compact,
-                        onPressed: () => setState(() => n.pinned = !n.pinned),
+                        onPressed: () => useLiveData.value ? showNotConnected(context) : setState(() => n.pinned = !n.pinned),
                         icon: Icon(n.pinned ? Icons.push_pin : Icons.push_pin_outlined, size: 18),
                       ),
                       IconButton(

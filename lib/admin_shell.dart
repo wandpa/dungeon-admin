@@ -344,7 +344,7 @@ class _StatusBar extends StatelessWidget {
               tooltip: '로그아웃',
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-              onPressed: signOut,
+              onPressed: liveSignOut,
               icon: const Icon(Icons.logout, size: 16),
             ),
           ],

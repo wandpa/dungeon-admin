@@ -394,7 +394,7 @@ class _WorkerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final w = worker;
     final running = w.status == WorkerStatus.running;
-    final allPaper = w.jobs.isNotEmpty && w.jobs.every((j) => j.isPaper);
+    final kind = w.jobs.isEmpty && w.kind == null ? null : w.kindKey;
     final accumulated = _accumulated;
     final borderColor = selected
         ? AppColors.brand
@@ -457,7 +457,9 @@ class _WorkerCard extends StatelessWidget {
                               const _KindBadge.worker(),
                               Text(w.symbolCode, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
                               Text(w.symbolName, style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
-                              if (allPaper) const StatusBadge('모의', color: AppColors.down),
+                              if (kind == 'alert') const StatusBadge('알람', color: AppColors.warning),
+                              if (kind == 'paper') const StatusBadge('모의', color: AppColors.down),
+                              if (w.kind == 'real') const StatusBadge('실전', color: AppColors.success),
                             ],
                           ),
                           const SizedBox(height: 4),

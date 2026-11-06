@@ -1511,9 +1511,10 @@ void main() {
     expect(find.byType(Dialog), findsNothing); // 넓은 화면은 줄을 누르면 오른쪽 패널에 나온다
     expect(find.text('bottomhunter'), findsNWidgets(2));
     expect(find.widgetWithText(FilledButton, '저장'), findsOneWidget);
-    for (final label in ['회원등급', '시작일자', '만료일자', '차단 사유', '이름', '휴대폰', '메모']) {
+    for (final label in ['회원등급', '시작일자', '만료일자', '차단 사유', '휴대폰', '메모']) {
       expect(find.text(label), findsOneWidget, reason: label);
     }
+    expect(find.text('이름'), findsNWidgets(2)); // 회원 표 머리줄과 상세 칸
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
     expect(find.text('허용'), findsNothing);

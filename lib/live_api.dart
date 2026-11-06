@@ -68,6 +68,7 @@ Future<void> _signIn() async {
   } on http.ClientException {
     throw const LiveApiException('API 서버에 연결하지 못했습니다.');
   }
+  if (res.statusCode == 429) throw LiveApiException(_messageOf(res) ?? '요청이 많습니다. 잠시 뒤 다시 시도하세요.');
   if (res.statusCode != 200) throw const LiveApiException('API 로그인에 실패했습니다.');
   _token = (_json(res) as Map<String, dynamic>)['token'] as String;
   _tokenFor = loginId;
@@ -76,27 +77,10 @@ Future<void> _signIn() async {
 /// 화면이 직접 쓰는 조회. 경로는 /api/admin/live 뒤부터다.
 Future<dynamic> liveGet(String path) => _get(path);
 
-/// 전체 알림 검색. 서버는 제목·내용만 찾으므로, 아이디가 한 회원만 가리키면 그 회원의 알림을 받는다.
+/// 전체 알림 검색. 서버가 아이디·제목·내용을 찾는다.
 Future<Map<String, dynamic>> liveNotifications(String query, {required int page, required int pageSize}) async {
-  final text = query.trim();
-  final q = Uri.encodeQueryComponent(text);
-  final paging = 'page=$page&pageSize=$pageSize';
-  if (text.isNotEmpty) {
-    final found = await _items('/members?q=$q&pageSize=$liveListLimit');
-    bool named(Map<String, dynamic> m) => (m['username'] as String? ?? '').toLowerCase().contains(text.toLowerCase());
-    final members = found.where(named).toList();
-    if (members.length == 1) {
-      final m = members.single;
-      final body = await _get('/members/${m['id']}/notifications?$paging') as Map<String, dynamic>;
-      return {
-        ...body,
-        'items': [
-          for (final n in (body['items'] as List).cast<Map<String, dynamic>>()) {...n, 'username': m['username']},
-        ],
-      };
-    }
-  }
-  return await _get('/notifications?q=$q&$paging') as Map<String, dynamic>;
+  final q = Uri.encodeQueryComponent(query.trim());
+  return await _get('/notifications?q=$q&page=$page&pageSize=$pageSize') as Map<String, dynamic>;
 }
 
 Future<List<Map<String, dynamic>>> liveItems(String path) => _items(path);
@@ -136,24 +120,61 @@ Future<String> liveEmail(Member m) async {
 
 Map<String, String> get _auth => {'Authorization': 'Bearer $_token'};
 
-/// 토큰을 챙겨 요청을 보내고, 만료되면 한 번 다시 로그인한다. 실패하면 [LiveApiException].
-Future<http.Response> _send(Future<http.Response> Function() request, {bool retry = true}) async {
+String? _sessionMessage;
+
+/// 로그인 화면에 한 번 보여 줄 세션 안내를 꺼낸다.
+String? takeLiveSessionMessage() {
+  final message = _sessionMessage;
+  _sessionMessage = null;
+  return message;
+}
+
+/// 받아 둔 토큰을 지우고 로그아웃한다.
+void liveSignOut() {
+  _token = null;
+  _tokenFor = null;
+  signOut();
+}
+
+/// 서버가 토큰을 거절했다. 다시 받지 않고 로그인 화면으로 돌려보낸다.
+/// 동시에 나간 요청이 함께 거절돼도 로그아웃은 한 번만 하고, 그사이 새로 받은 토큰은 건드리지 않는다.
+void _expireSession(String? rejected) {
+  if (_token != rejected) return;
+  if (signedInAdmin.value == null) {
+    _token = null;
+    _tokenFor = null;
+    return;
+  }
+  _sessionMessage = _sessionExpired;
+  liveSignOut();
+}
+
+const _sessionExpired = '로그인이 만료되었습니다. 다시 로그인하세요.';
+
+/// 토큰을 챙겨 요청을 보낸다. 만료되면 로그아웃한다. 실패하면 [LiveApiException].
+Future<http.Response> _send(Future<http.Response> Function() request) async {
   if (_token == null || _tokenFor != (signedInAdmin.value?.loginId ?? 'admin')) await _signIn();
+  final used = _token;
   final http.Response res;
   try {
     res = await request();
   } on http.ClientException {
     throw const LiveApiException('API 서버에 연결하지 못했습니다.');
   }
-  if (res.statusCode == 401 && retry) {
-    _token = null;
-    return _send(request, retry: false);
+  if (res.statusCode == 401) {
+    _expireSession(used);
+    throw const LiveApiException(_sessionExpired);
   }
   if (res.statusCode == 200) return res;
   if (res.statusCode == 403) throw const LiveApiException('권한이 없습니다.');
   if (res.statusCode == 404) throw const LiveApiException('대상을 찾지 못했습니다.');
+  throw LiveApiException(_messageOf(res) ?? '조회에 실패했습니다.');
+}
+
+/// 서버가 보낸 안내 문구.
+String? _messageOf(http.Response res) {
   final body = res.bodyBytes.isEmpty ? null : _json(res);
-  throw LiveApiException((body is Map ? body['message'] as String? : null) ?? '조회에 실패했습니다.');
+  return body is Map ? body['message'] as String? : null;
 }
 
 Future<dynamic> _get(String path) async {
@@ -180,6 +201,66 @@ class LiveStatus {
 
 final liveStatus = ValueNotifier(const LiveStatus());
 
+/// 청산 사유를 앱과 같은 말로 바꾼다.
+String? liveExitLabel(String? reason) => switch (reason) {
+  'take_profit' => '익절',
+  'stop_loss' => '손절',
+  'trailing' => '트레일링',
+  'signal' => '신호 청산',
+  'pnl_limit' => '누적 손익 종료',
+  null => null,
+  final other when RegExp(r'^[a-z_]+$').hasMatch(other) => '청산', // 영어 코드를 그대로 보이지 않는다
+  final other => other,
+};
+
+/// 앱과 같은 계좌 종류 표기. accounts.kind 값이다.
+String liveKindLabel(Object? kind) => switch (kind) {
+  'real' => '실전',
+  'paper' => '모의',
+  'alert' => '알람',
+  _ => '-',
+};
+
+final _paging = <String, (int, int)>{}; // 목록별 (받은 쪽, 전체 건수)
+
+(int, int)? _remaining(String key) {
+  final p = _paging[key];
+  if (p == null || p.$1 * liveListLimit >= p.$2) return null;
+  return (p.$1 * liveListLimit, p.$2);
+}
+
+String _ordersKey(Member m) => '${m.id}|orders';
+String _logsKey(Member m, String query) => '${m.id}|logs|$query';
+String _logScope(int? workerId, String? jobId) => jobId != null
+    ? 'jobId=$jobId'
+    : workerId != null
+    ? 'workerId=${_guidOf(workerId)}'
+    : '';
+
+/// 주문을 더 받을 수 있으면 (받은 건수, 전체 건수).
+(int, int)? liveMoreOrders(Member m) => _remaining(_ordersKey(m));
+
+/// 로그를 더 받을 수 있으면 (받은 건수, 전체 건수). 워커나 잡을 주면 그 범위다.
+(int, int)? liveMoreLogs(Member m, {int? workerId, String? jobId}) =>
+    _remaining(_logsKey(m, _logScope(workerId, jobId)));
+
+/// 회원의 다음 쪽 주문을 받아 붙인다.
+Future<void> loadMoreLiveOrders(Member m) async {
+  final key = _ordersKey(m);
+  final page = (_paging[key]?.$1 ?? 0) + 1;
+  final body =
+      await _get('/members/${m.liveId}/orders?page=$page&pageSize=$liveListLimit') as Map<String, dynamic>;
+  final rows = (body['items'] as List).cast<Map<String, dynamic>>();
+  addLiveOrders(m.id, [for (final o in rows) _order(o, _jobNames[m.id] ?? const {})]);
+  _paging[key] = (page, body['total'] as int? ?? 0);
+}
+
+/// 회원의 다음 쪽 로그를 받아 붙인다.
+Future<void> loadMoreLiveLogs(Member m, {int? workerId, String? jobId}) async {
+  final scope = _logScope(workerId, jobId);
+  await _mergeLogs(m, scope, page: (_paging[_logsKey(m, scope)]?.$1 ?? 0) + 1);
+}
+
 /// 회원 목록을 다시 불러온다. 회원별 모니터링 값은 비워서 다음에 볼 때 새로 받는다.
 Future<void> refreshLiveMembers() async {
   final revision = liveStatus.value.revision;
@@ -196,6 +277,7 @@ Future<void> refreshLiveMembers() async {
     _jobNames.clear();
     _workerLogs.clear();
     _loadedAt.clear();
+    _paging.clear();
     liveMembers
       ..clear()
       ..addAll(rows.map(_member));
@@ -220,6 +302,8 @@ Member _member(Map<String, dynamic> j) {
     liveId: id,
     liveWorkerCount: j['workerCount'] as int? ?? 0,
     liveRunningCount: j['runningWorkerCount'] as int? ?? 0,
+    maskedName: j['maskedName'] as String?,
+    tier: j['tier'] as int?,
   );
 }
 
@@ -249,8 +333,8 @@ Future<void> loadLiveMember(Member m) async {
     _items('$base/accounts'),
     _items('$base/balances'),
     _items('$base/positions'),
-    _items('$base/orders?pageSize=$liveListLimit'),
-    _items('$base/logs?pageSize=$liveListLimit'),
+    _get('$base/orders?pageSize=$liveListLimit'),
+    _get('$base/logs?pageSize=$liveListLimit'),
     _items('$base/notifications?pageSize=$liveListLimit'),
     _get('$base/notification-state'),
     _get('$base/overview'),
@@ -259,8 +343,10 @@ Future<void> loadLiveMember(Member m) async {
   final accountRows = rows[0] as List<Map<String, dynamic>>;
   final balanceRows = rows[1] as List<Map<String, dynamic>>;
   final positions = rows[2] as List<Map<String, dynamic>>;
-  final orders = rows[3] as List<Map<String, dynamic>>;
-  final logs = rows[4] as List<Map<String, dynamic>>;
+  final orderBody = rows[3] as Map<String, dynamic>;
+  final logBody = rows[4] as Map<String, dynamic>;
+  final orders = (orderBody['items'] as List).cast<Map<String, dynamic>>();
+  final logs = (logBody['items'] as List).cast<Map<String, dynamic>>();
   final notifications = rows[5] as List<Map<String, dynamic>>;
   final state = rows[6] as Map<String, dynamic>;
   final overview = rows[7] as Map<String, dynamic>;
@@ -273,27 +359,21 @@ Future<void> loadLiveMember(Member m) async {
     workers.addAll(await Future.wait(batch.map((w) => _worker(base, w, jobNames))));
   }
 
-  final exits = await _exitCycles(base, orders);
-  // 진행 중인 회차는 계약승수가 비어 1 로 온다. 같은 종목의 끝난 회차 값을 쓴다.
-  final multipliers = <Object?, double>{};
-  for (final o in orders) {
-    final value = _double(o['multiplier']) ?? 1;
-    if (value > (multipliers[o['symbolCode']] ?? 0)) multipliers[o['symbolCode']] = value;
-  }
-
   putLiveAccounts(
     m.id,
     accounts: [for (final a in accountRows) _account(a, balanceRows)],
     positions: [for (final p in positions) _position(p)],
-    orders: [for (final o in orders) _order(o, jobNames, exits[o], multipliers[o['symbolCode']])],
+    orders: [for (final o in orders) _order(o, jobNames)],
     notifications: [for (final n in notifications) _notification(n)],
     state: _notificationState(state),
   );
   _rememberWorkers(workerRows);
-  await _loadLogEvents(base, logs);
   putLiveWorkers(m.id, workers, [for (final l in logs) _log(l, jobNames)]);
   final issues = overview['issues'] as List? ?? const [];
   putLiveIssues(m.id, [for (final i in issues.cast<Map<String, dynamic>>()) _issue(i)]);
+  _paging.removeWhere((key, _) => key.startsWith('${m.id}|'));
+  _paging[_ordersKey(m)] = (1, orderBody['total'] as int? ?? orders.length);
+  _paging[_logsKey(m, '')] = (1, logBody['total'] as int? ?? logs.length);
   _loaded.add(m.id);
   _loadedAt[m.id] = DateTime.now();
 }
@@ -309,7 +389,7 @@ class LiveWorkerRow {
     required this.market,
     required this.running,
     required this.accounts,
-    required this.paper,
+    required this.kind,
     required this.round,
     required this.holding,
     required this.jobs,
@@ -326,8 +406,8 @@ class LiveWorkerRow {
   final String market;
   final bool running;
   final String accounts;
-  final bool? paper; // 잡이 없으면 알 수 없다
-  final String round;
+  final String kind; // 실전·모의·알람
+  final String round; // 진행 중 잡의 회차. 잡이 없으면 누적 회차 수다
   final String holding;
   final int jobs;
   final int finishedJobs;
@@ -335,124 +415,84 @@ class LiveWorkerRow {
   final DateTime? insertedAt;
 }
 
-LiveWorkerRow _workerRow(Member m, Map<String, dynamic> w, List<Map<String, dynamic>> jobs) {
-  final accounts = {
-    for (final j in jobs)
-      if (j['accountName'] != null) '${j['accountName']}(${j['maskedAccountNumber']})',
-  };
-  final held = jobs.where((j) => j['position'] != null).firstOrNull;
-  final job = held ?? jobs.where((j) => (j['repeatCount'] as int? ?? 0) > 1).firstOrNull;
-  final position = held?['position'] as Map<String, dynamic>?;
-  final unit = w['qtyUnit'] as String? ?? '';
+/// 통화별 실현손익. 합계에는 실전·모의가 따로 와서 통화로 더한다.
+Map<String, double> livePnl(Object? rows) {
   final pnl = <String, double>{};
-  for (final p in (w['pnl'] as List? ?? const []).cast<Map<String, dynamic>>()) {
+  for (final p in (rows as List? ?? const []).cast<Map<String, dynamic>>()) {
     final amount = _double(p['realizedPnl']) ?? 0;
     if (amount != 0) pnl.update(p['currency'] as String? ?? '-', (v) => v + amount, ifAbsent: () => amount);
   }
-  final papers = {for (final j in jobs) j['isPaper'] as bool?}.nonNulls;
+  return pnl;
+}
+
+/// 앱의 `0/10000회차` 표기. 전체 회차가 비어 있으면 지어내지 않고 지금 회차만 쓴다.
+String _workerRound(Map<String, dynamic> w) {
+  final jobs = (w['currentJobs'] as List? ?? const []).cast<Map<String, dynamic>>();
+  if (jobs.isEmpty) return '${w['cycleCount'] ?? 0}';
+  final job = jobs.first;
+  final current = job['repeatCurrent'] ?? 0;
+  final count = job['repeatCount'];
+  final text = count == null ? '$current회차' : '$current/$count회차';
+  return jobs.length == 1 ? text : '$text 외 ${jobs.length - 1}';
+}
+
+LiveWorkerRow liveWorkerRow(Map<String, dynamic> w) {
+  final accounts = (w['accounts'] as List? ?? const []).cast<Map<String, dynamic>>();
+  final names = {for (final a in accounts) '${a['accountName']}(${a['maskedAccountNumber']})'};
+  final holdings = (w['holdings'] as List? ?? const []).cast<Map<String, dynamic>>();
+  final unit = w['qtyUnit'] as String? ?? '';
+  String holding(Map<String, dynamic> h) =>
+      '${h['side'] == 'short' ? '매도' : '매수'} ${_double(h['size'])?.toInt() ?? 0}$unit';
   return LiveWorkerRow(
-    memberId: m.id,
-    username: m.username,
+    memberId: liveIntId(w['memberId'] as String),
+    username: w['username'] as String? ?? '-',
     workerId: liveIntId(w['id'] as String),
     symbolCode: w['symbolCode'] as String? ?? '-',
     symbolName: w['symbolName'] as String? ?? '-',
     market: w['marketType'] as String? ?? '-',
     running: w['status'] == 'running',
-    accounts: accounts.isEmpty
+    accounts: names.isEmpty
         ? '-'
-        : accounts.length == 1
-        ? accounts.single
-        : '${accounts.first} 외 ${accounts.length - 1}',
-    paper: papers.isEmpty ? null : papers.every((p) => p),
-    round: job == null ? '-' : '${job['repeatCurrent'] ?? 0}/${job['repeatCount'] ?? '-'}',
-    holding: position == null
+        : names.length == 1
+        ? names.single
+        : '${names.first} 외 ${names.length - 1}',
+    kind: liveKindLabel(w['kind']),
+    round: _workerRound(w),
+    holding: holdings.isEmpty
         ? '-'
-        : '${position['side'] == 'short' ? '매도' : '매수'} ${_double(position['size'])?.toInt() ?? 0}$unit',
-    jobs: w['jobCount'] as int? ?? jobs.length,
+        : holdings.length == 1
+        ? holding(holdings.single)
+        : '${holding(holdings.first)} 외 ${holdings.length - 1}',
+    jobs: w['jobCount'] as int? ?? 0,
     finishedJobs: w['finishedJobCount'] as int? ?? 0,
-    pnl: pnl,
+    pnl: livePnl(w['pnl']),
     insertedAt: _time(w['insertedAt']),
   );
 }
 
-/// 승인된 회원 전체의 같은 목록을 모은다. 회원마다 앞쪽 [liveListLimit] 건까지다.
-Future<List<(Member, Map<String, dynamic>)>> liveRowsOfAllMembers(String path) async {
-  await ensureLiveMembers();
-  final members = liveMembers.where((m) => m.status != MemberStatus.pending).toList();
-  final rows = <(Member, Map<String, dynamic>)>[];
-  for (var i = 0; i < members.length; i += _batchSize) {
-    final pages = await Future.wait(
-      members.skip(i).take(_batchSize).map((m) async {
-        final items = await _items('/members/${m.liveId}$path');
-        return [for (final r in items) (m, r)];
-      }),
-    );
-    rows.addAll(pages.expand((p) => p));
-  }
-  return rows;
-}
-
-/// 전체 회원의 워커. 전체를 한 번에 주는 API 가 없어 워커가 있는 회원을 돌며 모은다.
-Future<List<LiveWorkerRow>> liveAllWorkers() async {
-  await ensureLiveMembers();
-  final members = liveMembers.where((m) => m.liveWorkerCount > 0).toList();
-  final rows = <LiveWorkerRow>[];
-  for (var i = 0; i < members.length; i += _batchSize) {
-    final batch = members.skip(i).take(_batchSize);
-    final pages = await Future.wait(
-      batch.map((m) async {
-        final base = '/members/${m.liveId}';
-        final data = await Future.wait([_items('$base/workers'), _items('$base/jobs?status=current&pageSize=100')]);
-        return [
-          for (final w in data[0])
-            _workerRow(m, w, [
-              for (final j in data[1])
-                if (j['workerId'] == w['id']) j,
-            ]),
-        ];
-      }),
-    );
-    rows.addAll(pages.expand((r) => r));
-  }
-  return rows;
-}
-
-/// 주문 목록에는 손익이 없어 회차에서 찾는다. 회차 방향의 반대 주문이 그 회차 안에 있으면 청산이다.
-/// 한 회차를 여러 번 나눠 청산하면 회차 값이 합계이므로 마지막 주문에만 붙인다.
-Future<Map<Map<String, dynamic>, Map<String, dynamic>>> _exitCycles(
-  String base,
-  List<Map<String, dynamic>> orders,
-) async {
-  final filled = [
-    for (final o in orders)
-      if ((_double(o['filledQty']) ?? 0) > 0 && o['jobId'] != null) o,
-  ];
-  final jobIds = {for (final o in filled) o['jobId'] as String}.toList();
-  final cycles = <String, List<Map<String, dynamic>>>{};
-  for (var i = 0; i < jobIds.length; i += _batchSize) {
-    final batch = jobIds.skip(i).take(_batchSize);
-    await Future.wait(batch.map((id) async => cycles[id] = await _items('$base/jobs/$id/cycles')));
-  }
-  final exits = <Map<String, dynamic>, Map<String, dynamic>>{};
-  final used = <Map<String, dynamic>>{};
-  bool isExit(Map<String, dynamic> o, Map<String, dynamic> c) {
-    final opened = _time(c['openedAt']), closed = _time(c['closedAt']), at = _time(o['orderedAt']);
-    if (opened == null || closed == null || at == null) return false;
-    final exitSide = switch (c['side']) {
-      'long' => 'sell',
-      'short' => 'buy',
-      _ => null,
-    };
-    return o['side'] == exitSide && !at.isBefore(opened) && !at.isAfter(closed);
-  }
-
-  for (final o in filled) {
-    final cycle = cycles[o['jobId']]!.where((c) => !used.contains(c) && isExit(o, c)).firstOrNull;
-    if (cycle == null) continue;
-    used.add(cycle);
-    exits[o] = cycle;
-  }
-  return exits;
+/// 전체 회원 목록 한 쪽. 서버가 찾고 나누며, 합계는 현재 쪽이 아니라 조건 전체 기준이다.
+/// 신호만 회원을 member, 종목을 q 로 찾아서 [memberKey] 와 [symbolKey] 로 바꾼다.
+Future<Map<String, dynamic>> liveAllList(
+  String path, {
+  String member = '',
+  String symbol = '',
+  String memberKey = 'q',
+  String symbolKey = 'symbol',
+  String? status,
+  Map<String, String> filters = const {},
+  required int page,
+  required int pageSize,
+}) async {
+  await ensureLiveMembers(); // 줄을 누르면 그 회원을 열어야 한다
+  final query = [
+    if (member.trim().isNotEmpty) '$memberKey=${Uri.encodeQueryComponent(member.trim())}',
+    if (symbol.trim().isNotEmpty) '$symbolKey=${Uri.encodeQueryComponent(symbol.trim())}',
+    if (status != null) 'status=$status',
+    for (final f in filters.entries) '${f.key}=${Uri.encodeQueryComponent(f.value)}',
+    'page=$page',
+    'pageSize=$pageSize',
+  ].join('&');
+  return await _get('$path?$query') as Map<String, dynamic>;
 }
 
 Future<MemberWorker> _worker(String base, Map<String, dynamic> w, Map<String, String> jobNames) async {
@@ -484,6 +524,7 @@ Future<MemberWorker> _worker(String base, Map<String, dynamic> w, Map<String, St
     symbolName: w['symbolName'] as String? ?? '-',
     marketType: w['marketType'] as String? ?? '-',
     status: w['status'] == 'running' ? WorkerStatus.running : WorkerStatus.stopped,
+    kind: w['kind'] as String?,
     insertedAt: _time(w['insertedAt'])!,
     currency: w['currency'] as String? ?? '',
     currentPrice: null, // DB 에 시세가 없다
@@ -513,10 +554,11 @@ Future<void> loadLiveWorkerLogs(Member m, int workerId) async {
   _workerLogs.add(workerId);
 }
 
-Future<void> _mergeLogs(Member m, String query) async {
-  final rows = await _items('/members/${m.liveId}/logs?$query&pageSize=$liveListLimit');
-  await _loadLogEvents('/members/${m.liveId}', rows);
+Future<void> _mergeLogs(Member m, String query, {int page = 1}) async {
+  final body = await _get('/members/${m.liveId}/logs?$query&page=$page&pageSize=$liveListLimit') as Map<String, dynamic>;
+  final rows = (body['items'] as List).cast<Map<String, dynamic>>();
   addLiveLogs(m.id, [for (final l in rows) _log(l, _jobNames[m.id] ?? const {})]);
+  _paging[_logsKey(m, query)] = (page, body['total'] as int? ?? 0);
 }
 
 WorkerPnlLimit? _pnlLimit(Map<String, dynamic>? j) {
@@ -709,6 +751,7 @@ MemberAccount _account(Map<String, dynamic> a, List<Map<String, dynamic>> balanc
     totalEval: _double(balance?['totalEval']) ?? 0,
     snapshotAt: _time(balance?['snapshotAt']) ?? DateTime.now(),
     isPaper: a['isPaper'] as bool? ?? false,
+    kind: a['kind'] as String?,
     brokerCode: a['brokerCode'] as String? ?? '-',
     isActive: a['isActive'] as bool? ?? true,
     hasBalance: balance != null,
@@ -730,12 +773,8 @@ AccountPosition _position(Map<String, dynamic> p) {
   );
 }
 
-AccountOrder _order(
-  Map<String, dynamic> o,
-  Map<String, String> jobNames,
-  Map<String, dynamic>? exit,
-  double? multiplier,
-) {
+AccountOrder _order(Map<String, dynamic> o, Map<String, String> jobNames) {
+  final exit = o['kind'] == 'exit'; // 회차 평균가는 진입 주문에도 오지만 청산 주문에만 보여 준다
   final workerId = o['workerId'] as String?;
   return AccountOrder(
     at: _time(o['orderedAt'])!,
@@ -749,13 +788,16 @@ AccountOrder _order(
     jobName: jobNames[o['jobId']] ?? o['jobName'] as String? ?? '-',
     workerId: workerId == null ? null : liveIntId(workerId),
     currency: o['currency'] as String? ?? '',
-    multiplier: multiplier ?? 1,
+    multiplier: _double(o['multiplier']) ?? 1,
     isPaper: o['isPaper'] as bool? ?? false,
     avgFillPrice: _double(o['avgFillPrice']),
     message: o['message'] as String?,
-    buyPrice: exit == null ? null : _double(exit['avgBuyPrice']),
-    sellPrice: exit == null ? null : _double(exit['avgSellPrice']),
-    realizedPnl: exit == null ? null : _double(exit['realizedPnl']),
+    buyPrice: exit ? _double(o['buyPrice']) : null,
+    sellPrice: exit ? _double(o['sellPrice']) : null,
+    realizedPnl: _double(o['realizedPnl']),
+    kind: o['kind'] as String?,
+    exitReason: o['exitReason'] as String?,
+    cycleNo: o['cycleNo'] as int?,
   );
 }
 
@@ -786,7 +828,6 @@ String liveLogText(String text) => switch (text) {
   _ => text.replaceAll(RegExp(r'\bstart\b'), '시작').replaceAll(RegExp(r'\bstop\b'), '중지'),
 };
 
-final _logEvents = <String, Map<String, dynamic>>{}; // 로그 번호와 같은 잡 이벤트
 final _workerInfo = <String, Map<String, dynamic>>{}; // 로그에 종목을 붙일 워커
 
 void _rememberWorkers(Iterable<Map<String, dynamic>> rows) {
@@ -795,40 +836,19 @@ void _rememberWorkers(Iterable<Map<String, dynamic>> rows) {
   }
 }
 
-/// 로그 API 는 이벤트 코드만 주므로 잡 이벤트에서 방향·수량·가격을 찾아 둔다.
-/// 잡 이력을 못 받아도 로그는 보여야 하므로 그 잡만 건너뛴다.
-Future<void> _loadLogEvents(String base, List<Map<String, dynamic>> logs) async {
-  final jobs = {
-    for (final l in logs)
-      if (l['id'] != null && l['jobId'] != null && !_logEvents.containsKey(l['id'])) l['jobId'] as String,
-  }.toList();
-  for (var i = 0; i < jobs.length; i += _batchSize) {
-    await Future.wait(
-      jobs.skip(i).take(_batchSize).map((id) async {
-        try {
-          for (final e in await _items('$base/jobs/$id/events')) {
-            _logEvents[e['id'] as String] = e;
-          }
-        } on LiveApiException {
-          // 코드 문구로 둔다.
-        }
-      }),
-    );
-  }
-}
-
 String _plain(double v) {
   final r = (v * 100).round() / 100;
   return formatNumber(r == r.truncateToDouble() ? r.toInt() : r);
 }
 
+/// 로그의 코드와 값으로 문장을 만든다. 수량 단위와 통화는 워커에서 찾는다.
 String _eventText(Map<String, dynamic> e, Map<String, dynamic>? worker, String fallback) {
   final side = switch (e['side']) {
     'buy' => '매수',
     'sell' => '매도',
     _ => '',
   };
-  final phase = switch (e['group']) {
+  final phase = switch (e['kind']) {
     'entry' => '진입',
     'exit' => '청산',
     _ => '',
@@ -851,7 +871,10 @@ String _eventText(Map<String, dynamic> e, Map<String, dynamic>? worker, String f
   final line = switch (e['eventType']) {
     'alert_fired' => ['$side 신호 발생'.trim(), ?qtyText],
     'order_submitted' => ['$who 주문 전송'.trim(), ?qtyText],
-    'order_accepted' => ['$who 주문 접수'.trim(), if (e['message'] != null) '주문번호 ${e['message']}'],
+    'order_accepted' => [
+      '$who 주문 접수'.trim(),
+      if (_orderNumber.hasMatch(e['text'] as String? ?? '')) '주문번호 ${e['text']}',
+    ],
     'fill' => ['$who 체결'.trim(), if (qtyText != null) '$qtyText$at'],
     'balance_updated' => ['잔고 반영', if (balance != null) '잔량 ${_plain(balance)}$unit'],
     'cycle_closed' => [e['cycleNo'] == null ? '사이클 종료' : '${e['cycleNo']}회차 종료'],
@@ -861,29 +884,41 @@ String _eventText(Map<String, dynamic> e, Map<String, dynamic>? worker, String f
   return [...line, ?reason].join(' · ');
 }
 
-/// 로그 한 줄: 종목 · 잡 · 내용. 잡 이벤트가 없는 로그는 서버 문구를 그대로 쓴다.
+/// 로그 한 줄: 종목 · 잡 · 내용. 이벤트 코드가 없는 로그는 서버 문구를 그대로 쓴다.
 String liveLogDetail(Map<String, dynamic> l) {
   final fallback = liveLogText(l['text'] as String? ?? '');
-  final event = _logEvents[l['id']];
   final worker = _workerInfo[l['workerId']];
-  final text = event == null ? fallback : _eventText(event, worker, fallback);
-  return [?worker?['symbolCode'] as String?, ?l['jobName'] as String?, text].join(' · ');
+  final text = l['eventType'] == null ? fallback : _eventText(l, worker, fallback);
+  final symbol = l['symbolCode'] as String? ?? worker?['symbolCode'] as String?;
+  return [?symbol, ?l['jobName'] as String?, text].join(' · ');
 }
 
-/// 전체 회원의 고객 로그. 최신순이다.
-Future<List<(Member, Map<String, dynamic>)>> liveAllLogs() async {
-  final data = await Future.wait([
-    liveRowsOfAllMembers('/logs?pageSize=$liveListLimit'),
-    liveRowsOfAllMembers('/workers'),
-  ]);
-  _rememberWorkers([for (final (_, w) in data[1]) w]);
-  final byMember = <Member, List<Map<String, dynamic>>>{};
-  for (final (m, l) in data[0]) {
-    (byMember[m] ??= []).add(l);
+/// 전체 회원의 고객 로그 한 쪽. 수량 단위와 통화를 쓰려고 모르는 워커가 있으면 전체 워커를 받아 둔다.
+Future<Map<String, dynamic>> liveAllLogs({
+  String member = '',
+  String symbol = '',
+  Map<String, String> filters = const {},
+  required int page,
+  required int pageSize,
+}) async {
+  final body = await liveAllList(
+    '/logs',
+    member: member,
+    symbol: symbol,
+    filters: filters,
+    page: page,
+    pageSize: pageSize,
+  );
+  final rows = (body['items'] as List).cast<Map<String, dynamic>>();
+  if (rows.any((l) => l['workerId'] != null && !_workerInfo.containsKey(l['workerId']))) {
+    for (var n = 1; ; n++) {
+      final workers = await _get('/workers?includeInactive=true&page=$n&pageSize=$liveListLimit') as Map<String, dynamic>;
+      final items = (workers['items'] as List).cast<Map<String, dynamic>>();
+      _rememberWorkers(items);
+      if (n * liveListLimit >= (workers['total'] as int? ?? 0) || items.isEmpty) break;
+    }
   }
-  await Future.wait(byMember.entries.map((e) => _loadLogEvents('/members/${e.key.liveId}', e.value)));
-  int at((Member, Map<String, dynamic>) r) => _time(r.$2['at'])?.millisecondsSinceEpoch ?? 0;
-  return data[0]..sort((a, b) => at(b).compareTo(at(a)));
+  return body;
 }
 
 CustomerLog _log(Map<String, dynamic> l, Map<String, String> jobNames) {

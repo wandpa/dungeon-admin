@@ -27,6 +27,7 @@ class MemberWorker {
     this.errorMessage,
     this.pnlLimit,
     this.jobs = const [],
+    this.kind,
   });
 
   final int id;
@@ -41,6 +42,15 @@ class MemberWorker {
   final String? errorMessage;
   final WorkerPnlLimit? pnlLimit; // null 이면 누적 손익 종료를 쓰지 않는다
   final List<WorkerJob> jobs;
+  final String? kind; // real | paper | alert. 샘플 워커는 비어 있다
+
+  /// 워커 종류. 서버 값이 없는 샘플은 잡으로 판단한다.
+  String get kindKey {
+    if (kind != null) return kind!;
+    if (jobs.isEmpty) return 'real';
+    if (jobs.every((j) => j.isAlert)) return 'alert';
+    return jobs.every((j) => j.isAlert || j.isPaper) ? 'paper' : 'real';
+  }
 
   bool usesAccount(String accountName) => jobs.any((j) => j.accountName == accountName);
 

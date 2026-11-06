@@ -57,11 +57,12 @@ String _tick(Map<String, dynamic> p) {
 }
 
 class _Data {
-  const _Data(this.products, this.productTotal, this.stocks, this.stockTotal);
+  const _Data(this.products, this.productTotal, this.stocks, this.stockTotal, this.exchanges);
   final List<Map<String, dynamic>> products;
   final int productTotal;
   final List<Map<String, dynamic>> stocks;
   final int stockTotal;
+  final List<Map<String, dynamic>> exchanges; // 거래소별 상품 수. 해외선물에서만 받는다
 }
 
 /// 테스트 DB 종목 마스터. 앱 종목 검색처럼 시장, 거래소, 상품, 월물 순서로 찾는다. 조회만 한다.
@@ -74,13 +75,12 @@ class LiveSymbolPage extends StatefulWidget {
 
 class _LiveSymbolPageState extends State<LiveSymbolPage> {
   final _debounce = SearchDebounce();
-  final _products = <String, Future<List<Map<String, dynamic>>>>{}; // 검색어별 상품. 거래소는 화면에서 거른다
+  final _products = <String, Future<List<Map<String, dynamic>>>>{}; // 거래소별 상품 전체. 거래소 장 시간에 쓴다
   _Category _category = _Category.all;
   String? _exchange; // 비어 있으면 전체 거래소
   String _query = '';
   int _page = 1;
   Map<String, dynamic>? _opened; // 월물을 볼 상품
-  var _futures = const <Map<String, dynamic>>[]; // 받아 둔 해외선물 상품. 거래소 장 시간에 쓴다
 
   @override
   void dispose() {
@@ -88,11 +88,11 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
     super.dispose();
   }
 
-  /// API 에 거래소 조건이 없어 해외선물은 상품을 모두 받아 거른다. 한 쪽이 몇 초 걸려 나머지는 한 번에 받는다.
-  Future<List<Map<String, dynamic>>> _allProducts(String query) async {
-    final q = Uri.encodeQueryComponent(query);
+  /// 거래소의 상품 전체. 상품마다 시간이 다른지 봐야 해서 나눠 받은 쪽을 모두 모은다.
+  Future<List<Map<String, dynamic>>> _allProducts(String exchange) async {
+    final name = Uri.encodeQueryComponent(exchange);
     Future<Map<String, dynamic>> page(int n) async =>
-        await liveGet('/symbols?q=$q&page=$n&pageSize=$liveListLimit') as Map<String, dynamic>;
+        await liveGet('/symbols?exchange=$name&page=$n&pageSize=$liveListLimit') as Map<String, dynamic>;
     List<Map<String, dynamic>> items(Map<String, dynamic> body) => (body['items'] as List).cast<Map<String, dynamic>>();
 
     final first = await page(1);
@@ -101,40 +101,37 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
     return [...items(first), for (final body in rest) ...items(body)];
   }
 
-  Future<_Data> _load() async {
-    final query = _query.trim();
-    final q = Uri.encodeQueryComponent(query);
-    var products = const <Map<String, dynamic>>[];
-    var productTotal = 0;
-    if (_category == _Category.futures) {
-      final pending = _products[query] ??= _allProducts(query);
-      try {
-        products = await pending;
-      } catch (_) {
-        _products.remove(query); // 실패를 기억하지 않는다
-        rethrow;
-      }
-      productTotal = products.length;
-      _futures = products; // 거래소 칩은 이 값을 받은 뒤에 나온다
+  Future<List<Map<String, dynamic>>> _productsOf(String exchange) async {
+    try {
+      return await (_products[exchange] ??= _allProducts(exchange));
+    } catch (_) {
+      _products.remove(exchange); // 실패를 기억하지 않는다
+      rethrow;
     }
+  }
+
+  Future<_Data> _load() async {
+    final q = Uri.encodeQueryComponent(_query.trim());
     final paging = 'page=$_page&pageSize=$_pageSize';
+    final exchange = _exchange == null ? '' : '&exchange=${Uri.encodeQueryComponent(_exchange!)}';
     final rows = await Future.wait<Map<String, dynamic>?>([
-      if (_category == _Category.all) _body('/symbols?q=$q&$paging') else Future.value(),
+      if (_category.hasProducts) _body('/symbols?q=$q$exchange&$paging') else Future.value(),
       if (_category.hasStocks)
         _body('/symbols/stocks?q=$q&$paging${_category.exchange == null ? '' : '&exchange=${_category.exchange}'}')
       else
         Future.value(),
+      if (_category == _Category.futures) _body('/symbols/exchanges') else Future.value(),
     ]);
-    if (rows[0] != null) {
-      products = (rows[0]!['items'] as List).cast<Map<String, dynamic>>();
-      productTotal = rows[0]!['total'] as int? ?? 0;
-    }
+    final products = rows[0];
     final stocks = rows[1];
+    List<Map<String, dynamic>> items(Map<String, dynamic>? body) =>
+        body == null ? const [] : (body['items'] as List).cast<Map<String, dynamic>>();
     return _Data(
-      products,
-      productTotal,
-      stocks == null ? const [] : (stocks['items'] as List).cast<Map<String, dynamic>>(),
+      items(products),
+      products?['total'] as int? ?? 0,
+      items(stocks),
       stocks?['total'] as int? ?? 0,
+      items(rows[2]),
     );
   }
 
@@ -153,12 +150,10 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
     _opened = null;
   });
 
-  Widget _exchanges(List<Map<String, dynamic>> products) {
-    final counts = <String, int>{};
-    for (final p in products) {
-      counts.update(_text(p['exchange']), (n) => n + 1, ifAbsent: () => 1);
-    }
+  Widget _exchanges(List<Map<String, dynamic>> rows) {
+    final counts = {for (final r in rows) _text(r['exchange']): r['count'] as int? ?? 0};
     final names = counts.keys.toList()..sort();
+    final total = counts.values.fold(0, (a, b) => a + b);
     Widget chip(String label, String? value) => ChoiceChip(
       label: Text(label),
       visualDensity: VisualDensity.compact,
@@ -168,7 +163,7 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
     return Wrap(
       spacing: 6,
       runSpacing: 6,
-      children: [chip('전체 거래소 ${products.length}', null), for (final n in names) chip('$n ${counts[n]}', n)],
+      children: [chip('전체 거래소 $total', null), for (final n in names) chip('$n ${counts[n]}', n)],
     );
   }
 
@@ -227,13 +222,7 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
 
   Widget _view(BuildContext context, _Data data) {
     final futures = _category == _Category.futures;
-    final products = [
-      for (final p in data.products)
-        if (_exchange == null || p['exchange'] == _exchange) p,
-    ];
-    // 해외선물은 받아 둔 전체를 화면에서 나누고, 전체는 서버가 나눈 쪽을 그대로 보여 준다.
-    final shown = futures ? products.skip((_page - 1) * _pageSize).take(_pageSize).toList() : products;
-    final productTotal = futures ? products.length : data.productTotal;
+    final productTotal = data.productTotal;
     final total = productTotal > data.stockTotal ? productTotal : data.stockTotal;
     final wide = MediaQuery.sizeOf(context).width >= 1200;
     final opened = _opened;
@@ -241,7 +230,7 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (futures) ...[_exchanges(data.products), const SizedBox(height: 8)],
+        if (futures) ...[_exchanges(data.exchanges), const SizedBox(height: 8)],
         Text(
           [
             if (_category.hasStocks) '${formatNumber(data.stockTotal)}개 종목',
@@ -253,7 +242,7 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
         // 앱 검색 결과와 같이 국내 종목을 먼저 놓는다.
         if (_category.hasStocks) _stockTable(data.stocks),
         if (_category == _Category.all) const SizedBox(height: 8),
-        if (_category.hasProducts) _productTable(shown),
+        if (_category.hasProducts) _productTable(data.products),
         if (!wide && opened != null) ...[
           const SizedBox(height: 8),
           _MonthPanel(opened, key: ValueKey(_productKey(opened)), onClose: () => setState(() => _opened = null)),
@@ -264,21 +253,24 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
   }
 
   /// 거래소 장 시간. 상품마다 시간이 다르면 비워 두고 입력한 구간만 바꾼다.
-  Widget _exchangeHours(String exchange) {
-    final products = _futures.where((p) => p['exchange'] == exchange).toList();
-    String pattern(Map<String, dynamic> p) => [
-      for (final s in const ['am', 'base', 'pm', 'nextDay']) '${p['${s}Open']}~${p['${s}Close']}',
-    ].join(' ');
-    final kinds = products.map(pattern).toSet().length;
-    return _SessionForm(
-      kinds == 1 ? products.first : const {},
-      key: ValueKey(exchange),
-      title: '$exchange 장 시간',
-      note: kinds == 1
-          ? '상품 ${products.length}개에 함께 적용합니다.'
-          : '상품 ${products.length}개, 시간 $kinds종입니다. 입력한 구간만 상품 전체에 적용하고 빈 구간은 그대로 둡니다.',
-    );
-  }
+  Widget _exchangeHours(String exchange) => LiveLoader<List<Map<String, dynamic>>>(
+    key: ValueKey('hours|$exchange'),
+    load: () => _productsOf(exchange),
+    builder: (context, products) {
+      String pattern(Map<String, dynamic> p) => [
+        for (final s in const ['am', 'base', 'pm', 'nextDay']) '${p['${s}Open']}~${p['${s}Close']}',
+      ].join(' ');
+      final kinds = products.map(pattern).toSet().length;
+      return _SessionForm(
+        kinds == 1 ? products.first : const {},
+        key: ValueKey(exchange),
+        title: '$exchange 장 시간',
+        note: kinds == 1
+            ? '상품 ${products.length}개에 함께 적용합니다.'
+            : '상품 ${products.length}개, 시간 $kinds종입니다. 입력한 구간만 상품 전체에 적용하고 빈 구간은 그대로 둡니다.',
+      );
+    },
+  );
 
   String _productKey(Map<String, dynamic> p) => '${p['productCode']}|${p['exchange']}';
 
@@ -321,8 +313,7 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
           }),
         ),
         LiveLoader<_Data>(
-          // 해외선물은 받아 둔 상품을 화면에서 나누므로 쪽을 넘겨도 다시 받지 않는다.
-          key: ValueKey((_category, _query, _category == _Category.futures ? 0 : _page)),
+          key: ValueKey((_category, _query, _exchange, _page)),
           load: _load,
           builder: _view,
         ),

@@ -34,6 +34,7 @@ class MemberAccount {
     required this.totalEval,
     required this.snapshotAt,
     this.isPaper = false,
+    this.kind,
     this.brokerCode = 'KIS',
     this.isActive = true,
     this.hasBalance = true,
@@ -48,12 +49,16 @@ class MemberAccount {
   final double totalEval; // 총평가금액
   final DateTime snapshotAt;
   final bool isPaper;
+  final String? kind; // real | paper | alert. 샘플 계좌는 비어 있다
   final String brokerCode;
   final bool isActive;
   final bool hasBalance; // 테스트 DB 는 잔고 기록이 없는 계좌가 있다
 
   /// 목록에서는 계좌번호 뒤 네 자리만 보여 준다.
   String get maskedCano => cano.length <= 4 ? cano : '****${cano.substring(cano.length - 4)}';
+
+  /// 알람 계좌. 앱키가 없고 주문을 내지 않는다.
+  bool get isAlert => kind == 'alert';
 
   /// 앱 총자산과 같은 계산: 보유 평가금액 + 주문가능금액.
   double get totalAsset => totalEval + orderableCash;
@@ -106,8 +111,14 @@ class AccountOrder {
     this.buyPrice,
     this.sellPrice,
     this.realizedPnl,
+    this.kind,
+    this.exitReason,
+    this.cycleNo,
   });
 
+  final String? kind; // entry | exit
+  final String? exitReason;
+  final int? cycleNo;
   final DateTime at;
   final int? workerId;
   final String currency;
@@ -347,6 +358,14 @@ List<AccountPosition> positionsOf(int memberId, {String? accountName}) => [
 ];
 
 /// 잡 회차의 이벤트로 주문 목록을 만든다. 최신 주문이 앞에 온다.
+/// 더 받은 주문을 뒤에 붙인다. 그사이 새 주문이 들어와 쪽이 밀리면 겹치는 줄은 건너뛴다.
+void addLiveOrders(int memberId, List<AccountOrder> orders) {
+  final list = _liveOrders[memberId];
+  if (list == null) return;
+  final known = {for (final o in list) (o.at, o.symbolName, o.side, o.accountName)};
+  list.addAll(orders.where((o) => known.add((o.at, o.symbolName, o.side, o.accountName))));
+}
+
 List<AccountOrder> ordersOf(int memberId, {String? accountName}) {
   final live = _liveOrders[memberId];
   if (live != null) {

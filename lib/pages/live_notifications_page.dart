@@ -6,7 +6,6 @@ import '../mock_data.dart';
 import '../theme.dart';
 import '../widgets/admin_page.dart';
 import 'live_view.dart';
-import 'member_edit_panel.dart' show memberGrades;
 import 'push_page.dart' show pushTargetRequest;
 
 const _pageSize = 20;

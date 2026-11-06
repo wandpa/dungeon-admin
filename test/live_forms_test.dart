@@ -9,6 +9,7 @@ import 'package:dungeon_admin/pages/live_notifications_page.dart';
 import 'package:dungeon_admin/pages/live_symbol_page.dart';
 import 'package:dungeon_admin/pages/live_workers_table.dart';
 import 'package:dungeon_admin/pages/member_detail_dialog.dart';
+import 'package:dungeon_admin/pages/member_monitor_page.dart';
 import 'package:dungeon_admin/pages/push_page.dart' show pushTargetRequest;
 import 'package:dungeon_admin/widgets/admin_page.dart';
 import 'package:flutter/material.dart';
@@ -116,11 +117,21 @@ void main() {
         final path = request.url.path;
         if (path.endsWith('/auth/login')) return http.Response(jsonEncode({'token': 't'}), 200);
         asked.add(request.url.toString());
+        final exchange = request.url.queryParameters['exchange'];
+        final products = [
+          for (final p in [product('GC', 'Gold', 'CME'), product('BRN', 'Brent', 'ICE')])
+            if (exchange == null || p['exchange'] == exchange) p,
+        ];
         final Object body = path.endsWith('/live/symbols')
+            ? {'items': products, 'page': 1, 'pageSize': 100, 'total': products.length}
+            : path.endsWith('/live/symbols/exchanges')
             ? {
-                'items': [product('GC', 'Gold', 'CME'), product('BRN', 'Brent', 'ICE')],
+                'items': [
+                  {'exchange': 'CME', 'count': 1},
+                  {'exchange': 'ICE', 'count': 1},
+                ],
                 'page': 1,
-                'pageSize': 100,
+                'pageSize': 2,
                 'total': 2,
               }
             : path.endsWith('/live/symbols/stocks')
@@ -173,6 +184,9 @@ void main() {
     await tester.tap(find.text('ICE 1'));
     await tester.pumpAndSettle();
     expect(find.text('ICE 장 시간'), findsOneWidget);
+    expect(asked.where((u) => u.contains('/live/symbols?') && u.contains('exchange=ICE')), isNotEmpty);
+    expect(find.text('Gold'), findsNothing);
+    expect(find.text('Brent'), findsOneWidget);
     expect(find.text('상품 1개에 함께 적용합니다.'), findsOneWidget);
     expect(find.text('Gold'), findsNothing);
     expect(find.text('Brent'), findsOneWidget);
@@ -225,8 +239,11 @@ void main() {
       'workerCount': 1,
       'runningWorkerCount': 1,
     };
-    Map<String, Object?> worker(String id, String code, String status, double pnl) => {
+    final asked = <Uri>[];
+    Map<String, Object?> worker(String id, String member, String name, String code, String status, double pnl) => {
       'id': id,
+      'memberId': member,
+      'username': name,
       'symbolCode': code,
       'symbolName': '$code 이름',
       'marketType': '해외선물',
@@ -234,28 +251,57 @@ void main() {
       'qtyUnit': '계약',
       'jobCount': 1,
       'finishedJobCount': 2,
+      'cycleCount': 71,
       'insertedAt': '2026-11-04T05:15:00Z',
+      'accounts': code == 'HSIX26'
+          ? [
+              {'accountName': '해외계좌2', 'maskedAccountNumber': '****9999', 'isPaper': true},
+            ]
+          : [],
+      'holdings': code == 'HSIX26'
+          ? [
+              {'side': 'short', 'size': 1},
+            ]
+          : [],
       'pnl': [
         {'isPaper': true, 'currency': 'HKD', 'realizedPnl': pnl},
       ],
     };
-    Object body(String path) {
-      Map<String, Object?> page(List<Object?> items) => {
+    final workers = [
+      worker('33333333-0000-0000-0000-000000000000', a, 'superman', 'HSIX26', 'running', 1000),
+      worker('44444444-0000-0000-0000-000000000000', b, 'bossljo', 'MCLZ26', 'stopped', -300),
+    ];
+    Object body(Uri url) {
+      final path = url.path;
+      Map<String, Object?> page(List<Object?> items, [Object? totals]) => {
         'items': items,
         'page': 1,
         'pageSize': 100,
         'total': items.length,
+        'totals': ?totals,
       };
       if (path.endsWith('/live/members')) return page([member(a, 'superman'), member(b, 'bossljo')]);
-      if (path.endsWith('$a/workers')) {
-        return page([worker('33333333-0000-0000-0000-000000000000', 'HSIX26', 'running', 1000)]);
+      if (path.endsWith('/live/workers')) {
+        final status = url.queryParameters['status'];
+        final q = url.queryParameters['q'], symbol = url.queryParameters['symbol'];
+        final rows = [
+          for (final w in workers)
+            if ((status == null || w['status'] == status) &&
+                (q == null || w['username'] == q) &&
+                (symbol == null || w['symbolCode'] == symbol))
+              w,
+        ];
+        return page(rows, {
+          'running': rows.where((w) => w['status'] == 'running').length,
+          'stopped': rows.where((w) => w['status'] == 'stopped').length,
+          'pnl': [for (final w in rows) ...w['pnl'] as List],
+        });
       }
-      if (path.endsWith('$b/workers')) {
-        return page([worker('44444444-0000-0000-0000-000000000000', 'MCLZ26', 'stopped', -300)]);
-      }
-      if (path.endsWith('$a/positions')) {
+      if (path.endsWith('/live/positions')) {
         return page([
           {
+            'memberId': a,
+            'username': 'superman',
             'symbolCode': 'HSIX26',
             'symbolName': 'HSI',
             'accountName': '해외계좌2',
@@ -269,23 +315,37 @@ void main() {
           },
         ]);
       }
-      if (path.endsWith('$b/logs')) {
-        return page([
-          {'at': '2026-11-04T05:15:00Z', 'category': 'order', 'text': 'order_submitted', 'jobName': '돌파'},
-        ]);
-      }
-      if (path.endsWith('$a/jobs')) {
+      if (path.endsWith('/live/logs')) {
         return page([
           {
-            'workerId': '33333333-0000-0000-0000-000000000000',
-            'accountName': '해외계좌2',
-            'maskedAccountNumber': '****9999',
-            'isPaper': true,
-            'repeatCurrent': 7,
-            'repeatCount': 100,
-            'position': {'side': 'short', 'size': 1, 'entryPrice': 24640},
+            'memberId': b,
+            'username': 'bossljo',
+            'at': '2026-11-04T05:15:00Z',
+            'category': 'order',
+            'text': 'order_submitted',
+            'jobName': '돌파',
           },
         ]);
+      }
+      if (path.endsWith('/live/orders')) {
+        return page(
+          [
+            {
+              'memberId': a,
+              'username': 'superman',
+              'orderedAt': '2026-11-04T05:15:00Z',
+              'symbolName': 'HSI',
+              'side': 'buy',
+              'filledQty': 1,
+              'qtyUnit': '계약',
+              'kind': 'exit',
+              'realizedPnl': 500,
+            },
+          ],
+          [
+            {'isPaper': true, 'currency': 'HKD', 'orders': 749, 'filled': 748, 'realizedPnl': 120900},
+          ],
+        );
       }
       return page([]);
     }
@@ -293,7 +353,8 @@ void main() {
     setLiveClient(
       MockClient((request) async {
         if (request.url.path.endsWith('/auth/login')) return http.Response(jsonEncode({'token': 't'}), 200);
-        return http.Response.bytes(utf8.encode(jsonEncode(body(request.url.path))), 200);
+        asked.add(request.url);
+        return http.Response.bytes(utf8.encode(jsonEncode(body(request.url))), 200);
       }),
     );
     await refreshLiveMembers();
@@ -310,28 +371,45 @@ void main() {
 
     expect(find.text('워커 2개 · 가동중 1개'), findsOneWidget);
     expect(find.text('해외계좌2(****9999)'), findsOneWidget);
-    expect(find.text('7/100'), findsOneWidget);
+    expect(find.text('71'), findsNWidgets(2));
     expect(find.text('매도 1계약'), findsOneWidget);
     expect(find.text('+700 HKD', findRichText: true), findsOneWidget); // 합계
+    expect(asked.where((u) => u.path.contains('/members/')), isEmpty); // 회원마다 부르지 않는다
 
-    await tester.enterText(find.widgetWithText(TextField, '회원 아이디 검색'), 'BOSS');
-    await tester.pump();
+    await tester.enterText(find.widgetWithText(TextField, '회원 아이디 검색'), 'bossljo');
+    await tester.pumpAndSettle(const Duration(milliseconds: 400));
+    expect(asked.last.queryParameters['q'], 'bossljo');
     expect(find.text('superman'), findsNothing);
-    expect(find.text('bossljo'), findsOneWidget);
+    expect(find.text('워커 1개 · 가동중 0개'), findsOneWidget);
 
     await tester.enterText(find.widgetWithText(TextField, '회원 아이디 검색'), '');
-    await tester.enterText(find.widgetWithText(TextField, '종목코드·종목명 검색'), 'hsi');
-    await tester.pump();
+    await tester.enterText(find.widgetWithText(TextField, '종목코드·종목명 검색'), 'HSIX26');
+    await tester.pumpAndSettle(const Duration(milliseconds: 400));
     expect(find.text('워커 1개 · 가동중 1개'), findsOneWidget);
     await tester.tap(find.text('superman'));
     await tester.pump(const Duration(milliseconds: 400));
     expect(opened?.symbolCode, 'HSIX26');
 
     await tester.enterText(find.widgetWithText(TextField, '종목코드·종목명 검색'), '');
+    await tester.pumpAndSettle(const Duration(milliseconds: 400));
     await tester.tap(find.widgetWithText(ChoiceChip, '중지됨'));
     await tester.pumpAndSettle();
+    expect(asked.last.queryParameters['status'], 'stopped');
     expect(find.text('워커 1개 · 가동중 0개'), findsOneWidget);
     expect(find.text('-300 HKD', findRichText: true), findsWidgets);
+
+    // 거래는 전체 기준 합계를 함께 보여 준다.
+    await tester.tap(find.widgetWithText(ChoiceChip, '거래'));
+    await tester.pumpAndSettle();
+    expect(find.text('청산'), findsOneWidget);
+    expect(find.text('+500'), findsOneWidget);
+    expect(find.text('모의 HKD · 주문 749건 · 체결 748건 · 손익 120,900'), findsOneWidget);
+    await tester.tap(find.text('전체 상태'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('거부').last);
+    await tester.pumpAndSettle();
+    expect(asked.last.queryParameters['group'], 'rejected');
+    expect(find.text('합계(삭제된 워커 포함)'), findsOneWidget);
 
     // 포지션과 로그도 전체 회원 것이 나오고 줄을 누르면 그 회원을 연다.
     await tester.tap(find.widgetWithText(ChoiceChip, '포지션'));
@@ -344,6 +422,84 @@ void main() {
     await tester.tap(find.text('돌파 · 주문 전송'));
     await tester.pump(const Duration(milliseconds: 400));
     expect(openedMember, liveMembers.firstWhere((m) => m.username == 'bossljo').id);
+  });
+
+  testWidgets('회원 워커: 실전·모의·알람을 체크박스로 골라 본다', (tester) async {
+    tester.view.physicalSize = const Size(1800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    const id = '11111111-0000-0000-0000-000000000000';
+    Map<String, Object?> worker(String guid, String code, String kind) => {
+      'id': guid,
+      'symbolCode': code,
+      'symbolName': '$code 이름',
+      'marketType': '해외선물',
+      'status': 'stopped',
+      'kind': kind,
+      'jobCount': 0,
+      'finishedJobCount': 0,
+      'insertedAt': '2026-11-04T05:15:00Z',
+    };
+    Map<String, Object?> page(List<Object?> items) => {'items': items, 'page': 1, 'pageSize': 100, 'total': items.length};
+    Object body(String path) {
+      if (path.endsWith('/live/members')) {
+        return page([
+          {
+            'id': id,
+            'username': 'superman',
+            'status': 'active',
+            'joinedAt': '2026-10-28T03:20:00Z',
+            'workerCount': 3,
+          },
+        ]);
+      }
+      if (path.endsWith('$id/workers')) {
+        return page([
+          worker('33333333-0000-0000-0000-000000000000', 'REAL1', 'real'),
+          worker('44444444-0000-0000-0000-000000000000', 'PAPER1', 'paper'),
+          worker('55555555-0000-0000-0000-000000000000', 'ALERT1', 'alert'),
+        ]);
+      }
+      return page([]);
+    }
+
+    setLiveClient(
+      MockClient((request) async {
+        if (request.url.path.endsWith('/auth/login')) return http.Response(jsonEncode({'token': 't'}), 200);
+        return http.Response.bytes(utf8.encode(jsonEncode(body(request.url.path))), 200);
+      }),
+    );
+    await refreshLiveMembers();
+    memberMonitorRequest.value = MonitorRequest(liveMembers.single.id);
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: MemberMonitorPage())));
+    await tester.pumpAndSettle();
+
+    expect(find.text('REAL1'), findsOneWidget);
+    expect(find.text('PAPER1'), findsOneWidget);
+    expect(find.text('ALERT1'), findsOneWidget);
+    expect(find.byType(Checkbox), findsNWidgets(3));
+
+    // 실전만 본다.
+    await tester.tap(find.text('모의 1'));
+    await tester.tap(find.text('알람 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('REAL1'), findsOneWidget);
+    expect(find.text('PAPER1'), findsNothing);
+    expect(find.text('ALERT1'), findsNothing);
+
+    // 알람을 함께 고른다.
+    await tester.tap(find.text('알람 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('ALERT1'), findsOneWidget);
+
+    // 모두 끄면 안내가 나온다.
+    await tester.tap(find.text('실전 1'));
+    await tester.tap(find.text('알람 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('선택한 종류의 워커가 없습니다.'), findsOneWidget);
+    await tester.tap(find.text('모의 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('PAPER1'), findsOneWidget);
   });
 
   testWidgets('회원 목록: 전략을 찾고 줄을 누르면 설정이 나온다', (tester) async {

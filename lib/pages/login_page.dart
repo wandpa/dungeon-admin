@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../live_api.dart';
 import '../mock_admin.dart';
 import '../theme.dart';
 import '../widgets/admin_page.dart';
@@ -14,7 +15,7 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _id = TextEditingController();
   final _password = TextEditingController();
-  String? _error;
+  String? _error = takeLiveSessionMessage(); // 로그인이 만료되어 돌아왔으면 알려 준다
 
   @override
   void dispose() {

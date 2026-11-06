@@ -64,7 +64,14 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
     _page = 0;
   });
 
+  /// 계정을 저장할 곳이 없다.
+  bool _blocked() {
+    if (useLiveData.value) showNotConnected(context);
+    return useLiveData.value;
+  }
+
   void _addAdmin() {
+    if (_blocked()) return;
     final name = _name.text.trim();
     final loginId = _loginId.text.trim();
     if (name.isEmpty || loginId.isEmpty) return;
@@ -84,6 +91,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
   }
 
   void _changeRole(AdminUser a, AdminRole role) {
+    if (_blocked()) return;
     setState(() {
       a.role = role;
       logActivity(ActivityKind.admin, '${a.name} 권한 변경 → ${role.label}');
@@ -91,6 +99,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
   }
 
   Future<void> _toggleActive(AdminUser a) async {
+    if (_blocked()) return;
     final ok = await showConfirmDialog(
       context,
       title: a.active ? '계정 사용 중지' : '계정 다시 사용',
@@ -106,6 +115,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
   }
 
   void _resetPassword(AdminUser a) {
+    if (_blocked()) return;
     logActivity(ActivityKind.admin, '${a.name} 비밀번호 초기화');
     setState(() => _temp = (name: a.name, password: _newPassword()));
   }
@@ -285,6 +295,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
       title: '관리자',
       description: '관리자 활동 기록을 확인합니다. 최고 관리자는 계정과 권한도 관리합니다.',
       children: [
+        if (useLiveData.value) const SampleNotice('샘플 계정과 샘플 활동 기록입니다. 관리자 API 연결 전이라 저장되지 않습니다.'),
         if (canManage)
           Wrap(
             spacing: 6,

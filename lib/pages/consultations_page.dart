@@ -80,6 +80,7 @@ class _ConsultationsPageState extends State<ConsultationsPage> {
       title: '상담 이력',
       description: '회원 상담을 접수 경로·유형·처리 상태별로 확인합니다. 내용을 누르면 전체가 보이고, 회원을 누르면 회원 모니터링으로 이동합니다.',
       children: [
+        if (useLiveData.value) const SampleNotice('샘플 상담입니다. 실제 회원의 상담 이력이 아니며, 상담 API 연결 전입니다.'),
         FilterBar(
           hint: '회원·내용·담당자 검색',
           filters: [for (final s in statuses) '${s?.label ?? '전체'} ${_count(s)}'],

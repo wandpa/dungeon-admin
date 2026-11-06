@@ -13,11 +13,20 @@ enum _TradeFilter {
 
 /// 앱 내역 > 거래와 같은 화면. 보유 포지션 카드 뒤에 주문 목록이 이어진다.
 class _TradesPane extends StatefulWidget {
-  const _TradesPane({super.key, required this.positions, required this.orders, required this.onOpen});
+  const _TradesPane({
+    super.key,
+    required this.positions,
+    required this.orders,
+    required this.onOpen,
+    this.more,
+    this.onMore,
+  });
 
   final List<AccountPosition> positions;
   final List<AccountOrder> orders;
   final void Function(int? workerId, String? jobName) onOpen;
+  final (int, int)? more; // 더 받을 수 있으면 (받은 건수, 전체 건수)
+  final Future<void> Function()? onMore;
 
   @override
   State<_TradesPane> createState() => _TradesPaneState();
@@ -183,6 +192,16 @@ class _TradesPaneState extends State<_TradesPane> {
                         '계좌 ${o.accountName} · ${o.jobName}',
                         style: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
                       ),
+                      if (o.cycleNo != null || o.kind != null)
+                        Text(
+                          [
+                            if (o.cycleNo != null) '${o.cycleNo}회차',
+                            if (o.kind == 'entry') '진입',
+                            if (o.kind == 'exit') '청산',
+                            ?_exitLabel(o.exitReason),
+                          ].join(' · '),
+                          style: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                        ),
                       if (o.buyPrice != null && o.sellPrice != null)
                         Text(
                           '매수가 ${_appPrice(o.buyPrice!, o.currency)} · 매도가 ${_appPrice(o.sellPrice!, o.currency)}',
@@ -264,7 +283,11 @@ class _TradesPaneState extends State<_TradesPane> {
               child: positions.isEmpty && orders.isEmpty
                   ? _Empty(_filter == _TradeFilter.held ? '보유중인 포지션이 없어요' : '표시할 주문이 없어요')
                   : ListView(
-                      children: [for (final p in positions) _positionCard(p), for (final o in orders) _orderTile(o)],
+                      children: [
+                        for (final p in positions) _positionCard(p),
+                        for (final o in orders) _orderTile(o),
+                        if (widget.more != null && widget.onMore != null) _MoreButton('주문', widget.more!, widget.onMore!),
+                      ],
                     ),
             ),
           ],
@@ -272,4 +295,43 @@ class _TradesPaneState extends State<_TradesPane> {
       ),
     );
   }
+}
+
+/// 회원별 내역은 앞쪽 일부만 받으므로 다음 쪽을 이어 받는다.
+class _MoreButton extends StatefulWidget {
+  const _MoreButton(this.label, this.more, this.onMore);
+
+  final String label;
+  final (int, int) more; // 받은 건수, 전체 건수
+  final Future<void> Function() onMore;
+
+  @override
+  State<_MoreButton> createState() => _MoreButtonState();
+}
+
+class _MoreButtonState extends State<_MoreButton> {
+  bool _loading = false;
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      await widget.onMore();
+    } on LiveApiException catch (e) {
+      if (mounted) showMessage(context, e.message);
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: OutlinedButton(
+      onPressed: _loading ? null : _load,
+      child: Text(
+        _loading
+            ? '받는 중입니다.'
+            : '${widget.label} 더 보기 (${formatNumber(widget.more.$1)} / ${formatNumber(widget.more.$2)}건)',
+      ),
+    ),
+  );
 }

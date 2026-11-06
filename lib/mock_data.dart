@@ -7,6 +7,9 @@ library;
 import 'package:flutter/foundation.dart';
 
 /// 회원. 관리자 화면에서 상태를 바꾸므로 일부 필드는 바뀔 수 있다.
+/// 앱과 같은 회원등급. 서버 tier 1~5 가 이 순서다.
+const memberGrades = ['브론즈', '실버', '골드', '다이아', 'VIP'];
+
 class Member {
   Member(
     this.id,
@@ -26,6 +29,8 @@ class Member {
     this.liveId,
     this.liveWorkerCount = 0,
     this.liveRunningCount = 0,
+    this.maskedName,
+    this.tier,
     List<MemberLog>? history,
   }) : history = history ?? [];
 
@@ -48,6 +53,14 @@ class Member {
   final String? liveId; // 테스트 DB 회원의 GUID. 샘플 회원은 비어 있다
   final int liveWorkerCount;
   final int liveRunningCount;
+  final String? maskedName; // 서버가 가려서 준다. 값이 없는 회원도 있다
+  final int? tier; // 1~5
+
+  /// 회원등급 이름. 범위 밖이면 비워 둔다.
+  String? get gradeLabel {
+    final t = tier;
+    return t == null || t < 1 || t > memberGrades.length ? null : memberGrades[t - 1];
+  }
 
   bool get accessBlocked => accessBlockedAt != null;
   bool get isLive => liveId != null;
