@@ -5,6 +5,7 @@ import '../mock_admin.dart';
 import '../mock_data.dart' show formatDateTime, formatNumber;
 import '../theme.dart';
 import '../widgets/admin_page.dart';
+import 'live_market_hours.dart';
 import 'live_view.dart';
 
 const _pageSize = 20;
@@ -79,6 +80,7 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
   String _query = '';
   int _page = 1;
   Map<String, dynamic>? _opened; // 월물을 볼 상품
+  var _futures = const <Map<String, dynamic>>[]; // 받아 둔 해외선물 상품. 거래소 장 시간에 쓴다
 
   @override
   void dispose() {
@@ -113,6 +115,7 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
         rethrow;
       }
       productTotal = products.length;
+      _futures = products; // 거래소 칩은 이 값을 받은 뒤에 나온다
     }
     final paging = 'page=$_page&pageSize=$_pageSize';
     final rows = await Future.wait<Map<String, dynamic>?>([
@@ -260,6 +263,23 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
     );
   }
 
+  /// 거래소 장 시간. 상품마다 시간이 다르면 비워 두고 입력한 구간만 바꾼다.
+  Widget _exchangeHours(String exchange) {
+    final products = _futures.where((p) => p['exchange'] == exchange).toList();
+    String pattern(Map<String, dynamic> p) => [
+      for (final s in const ['am', 'base', 'pm', 'nextDay']) '${p['${s}Open']}~${p['${s}Close']}',
+    ].join(' ');
+    final kinds = products.map(pattern).toSet().length;
+    return _SessionForm(
+      kinds == 1 ? products.first : const {},
+      key: ValueKey(exchange),
+      title: '$exchange 장 시간',
+      note: kinds == 1
+          ? '상품 ${products.length}개에 함께 적용합니다.'
+          : '상품 ${products.length}개, 시간 $kinds종입니다. 입력한 구간만 상품 전체에 적용하고 빈 구간은 그대로 둡니다.',
+    );
+  }
+
   String _productKey(Map<String, dynamic> p) => '${p['productCode']}|${p['exchange']}';
 
   @override
@@ -269,12 +289,21 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
     return AdminPage(
       title: '종목 마스터',
       description: '앱 종목 검색과 같은 순서로 상품과 월물을 조회하고 장 시간을 입력합니다.',
-      side: !wide || !_category.hasProducts
+      side: !wide
           ? null
-          : opened == null
-          ? const Text('상품을 누르면 월물이 나옵니다.', style: TextStyle(color: AppColors.textTertiary))
-          : _MonthPanel(opened, key: ValueKey(_productKey(opened)), onClose: () => setState(() => _opened = null)),
+          : opened != null
+          ? _MonthPanel(opened, key: ValueKey(_productKey(opened)), onClose: () => setState(() => _opened = null))
+          : _category.hasStocks
+          ? const LiveMarketHours()
+          : _exchange != null
+          ? _exchangeHours(_exchange!)
+          : const Text(
+              '거래소 칩을 누르면 거래소 장 시간, 상품을 누르면 상품 장 시간과 월물이 나옵니다.',
+              style: TextStyle(color: AppColors.textTertiary),
+            ),
       children: [
+        if (!wide && _category.hasStocks) const LiveMarketHours(),
+        if (!wide && _category == _Category.futures && _exchange != null && opened == null) _exchangeHours(_exchange!),
         FilterBar(
           hint: '종목명·코드 검색',
           filters: [for (final c in _Category.values) c.label],
@@ -304,9 +333,11 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
 
 /// 상품의 장 시작·종료 입력. DB 의 네 구간을 그대로 고친다. 저장 API 가 없어 지금은 안내만 한다.
 class _SessionForm extends StatefulWidget {
-  const _SessionForm(this.product);
+  const _SessionForm(this.product, {super.key, this.title = '장 시간', this.note});
 
   final Map<String, dynamic> product;
+  final String title;
+  final String? note;
 
   @override
   State<_SessionForm> createState() => _SessionFormState();
@@ -324,13 +355,36 @@ class _SessionFormState extends State<_SessionForm> {
       ),
   };
 
+  final _special = <SpecialRow>[];
+
   bool get _editable => can(AdminPermission.manageSymbols);
+
+  @override
+  void initState() {
+    super.initState();
+    _fillSpecial();
+  }
+
+  /// DB 에는 상품마다 특정일이 하나뿐이고 시간 칸이 없다.
+  void _fillSpecial() {
+    for (final r in _special) {
+      r.dispose();
+    }
+    _special.clear();
+    final date = widget.product['specialDate'] as String?;
+    if (date != null) {
+      _special.add(SpecialRow(date: DateTime.tryParse(date), reason: widget.product['specialReason'] as String?));
+    }
+  }
 
   @override
   void dispose() {
     for (final (open, close) in _fields.values) {
       open.dispose();
       close.dispose();
+    }
+    for (final r in _special) {
+      r.dispose();
     }
     super.dispose();
   }
@@ -344,7 +398,7 @@ class _SessionFormState extends State<_SessionForm> {
       if (from.isEmpty || to.isEmpty) return '$label 장 시작과 장 종료를 함께 입력하세요.';
       if (!_time.hasMatch(from) || !_time.hasMatch(to)) return '$label 시간은 08:45 형식으로 입력하세요.';
     }
-    return null;
+    return specialDaysProblem(_special, sameDay: false); // 해외선물은 다음 날로 넘어간다
   }
 
   void _reset() => setState(() {
@@ -353,6 +407,7 @@ class _SessionFormState extends State<_SessionForm> {
       open.text = widget.product['${key}Open'] as String? ?? '';
       close.text = widget.product['${key}Close'] as String? ?? '';
     }
+    _fillSpecial();
   });
 
   Widget _field(TextEditingController controller) => Expanded(
@@ -370,10 +425,14 @@ class _SessionFormState extends State<_SessionForm> {
     final problem = _problem;
     const head = TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w700);
     return Panel(
-      title: '장 시간',
+      title: widget.title,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (widget.note != null) ...[
+            Text(widget.note!, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+            const SizedBox(height: 8),
+          ],
           const Row(
             children: [
               SizedBox(width: 100),
@@ -395,7 +454,15 @@ class _SessionFormState extends State<_SessionForm> {
                 ],
               ),
             ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
+          SpecialDaysEditor(
+            rows: _special,
+            editable: _editable,
+            defaultOpen: _fields['am']!.$1.text.trim(),
+            defaultClose: _fields['am']!.$2.text.trim(),
+            onChanged: () => setState(() {}),
+          ),
+          const SizedBox(height: 8),
           Text(
             problem ?? '저장 API 연결 전입니다. 입력한 값은 저장되지 않습니다.',
             style: TextStyle(color: problem == null ? AppColors.warning : AppColors.up, fontSize: 12),

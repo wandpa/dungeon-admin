@@ -4,6 +4,7 @@ import 'package:dungeon_admin/live_api.dart';
 import 'package:dungeon_admin/mock_admin.dart';
 import 'package:dungeon_admin/mock_data.dart';
 import 'package:dungeon_admin/pages/live_lists.dart';
+import 'package:dungeon_admin/pages/live_market_hours.dart';
 import 'package:dungeon_admin/pages/live_notifications_page.dart';
 import 'package:dungeon_admin/pages/live_symbol_page.dart';
 import 'package:dungeon_admin/pages/live_workers_table.dart';
@@ -171,6 +172,8 @@ void main() {
     expect(find.text('전체 거래소 2'), findsOneWidget);
     await tester.tap(find.text('ICE 1'));
     await tester.pumpAndSettle();
+    expect(find.text('ICE 장 시간'), findsOneWidget);
+    expect(find.text('상품 1개에 함께 적용합니다.'), findsOneWidget);
     expect(find.text('Gold'), findsNothing);
     expect(find.text('Brent'), findsOneWidget);
     await tester.tap(find.text('전체 거래소 2'));
@@ -195,6 +198,12 @@ void main() {
     expect(find.textContaining('08:45 형식'), findsOneWidget);
     expect(tester.widget<FilledButton>(save).onPressed, isNull);
     await tester.enterText(fields.at(0), '08:45');
+    await tester.pump();
+    await tester.tap(find.text('특정일 추가'));
+    await tester.pumpAndSettle();
+    expect(find.text('특정일 날짜를 고르세요.'), findsOneWidget);
+    await tester.tap(find.byTooltip('특정일 삭제'));
+    await tester.pumpAndSettle();
     await tester.pump();
     await tester.tap(save);
     await tester.pump();
@@ -387,6 +396,75 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('2 계약'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  test('특정일 시간: 국내는 같은 날 안에서, 해외선물은 다음 날로 넘어갈 수 있다', () {
+    final rows = [SpecialRow(date: DateTime(2026, 12, 24), reason: '조기 종료', open: '22:20', close: '03:30')];
+    expect(specialDaysProblem(rows, sameDay: false), isNull);
+    expect(specialDaysProblem(rows, sameDay: true), contains('늦어야'));
+  });
+
+  testWidgets('국내 장 시간: 기본 시간과 특정일을 입력하고 저장은 안내만 한다', (tester) async {
+    tester.view.physicalSize = const Size(700, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    setLiveClient(
+      MockClient((request) async {
+        if (request.url.path.endsWith('/auth/login')) return http.Response(jsonEncode({'token': 't'}), 200);
+        return http.Response.bytes(
+          utf8.encode(
+            jsonEncode({
+              'markets': [],
+              'holidays': [
+                {'date': '2026-12-25', 'name': '성탄절', 'market': 'KRX'},
+              ],
+              'specialDays': [
+                {'name': '국내주식', 'date': null, 'amOpen': '09:00', 'amClose': '15:35'},
+                {'name': '수능일', 'date': '2026-11-19', 'reason': '수능일', 'amOpen': '10:00', 'amClose': '16:35'},
+              ],
+            }),
+          ),
+          200,
+        );
+      }),
+    );
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: SingleChildScrollView(child: LiveMarketHours())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('2026-11-19'), findsOneWidget);
+    expect(find.text('수능일'), findsOneWidget);
+    expect(find.text('10:00'), findsOneWidget);
+    expect(find.textContaining('2026-12-25 성탄절'), findsOneWidget);
+    final save = find.widgetWithText(FilledButton, '저장');
+    expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
+
+    // 새 특정일은 날짜와 사유가 있어야 저장할 수 있다.
+    await tester.tap(find.text('특정일 추가'));
+    await tester.pumpAndSettle();
+    expect(find.text('특정일 날짜를 고르세요.'), findsOneWidget);
+    expect(tester.widget<FilledButton>(save).onPressed, isNull);
+    await tester.tap(find.text('날짜 선택'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('사유를 입력하세요'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).at(5), '임시 변경');
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField).at(4), '09:00');
+    await tester.pump();
+    expect(find.textContaining('장 종료는 장 시작보다 늦어야'), findsOneWidget);
+    await tester.tap(find.text('되돌리기'));
+    await tester.pump();
+    expect(find.text('임시 변경'), findsNothing);
+    expect(find.text('16:35'), findsOneWidget);
+
+    await tester.tap(save);
+    await tester.pump();
+    expect(find.text(_notConnected), findsOneWidget);
   });
 
   testWidgets('푸시 알림: 회원 상세에서 오면 그 회원이 받는 사람으로 골라져 있다', (tester) async {
