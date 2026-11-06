@@ -941,6 +941,46 @@ class _Empty extends StatelessWidget {
 }
 
 /// 맨 위 회원 검색. 고른 회원의 화면에서 바로 다른 회원으로 옮기거나 전체 워커로 돌아간다.
+/// 회원 선택 목록. 브라우저에서는 마우스를 누르는 순간 입력칸 포커스가 풀려 목록이 닫히므로,
+/// 뗄 때까지 기다리는 탭으로는 선택되지 않는다. 그래서 누르는 순간 고른다.
+class _MemberOptions extends StatelessWidget {
+  const _MemberOptions(this.options, this.onSelected);
+
+  final List<Member> options;
+  final ValueChanged<Member> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final highlighted = AutocompleteHighlightedOption.of(context);
+    return Align(
+      alignment: Alignment.topLeft,
+      child: Material(
+        elevation: 4,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 200, maxWidth: 240),
+          child: ListView.builder(
+            padding: EdgeInsets.zero,
+            shrinkWrap: true,
+            itemCount: options.length,
+            itemBuilder: (context, i) => Listener(
+              behavior: HitTestBehavior.opaque,
+              onPointerDown: (_) => onSelected(options[i]),
+              child: InkWell(
+                onTap: () {},
+                child: Container(
+                  color: i == highlighted ? Theme.of(context).focusColor : null,
+                  padding: const EdgeInsets.all(16),
+                  child: Text(options[i].username),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _MemberPicker extends StatelessWidget {
   const _MemberPicker({
     required this.members,
@@ -996,6 +1036,7 @@ class _MemberPicker extends StatelessWidget {
               );
             },
             onSelected: onSelect,
+            optionsViewBuilder: (context, select, options) => _MemberOptions(options.toList(), select),
             fieldViewBuilder: (context, controller, focus, onSubmitted) => TextField(
               controller: controller,
               focusNode: focus,

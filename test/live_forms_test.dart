@@ -425,6 +425,64 @@ void main() {
     expect(openedMember, liveMembers.firstWhere((m) => m.username == 'bossljo').id);
   });
 
+  testWidgets('회원 선택: 목록을 누르는 순간 그 회원의 워커로 바뀐다', (tester) async {
+    tester.view.physicalSize = const Size(1800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    writeView('worker-kinds/admin', 'real,paper,alert');
+    const a = '11111111-0000-0000-0000-000000000000', b = '22222222-0000-0000-0000-000000000000';
+    Map<String, Object?> member(String id, String name) => {
+      'id': id,
+      'username': name,
+      'status': 'active',
+      'joinedAt': '2026-10-28T03:20:00Z',
+      'workerCount': 1,
+    };
+    Map<String, Object?> worker(String id, String code) => {
+      'id': id,
+      'symbolCode': code,
+      'symbolName': '$code 이름',
+      'marketType': '해외선물',
+      'status': 'stopped',
+      'kind': 'paper',
+      'jobCount': 0,
+      'finishedJobCount': 0,
+      'insertedAt': '2026-11-04T05:15:00Z',
+    };
+    Map<String, Object?> page(List<Object?> items) => {'items': items, 'page': 1, 'pageSize': 100, 'total': items.length};
+    Object body(String path) {
+      if (path.endsWith('/live/members')) return page([member(a, 'superman'), member(b, 'bossljo')]);
+      if (path.endsWith('$a/workers')) return page([worker('33333333-0000-0000-0000-000000000000', 'SUPERW')]);
+      if (path.endsWith('$b/workers')) return page([worker('44444444-0000-0000-0000-000000000000', 'BOSSW')]);
+      return page([]);
+    }
+
+    setLiveClient(
+      MockClient((request) async {
+        if (request.url.path.endsWith('/auth/login')) return http.Response(jsonEncode({'token': 't'}), 200);
+        return http.Response.bytes(utf8.encode(jsonEncode(body(request.url.path))), 200);
+      }),
+    );
+    await refreshLiveMembers();
+    memberMonitorRequest.value = MonitorRequest(liveMembers.last.id);
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: MemberMonitorPage())));
+    await tester.pumpAndSettle();
+    expect(find.text('BOSSW'), findsOneWidget);
+
+    await tester.tap(find.byType(TextField).first);
+    await tester.pumpAndSettle();
+
+    // 마우스를 아직 떼지 않았는데 이미 바뀌어야 한다.
+    final press = await tester.startGesture(tester.getCenter(find.text('superman').last));
+    await tester.pumpAndSettle();
+    expect(find.text('superman 워커'), findsOneWidget);
+    expect(find.text('SUPERW'), findsOneWidget);
+    expect(find.text('BOSSW'), findsNothing);
+    await press.up();
+    await tester.pumpAndSettle();
+    expect(find.text('superman 워커'), findsOneWidget);
+  });
+
   testWidgets('회원 워커: 실전·모의·알람을 체크박스로 골라 본다', (tester) async {
     tester.view.physicalSize = const Size(1800, 1200);
     tester.view.devicePixelRatio = 1;

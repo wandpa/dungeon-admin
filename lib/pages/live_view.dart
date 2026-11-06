@@ -20,7 +20,8 @@ class _LiveLoaderState<T> extends State<LiveLoader<T>> {
   late Future<T> _future = _load();
 
   Future<T> _load() {
-    adminStatus.value = '조회 중입니다.';
+    // 처음 그리는 도중에 불리므로 상태줄은 다 그린 뒤에 바꾼다.
+    WidgetsBinding.instance.addPostFrameCallback((_) => adminStatus.value = '조회 중입니다.');
     return widget.load().then(
       (data) {
         final total = data is Map ? data['total'] : null;
