@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../file_download.dart';
+import '../live_api.dart';
 import '../mock_admin.dart';
 import '../mock_data.dart';
 import '../theme.dart';
@@ -21,23 +22,26 @@ class _MembersPageState extends State<MembersPage> {
 
   String _query = '';
   MemberStatus? _status; // null 이면 전체
+  bool _blockedOnly = false; // 접속 차단은 상태와 따로라 필터도 따로 둔다
   int _page = 0;
   final _selectedIds = <int>{};
 
   List<Member> get _filtered {
     final q = _query.trim().toLowerCase();
     return [
-      for (final m in mockMembers)
+      for (final m in currentMembers)
         if ((_status == null || m.status == _status) &&
+            (!_blockedOnly || m.accessBlocked) &&
             (q.isEmpty || m.username.toLowerCase().contains(q) || m.email.toLowerCase().contains(q)))
           m,
     ];
   }
 
-  int _count(MemberStatus? s) => s == null ? mockMembers.length : mockMembers.where((m) => m.status == s).length;
+  int _count(MemberStatus? s) => s == null ? currentMembers.length : currentMembers.where((m) => m.status == s).length;
 
-  void _setFilter(MemberStatus? s) => setState(() {
+  void _setFilter(MemberStatus? s, {bool blocked = false}) => setState(() {
     _status = s;
+    _blockedOnly = blocked;
     _page = 0;
     _selectedIds.clear();
   });
@@ -62,6 +66,16 @@ class _MembersPageState extends State<MembersPage> {
   }
 
   /// 지금 필터의 회원을 CSV 로 내려받는다. 이메일은 화면과 같이 가린다.
+  Future<void> _exportLive() async {
+    try {
+      final csv = await liveMembersCsv(q: _query.trim(), status: _status);
+      downloadCsv('members_live.csv', csv);
+      if (mounted) showMessage(context, '회원을 내보냈습니다.');
+    } on LiveApiException catch (e) {
+      if (mounted) showMessage(context, e.message);
+    }
+  }
+
   void _export(List<Member> members) {
     String cell(String v) {
       // 엑셀이 값을 수식으로 실행하지 않게 막는다.
@@ -70,15 +84,16 @@ class _MembersPageState extends State<MembersPage> {
     }
 
     final rows = [
-      ['번호', '아이디', '이메일', '가입일', '최근 접속', '상태'],
+      ['번호', '아이디', '이메일', '가입일', '최근 접속', '상태', '접속 차단'],
       for (final m in members)
         [
-          '${m.id}',
+          m.shownId,
           m.username,
-          maskEmail(m.email),
+          m.shownEmail,
           formatDateTime(m.joinedAt),
           m.lastLoginAt == null ? '' : formatDateTime(m.lastLoginAt!),
           m.status.label,
+          m.accessBlocked ? '차단' : '',
         ],
     ];
     final now = DateTime.now();
@@ -87,6 +102,8 @@ class _MembersPageState extends State<MembersPage> {
     logActivity(ActivityKind.member, '회원 ${members.length}명 내보내기');
     showMessage(context, '${members.length}명을 내보냈습니다.');
   }
+
+  void _openMonitor(Member m) => memberMonitorRequest.value = MonitorRequest(m.id);
 
   Future<void> _openDetail(Member m) async {
     await showMemberDetail(context, m);
@@ -100,15 +117,19 @@ class _MembersPageState extends State<MembersPage> {
     final page = _page.clamp(0, pageCount - 1);
     final visible = filtered.skip(page * _pageSize).take(_pageSize).toList();
     final pending = _count(MemberStatus.pending);
-    final selectable = _status == MemberStatus.pending && can(AdminPermission.memberActions);
+    final selectable = !useLiveData.value && _status == MemberStatus.pending && can(AdminPermission.memberActions);
     final statuses = <MemberStatus?>[null, ...MemberStatus.values];
 
     return AdminPage(
       title: '회원 관리',
-      description: '가입 회원을 조회하고 승인·정지·탈퇴를 처리합니다.',
+      description: '가입 회원을 조회하고 승인·정지·차단·탈퇴를 처리합니다.',
       actions: [
         OutlinedButton.icon(
-          onPressed: can(AdminPermission.exportMembers) ? () => _export(filtered) : null,
+          onPressed: !can(AdminPermission.exportMembers)
+              ? null
+              : useLiveData.value
+              ? _exportLive
+              : () => _export(filtered),
           icon: const Icon(Icons.download, size: 18),
           label: const Text('엑셀 내보내기'),
         ),
@@ -117,9 +138,12 @@ class _MembersPageState extends State<MembersPage> {
         if (pending > 0 && !selectable) _PendingBanner(count: pending, onTap: () => _setFilter(MemberStatus.pending)),
         FilterBar(
           hint: '아이디·이메일 검색',
-          filters: [for (final s in statuses) '${s?.label ?? '전체'} ${_count(s)}'],
-          selectedIndex: statuses.indexOf(_status),
-          onFilterSelected: (i) => _setFilter(statuses[i]),
+          filters: [
+            for (final s in statuses) '${s?.label ?? '전체'} ${_count(s)}',
+            '접속 차단 ${currentMembers.where((m) => m.accessBlocked).length}',
+          ],
+          selectedIndex: _blockedOnly ? statuses.length : statuses.indexOf(_status),
+          onFilterSelected: (i) => i == statuses.length ? _setFilter(null, blocked: true) : _setFilter(statuses[i]),
           onSearchChanged: (v) => setState(() {
             _query = v;
             _page = 0;
@@ -146,6 +170,11 @@ class _MembersPageState extends State<MembersPage> {
           ),
         AdminTable(
           columns: const ['번호', '아이디', '이메일', '가입일', '최근 접속', '상태', ''],
+          columnSpacing: 16, // 처리 버튼 3개가 옆으로 밀리지 않게 줄인다
+          // 줄을 두 번 누르면 그 회원의 워커 목록으로 간다. 승인 전 회원은 볼 내용이 없다.
+          onRowDoubleTap: (i) {
+            if (visible[i].status != MemberStatus.pending) _openMonitor(visible[i]);
+          },
           emptyText: '조건에 맞는 회원이 없습니다.',
           selected: selectable
               ? {
@@ -163,25 +192,46 @@ class _MembersPageState extends State<MembersPage> {
           rows: [
             for (final m in visible)
               [
-                Text('${m.id}'),
+                Text(m.shownId),
                 InkWell(
                   onTap: () => _openDetail(m),
+                  // 아이디를 두 번 눌러도 상세가 먼저 열리지 않게 한다.
+                  onDoubleTap: m.status == MemberStatus.pending ? null : () => _openMonitor(m),
                   child: Text(m.username, style: const TextStyle(fontWeight: FontWeight.w600)),
                 ),
-                Text(maskEmail(m.email)),
+                Text(m.shownEmail),
                 Text(formatDateTime(m.joinedAt)),
                 Text(m.lastLoginAt == null ? '-' : formatDateTime(m.lastLoginAt!)),
-                StatusBadge(m.status.label, color: memberStatusColor(m.status)),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    TextButton(onPressed: () => _openDetail(m), child: const Text('상세')),
+                    StatusBadge(m.status.label, color: memberStatusColor(m.status)),
+                    if (m.accessBlocked) ...[const SizedBox(width: 4), const StatusBadge('접속 차단', color: AppColors.up)],
+                  ],
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextButton(style: _rowButton, onPressed: () => _openDetail(m), child: const Text('상세')),
                     // 승인 전 회원은 로그인한 적이 없어 모니터링할 내용이 없다.
                     if (m.status != MemberStatus.pending)
-                      TextButton(
-                        onPressed: () => memberMonitorRequest.value = MonitorRequest(m.id),
-                        child: const Text('모니터링'),
-                      ),
+                      TextButton(style: _rowButton, onPressed: () => _openMonitor(m), child: const Text('모니터링')),
+                    if (m.status != MemberStatus.pending && !m.isLive && can(AdminPermission.memberActions))
+                      m.accessBlocked
+                          ? TextButton(
+                              style: _rowButton,
+                              onPressed: () async {
+                                if (await unblockMemberAccess(context, m) && mounted) setState(() {});
+                              },
+                              child: const Text('해제'),
+                            )
+                          : TextButton(
+                              style: _rowButton.merge(TextButton.styleFrom(foregroundColor: AppColors.up)),
+                              onPressed: () async {
+                                if (await blockMemberAccess(context, m) && mounted) setState(() {});
+                              },
+                              child: const Text('차단'),
+                            ),
                   ],
                 ),
               ],
@@ -218,6 +268,12 @@ Color memberStatusColor(MemberStatus s) => switch (s) {
   MemberStatus.suspended => AppColors.up,
   MemberStatus.deleteRequested => AppColors.warning,
 };
+
+final _rowButton = TextButton.styleFrom(
+  padding: const EdgeInsets.symmetric(horizontal: 6),
+  minimumSize: const Size(0, 32),
+  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+);
 
 class _PendingBanner extends StatelessWidget {
   const _PendingBanner({required this.count, required this.onTap});

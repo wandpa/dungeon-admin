@@ -36,7 +36,7 @@ class MemberWorker {
   final WorkerStatus status;
   final DateTime insertedAt;
   final String currency; // USD · HKD · EUR · KRW
-  final double currentPrice;
+  final double? currentPrice; // 테스트 DB 에는 시세가 없어 비어 있다
   final bool autoCloseOnMarketEnd;
   final String? errorMessage;
   final WorkerPnlLimit? pnlLimit; // null 이면 누적 손익 종료를 쓰지 않는다
@@ -61,6 +61,21 @@ class MemberWorker {
       for (final j in jobs)
         if (j.accountName == accountName) j,
     ],
+  );
+
+  MemberWorker withJobs(List<WorkerJob> next) => MemberWorker(
+    id: id,
+    symbolCode: symbolCode,
+    symbolName: symbolName,
+    marketType: marketType,
+    status: status,
+    insertedAt: insertedAt,
+    currency: currency,
+    currentPrice: currentPrice,
+    autoCloseOnMarketEnd: autoCloseOnMarketEnd,
+    errorMessage: errorMessage,
+    pnlLimit: pnlLimit,
+    jobs: next,
   );
 
   /// 수량 단위. 앱과 같이 선물은 계약, 주식은 주.
@@ -131,6 +146,12 @@ class JobStrategy {
     this.entrySettings = const {},
     this.conditions = const {},
     this.entryMode,
+    this.liveItems,
+    this.liveName,
+    this.liveExitCards,
+    this.liveTrailingOn = false,
+    this.tickSize,
+    this.tickValue,
   });
 
   final String templateId;
@@ -148,6 +169,12 @@ class JobStrategy {
   /// 지표 조합의 신호 조건. 키는 OR 묶음, 값은 그 안의 AND 조건.
   final Map<String, List<String>> conditions;
   final String? entryMode; // 지표 조합의 진입 방식
+  final List<LiveSetting>? liveItems; // 테스트 DB 잡의 앱 항목. 있으면 화면이 이 순서대로 그린다
+  final String? liveName; // 앱에 저장된 전략 이름
+  final List<LiveSetting>? liveExitCards; // 커스텀 청산 조건 카드
+  final bool liveTrailingOn; // 테스트 DB 잡은 꺼져 있어도 트레일링 항목을 보여 준다
+  final double? tickSize; // 틱 환산 줄에 쓴다
+  final double? tickValue;
 
   /// 앱 strategyTemplateLabel 과 같은 표기.
   String get label => switch (templateId) {
@@ -159,6 +186,21 @@ class JobStrategy {
     'trailing_entry' => '트레일링 진입',
     _ => templateId,
   };
+}
+
+/// 앱 상세보기 화면의 항목 하나.
+class LiveSetting {
+  const LiveSetting.value(this.label, this.value, {this.note}) : options = const [], on = null;
+  const LiveSetting.segment(this.label, this.options, this.value, {this.note}) : on = null;
+  const LiveSetting.toggle(this.label, this.value, bool this.on) : options = const [], note = null;
+
+  final String label;
+  final String value; // 스위치 카드에서는 설명글
+  final List<String> options; // 비어 있지 않으면 고르는 버튼
+  final String? note;
+  final bool? on; // 있으면 스위치 카드
+
+  bool get isToggle => on != null;
 }
 
 class WorkerJob {
@@ -175,6 +217,11 @@ class WorkerJob {
     this.repeatCount = 1,
     this.position,
     this.cycles = const [],
+    this.liveId,
+    this.fixedRealizedPnl,
+    this.detailLoaded = false,
+    this.accountNumber,
+    this.endReason,
   });
 
   final String name;
@@ -189,6 +236,32 @@ class WorkerJob {
   final int repeatCount;
   final JobPosition? position;
   final List<JobCycle> cycles; // 최신 회차가 앞에 온다
+  final String? liveId; // 테스트 DB 잡의 GUID
+  final double? fixedRealizedPnl; // 서버가 합산해 준 실현손익. 회차는 잡을 고를 때 받는다
+  final bool detailLoaded; // 테스트 DB 잡의 설정·회차를 받았는지
+  final String? accountNumber; // 서버가 가려서 준 계좌번호
+  final String? endReason; // completed · user_close · deleted · failed · cancelled · abnormal
+
+  /// 설정과 회차를 채운 잡.
+  WorkerJob withDetail(JobStrategy strategy, List<JobCycle> cycles) => WorkerJob(
+    name: name,
+    status: status,
+    accountName: accountName,
+    isPaper: isPaper,
+    strategy: strategy,
+    mode: mode,
+    isActive: isActive,
+    entrySide: entrySide,
+    repeatCurrent: repeatCurrent,
+    repeatCount: repeatCount,
+    position: position,
+    cycles: cycles,
+    liveId: liveId,
+    fixedRealizedPnl: fixedRealizedPnl,
+    detailLoaded: true,
+    accountNumber: accountNumber,
+    endReason: endReason,
+  );
 
   bool get isAlert => mode == 'alert';
 
@@ -207,7 +280,7 @@ class WorkerJob {
     return JobSlot.queued;
   }
 
-  double get realizedPnl => cycles.fold(0, (sum, c) => sum + (c.realizedPnl ?? 0));
+  double get realizedPnl => fixedRealizedPnl ?? cycles.fold(0, (sum, c) => sum + (c.realizedPnl ?? 0));
 
   /// 거부된 주문의 사유.
   List<String> get rejectReasons => [
@@ -237,6 +310,20 @@ class WorkerJob {
     };
   }
 
+  /// 앱 종료된 전략 카드의 칩. 서버가 종료 사유를 주지 않으면 상태 글자를 쓴다.
+  String get endLabel => switch (endReason) {
+    'completed' => '정상 종료',
+    'user_close' => 'Close 종료',
+    'deleted' => '삭제 종료',
+    'failed' => '실패 종료',
+    'cancelled' => '취소됨',
+    'abnormal' => '⚠️ 비정상종료',
+    _ => statusLabel,
+  };
+
+  /// 계좌 이름과 서버가 가려서 준 번호. 번호가 없으면 이름만 쓴다.
+  String get accountLabel => accountNumber == null ? accountName : '$accountName($accountNumber)';
+
   String get entrySideLabel => switch (entrySide) {
     'buy' => '매수',
     'sell' => '매도',
@@ -253,12 +340,15 @@ class JobPosition {
   final double multiplier; // 계약승수
 
   /// 평가손익. 앱과 같이 (현재가 − 진입가) × 수량 × 승수이고 매도 보유는 부호가 반대다.
-  /// 방향을 모르면 null.
-  double? pnlAt(double price) => switch (side) {
-    'long' => (price - entryPrice) * size * multiplier,
-    'short' => (entryPrice - price) * size * multiplier,
-    _ => null,
-  };
+  /// 방향이나 현재가를 모르면 null.
+  double? pnlAt(double? price) {
+    if (price == null) return null;
+    return switch (side) {
+      'long' => (price - entryPrice) * size * multiplier,
+      'short' => (entryPrice - price) * size * multiplier,
+      _ => null,
+    };
+  }
 
   /// 앱과 같이 방향이 비면 롱으로 치지 않고 그대로 드러낸다.
   String get sideLabel => switch (side) {
@@ -283,6 +373,7 @@ class JobCycle {
     this.openedAt,
     this.closedAt,
     this.events = const [],
+    this.side,
   });
 
   final int cycleNo;
@@ -297,18 +388,20 @@ class JobCycle {
   final DateTime? openedAt;
   final DateTime? closedAt;
   final List<JobEvent> events; // 시간순
+  final String? side; // 테스트 DB 회차의 방향. long | short
 
   String get statusLabel => switch (status) {
     'open' => '진행중',
     'closed' => '종료',
     'sold_elsewhere' => '타 매체 매도',
     'cancelled' => '취소됨',
+    'none' => '',
     _ => status,
   };
 }
 
 class JobEvent {
-  const JobEvent(this.at, this.type, {this.side, this.qty, this.price, this.message});
+  const JobEvent(this.at, this.type, {this.side, this.qty, this.price, this.message, this.group, this.exitReason});
 
   final DateTime at;
   final String type; // alert_fired · order_submitted · fill · order_rejected ...
@@ -316,6 +409,8 @@ class JobEvent {
   final double? qty;
   final double? price;
   final String? message;
+  final String? group; // 서버가 준 축. job | entry | exit. 샘플은 비어 있다
+  final String? exitReason; // take_profit | stop_loss ...
 
   String get sideLabel => switch (side) {
     'buy' => '매수',
@@ -343,11 +438,38 @@ class CustomerLog {
   final String? jobName; // 워커 시작처럼 잡과 무관한 로그는 null. API 를 붙이면 잡 id 로 바꾼다.
 }
 
-List<MemberWorker> workersOf(int memberId) => _workers[memberId] ?? const [];
+final _liveWorkers = <int, List<MemberWorker>>{};
+final _liveLogs = <int, List<CustomerLog>>{};
+
+/// 테스트 DB 에서 받은 회원의 워커와 고객 로그를 넣는다.
+void putLiveWorkers(int memberId, List<MemberWorker> workers, List<CustomerLog> logs) {
+  _liveWorkers[memberId] = workers;
+  _liveLogs[memberId] = logs;
+}
+
+/// 설정·회차를 받은 잡으로 바꾼다.
+void replaceLiveJob(int memberId, WorkerJob before, WorkerJob after) {
+  final workers = _liveWorkers[memberId];
+  if (workers == null) return;
+  _liveWorkers[memberId] = [
+    for (final w in workers)
+      w.jobs.contains(before) ? w.withJobs([for (final j in w.jobs) j == before ? after : j]) : w,
+  ];
+}
+
+/// 더 받은 로그를 합친다. 겹치는 로그는 한 번만 둔다.
+void addLiveLogs(int memberId, List<CustomerLog> logs) {
+  final list = _liveLogs[memberId];
+  if (list == null) return;
+  final known = {for (final l in list) (l.at, l.text, l.workerId, l.jobName)};
+  list.addAll(logs.where((l) => known.add((l.at, l.text, l.workerId, l.jobName))));
+}
+
+List<MemberWorker> workersOf(int memberId) => _liveWorkers[memberId] ?? _workers[memberId] ?? const [];
 
 /// 최신 로그가 앞에 온다. [workerId] 를 주면 그 워커, [jobName] 까지 주면 그 잡의 로그만 준다.
 List<CustomerLog> customerLogsOf(int memberId, {int? workerId, String? jobName}) => [
-  for (final l in _logs[memberId] ?? const <CustomerLog>[])
+  for (final l in _liveLogs[memberId] ?? _logs[memberId] ?? const <CustomerLog>[])
     if ((workerId == null || l.workerId == workerId) && (jobName == null || l.jobName == jobName)) l,
 ]..sort((a, b) => b.at.compareTo(a.at));
 

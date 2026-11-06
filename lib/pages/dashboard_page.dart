@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 
+import 'live_view.dart';
 import 'member_monitor_page.dart' show MonitorRequest, memberMonitorRequest;
 import 'system_page.dart' show systemLevelColor, systemLevelIcon;
 
+import '../live_api.dart';
 import '../mock_accounts.dart';
 import '../mock_data.dart';
 import '../mock_symbols.dart';
 import '../mock_system.dart';
 import '../theme.dart';
 import '../widgets/admin_page.dart';
+
+part 'dashboard_live.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -39,30 +43,6 @@ class DashboardPage extends StatelessWidget {
         ),
         const _IssuePanel(),
         const _OperationSection(),
-        Panel(
-          title: '최근 신호',
-          child: Column(
-            children: [
-              for (final s in mockSignals.where((s) => !s.hidden).take(5))
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: StatusBadge(
-                    s.side == 'buy' ? '매수' : '매도',
-                    color: s.side == 'buy' ? AppColors.up : AppColors.down,
-                  ),
-                  title: Text('${s.symbolName} · ${s.alertName}'),
-                  subtitle: Text(
-                    '${s.marketType} · ${formatNumber(s.price)}',
-                    style: const TextStyle(color: AppColors.textTertiary),
-                  ),
-                  trailing: Text(
-                    formatDateTime(s.triggeredAt),
-                    style: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
-                  ),
-                ),
-            ],
-          ),
-        ),
         Panel(
           title: '최근 가입 회원',
           child: Column(
@@ -148,15 +128,20 @@ class _SystemMonitor extends StatelessWidget {
 
 /// 회사 전체에서 지금 확인이 필요한 회원. 워커 문제를 맨 위로 올린다.
 class _IssuePanel extends StatelessWidget {
-  const _IssuePanel();
+  const _IssuePanel({this.live});
 
   static const _limit = 8;
+
+  /// 테스트 DB 가 준 회원별 문제. 비어 있으면 샘플에서 모은다.
+  final List<({int id, String username, List<MemberIssue> issues})>? live;
 
   @override
   Widget build(BuildContext context) {
     final rows = [
-      for (final m in pushableMembers())
-        if (issuesOf(m).isNotEmpty) (member: m, issues: issuesOf(m)),
+      ...?live,
+      if (live == null)
+        for (final m in pushableMembers())
+          if (issuesOf(m).isNotEmpty) (id: m.id, username: m.username, issues: issuesOf(m)),
     ];
     int rank(List<MemberIssue> issues) => issues.any((i) => i.kind == MemberIssueKind.worker) ? 0 : 1;
     rows.sort((a, b) {
@@ -184,8 +169,8 @@ class _IssuePanel extends StatelessWidget {
                               alignment: Alignment.centerLeft,
                               padding: const EdgeInsets.symmetric(horizontal: 4),
                             ),
-                            onPressed: () => memberMonitorRequest.value = MonitorRequest(r.member.id),
-                            child: Text(r.member.username, overflow: TextOverflow.ellipsis),
+                            onPressed: () => memberMonitorRequest.value = MonitorRequest(r.id),
+                            child: Text(r.username, overflow: TextOverflow.ellipsis),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -199,7 +184,7 @@ class _IssuePanel extends StatelessWidget {
                                   label: Text(i.label, style: const TextStyle(fontSize: 12, color: AppColors.warning)),
                                   visualDensity: VisualDensity.compact,
                                   side: const BorderSide(color: AppColors.warning),
-                                  onPressed: () => memberMonitorRequest.value = MonitorRequest(r.member.id, issue: i),
+                                  onPressed: () => memberMonitorRequest.value = MonitorRequest(r.id, issue: i),
                                 ),
                             ],
                           ),

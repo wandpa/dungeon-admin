@@ -53,7 +53,8 @@ class _TradesPaneState extends State<_TradesPane> {
     final position = p.position;
     final short = position.side == 'short';
     final tick = tickSizeOf(p.symbolCode);
-    final ticks = tick == null ? null : (p.currentPrice - position.entryPrice) * (short ? -1 : 1) / tick;
+    final price = p.currentPrice;
+    final ticks = tick == null || price == null ? null : (price - position.entryPrice) * (short ? -1 : 1) / tick;
     const value = TextStyle(fontSize: 15, fontWeight: FontWeight.w700);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -107,7 +108,7 @@ class _TradesPaneState extends State<_TradesPane> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    _cell('현재가', Text(_appPrice(p.currentPrice, p.currency), style: value)),
+                    _cell('현재가', Text(price == null ? '-' : _appPrice(price, p.currency), style: value)),
                     _cell('매입가', Text(_appPrice(position.entryPrice, p.currency), style: value)),
                     _cell(
                       short ? '매도수량' : '보유수량',

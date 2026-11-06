@@ -36,6 +36,7 @@ class MemberAccount {
     this.isPaper = false,
     this.brokerCode = 'KIS',
     this.isActive = true,
+    this.hasBalance = true,
   });
 
   final String name;
@@ -49,6 +50,7 @@ class MemberAccount {
   final bool isPaper;
   final String brokerCode;
   final bool isActive;
+  final bool hasBalance; // 테스트 DB 는 잔고 기록이 없는 계좌가 있다
 
   /// 목록에서는 계좌번호 뒤 네 자리만 보여 준다.
   String get maskedCano => cano.length <= 4 ? cano : '****${cano.substring(cano.length - 4)}';
@@ -77,7 +79,7 @@ class AccountPosition {
   final String qtyUnit;
   final String accountName;
   final JobPosition position;
-  final double currentPrice;
+  final double? currentPrice; // 테스트 DB 에는 시세가 없어 비어 있다
   final int? workerId;
   final String? jobName;
 
@@ -157,6 +159,7 @@ class NotificationState {
     this.sound = true,
     this.vibration = true,
     this.banner = true,
+    this.deviceSettingsKnown = true,
   });
 
   final bool pushAllowed;
@@ -167,6 +170,7 @@ class NotificationState {
   final bool sound;
   final bool vibration;
   final bool banner;
+  final bool deviceSettingsKnown; // false 면 토큰·서버 등록 외의 값은 모른다
 }
 
 class NotificationMessage {
@@ -238,6 +242,7 @@ class MemberIssue {
 
 /// 전체 계좌 기준으로 문제를 모은다. 계좌를 골라도 문제는 숨기지 않는다.
 List<MemberIssue> issuesOf(Member m) {
+  if (m.isLive) return _liveIssues[m.id] ?? const [];
   final workers = workersOf(m.id);
   final orders = ordersOf(m.id);
   final errors = workers.where((w) => w.status == WorkerStatus.error).toList();
@@ -258,6 +263,7 @@ List<MemberIssue> issuesOf(Member m) {
   return [
     if (m.status == MemberStatus.suspended)
       MemberIssue(MemberIssueKind.memberStatus, '이용 정지: ${m.suspendReason ?? '-'}'),
+    if (m.accessBlocked) MemberIssue(MemberIssueKind.memberStatus, '접속 차단: ${m.accessBlockReason ?? '-'}'),
     if (errors.isNotEmpty) MemberIssue(MemberIssueKind.worker, '오류 워커 ${errors.length}', workerId: errors.first.id),
     if (limited.isNotEmpty)
       MemberIssue(MemberIssueKind.worker, '한도 종료 워커 ${limited.length}', workerId: limited.first.id),
@@ -268,7 +274,32 @@ List<MemberIssue> issuesOf(Member m) {
   ];
 }
 
-List<MemberAccount> accountsOf(int memberId) => _accounts[memberId] ?? const [];
+final _liveAccounts = <int, List<MemberAccount>>{};
+final _livePositions = <int, List<AccountPosition>>{};
+final _liveOrders = <int, List<AccountOrder>>{};
+final _liveNotifications = <int, List<NotificationMessage>>{};
+final _liveStates = <int, NotificationState>{};
+final _liveIssues = <int, List<MemberIssue>>{};
+
+void putLiveIssues(int memberId, List<MemberIssue> issues) => _liveIssues[memberId] = issues;
+
+/// 테스트 DB 에서 받은 회원의 계좌·포지션·주문·알림을 넣는다.
+void putLiveAccounts(
+  int memberId, {
+  required List<MemberAccount> accounts,
+  required List<AccountPosition> positions,
+  required List<AccountOrder> orders,
+  required List<NotificationMessage> notifications,
+  required NotificationState state,
+}) {
+  _liveAccounts[memberId] = accounts;
+  _livePositions[memberId] = positions;
+  _liveOrders[memberId] = orders;
+  _liveNotifications[memberId] = notifications;
+  _liveStates[memberId] = state;
+}
+
+List<MemberAccount> accountsOf(int memberId) => _liveAccounts[memberId] ?? _accounts[memberId] ?? const [];
 
 /// 회원과 함께 묶은 포지션.
 class MemberPosition {
@@ -287,26 +318,36 @@ List<MemberPosition> allMemberPositions() => [
 
 /// [accountName] 을 주면 그 계좌, 없으면 전체 계좌의 포지션.
 List<AccountPosition> positionsOf(int memberId, {String? accountName}) => [
-  for (final w in workersOf(memberId))
-    for (final j in w.jobs)
-      if (j.position != null && (accountName == null || j.accountName == accountName))
-        AccountPosition(
-          symbolCode: w.symbolCode,
-          symbolName: w.symbolName,
-          currency: w.currency,
-          qtyUnit: w.qtyUnit,
-          accountName: j.accountName,
-          position: j.position!,
-          currentPrice: w.currentPrice,
-          workerId: w.id,
-          jobName: j.name,
-        ),
+  for (final p in _livePositions[memberId] ?? const <AccountPosition>[])
+    if (accountName == null || p.accountName == accountName) p,
+  if (!_livePositions.containsKey(memberId))
+    for (final w in workersOf(memberId))
+      for (final j in w.jobs)
+        if (j.position != null && (accountName == null || j.accountName == accountName))
+          AccountPosition(
+            symbolCode: w.symbolCode,
+            symbolName: w.symbolName,
+            currency: w.currency,
+            qtyUnit: w.qtyUnit,
+            accountName: j.accountName,
+            position: j.position!,
+            currentPrice: w.currentPrice,
+            workerId: w.id,
+            jobName: j.name,
+          ),
   for (final p in _manualPositions[memberId] ?? const <AccountPosition>[])
     if (accountName == null || p.accountName == accountName) p,
 ];
 
 /// 잡 회차의 이벤트로 주문 목록을 만든다. 최신 주문이 앞에 온다.
 List<AccountOrder> ordersOf(int memberId, {String? accountName}) {
+  final live = _liveOrders[memberId];
+  if (live != null) {
+    return [
+      for (final o in live)
+        if (accountName == null || o.accountName == accountName) o,
+    ];
+  }
   final orders = <AccountOrder>[];
   for (final w in workersOf(memberId)) {
     for (final j in w.jobs) {
@@ -488,16 +529,25 @@ Map<String, double> realizedPnlOf(int memberId, {String? accountName}) {
   return sums;
 }
 
-NotificationState notificationStateOf(Member m) => switch (m.id) {
-  1020 => NotificationState(pushAllowed: m.pushAgreed, onServer: false),
-  1018 => NotificationState(pushAllowed: m.pushAgreed, permitted: false, hasToken: false, onServer: false),
-  1017 => NotificationState(pushAllowed: m.pushAgreed, sound: false, banner: false),
-  _ => NotificationState(pushAllowed: m.pushAgreed),
-};
+NotificationState notificationStateOf(Member m) =>
+    _liveStates[m.id] ??
+    switch (m.id) {
+      1020 => NotificationState(pushAllowed: m.pushAgreed, onServer: false),
+      1018 => NotificationState(pushAllowed: m.pushAgreed, permitted: false, hasToken: false, onServer: false),
+      1017 => NotificationState(pushAllowed: m.pushAgreed, sound: false, banner: false),
+      _ => NotificationState(pushAllowed: m.pushAgreed),
+    };
 
 /// 체결·거부 이벤트로 알림 이력을 만든다. 최신 알림이 앞에 오고 최근 2건은 안 읽음으로 둔다.
 /// [accountName] 을 주면 그 계좌의 알림만 준다.
 List<NotificationMessage> notificationsOf(int memberId, {String? accountName}) {
+  final live = _liveNotifications[memberId];
+  if (live != null) {
+    return [
+      for (final n in live)
+        if (accountName == null || n.accountName == accountName) n,
+    ];
+  }
   String amount(double? v) {
     if (v == null) return '';
     final r = (v * 100).round() / 100;

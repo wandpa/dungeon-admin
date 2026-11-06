@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 import 'admin_shell.dart';
 import 'mock_admin.dart';
+import 'mock_data.dart';
 import 'pages/login_page.dart';
 import 'theme.dart';
 
 void main() {
+  useLiveData.value = true; // 회원 목록·모니터링은 테스트 DB 를 본다
   runApp(const AdminApp());
 }
 

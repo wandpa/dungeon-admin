@@ -49,23 +49,33 @@ class _ScopeBar extends StatelessWidget {
 
 /// 선택한 회원의 모드와 화면 탭. 패널들 위에 늘 보인다.
 class _MemberBar extends StatelessWidget {
-  const _MemberBar({required this.member, required this.tab, required this.onTabChanged, required this.onDetail});
+  const _MemberBar({
+    required this.member,
+    required this.tab,
+    required this.onTabChanged,
+    required this.onDetail,
+    this.onReload,
+    this.reloading = false,
+  });
 
   final Member? member;
   final _MonitorTab tab;
   final ValueChanged<_MonitorTab> onTabChanged;
   final VoidCallback onDetail;
+  final VoidCallback? onReload; // 테스트 DB 회원만 있다
+  final bool reloading;
 
   @override
   Widget build(BuildContext context) {
     final m = member;
+    final loadedAt = m == null ? null : liveLoadedAt(m);
     Widget chip(_MonitorTab t, String label) => ChoiceChip(
       label: Text(label, style: const TextStyle(fontSize: 13)),
       visualDensity: VisualDensity.compact,
       selected: tab == t,
       onSelected: (_) => onTabChanged(t),
     );
-    final mode = m == null ? null : tradeModeOf(m.id);
+    final mode = m == null || m.isLive ? null : tradeModeOf(m.id);
     return Wrap(
       alignment: WrapAlignment.spaceBetween,
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -79,20 +89,42 @@ class _MemberBar extends StatelessWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(m.username, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-              const Text('사용 모드', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
-              StatusBadge(
-                mode!.label,
-                color: switch (mode) {
-                  TradeMode.real => AppColors.up,
-                  TradeMode.paper => AppColors.down,
-                  TradeMode.alert => AppColors.accent,
-                },
-              ),
+              // 사용 모드는 앱이 서버로 보내야 알 수 있어 테스트 DB 회원은 비어 있다.
+              if (mode != null) ...[
+                const Text('사용 모드', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                StatusBadge(
+                  mode.label,
+                  color: switch (mode) {
+                    TradeMode.real => AppColors.up,
+                    TradeMode.paper => AppColors.down,
+                    TradeMode.alert => AppColors.accent,
+                  },
+                ),
+              ],
               Text(m.device, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
               TextButton(onPressed: onDetail, child: const Text('회원 정보·처리')),
             ],
           ),
-        Wrap(spacing: 6, runSpacing: 6, children: [for (final t in _MonitorTab.values) chip(t, t.label)]),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            for (final t in _MonitorTab.values) chip(t, t.label),
+            if (onReload != null) ...[
+              if (loadedAt != null)
+                Text(
+                  '조회 ${formatDateTime(loadedAt, seconds: true).substring(11)}',
+                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                ),
+              OutlinedButton.icon(
+                onPressed: reloading ? null : onReload,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('재조회', style: TextStyle(fontSize: 13)),
+              ),
+            ],
+          ],
+        ),
       ],
     );
   }
@@ -251,46 +283,48 @@ class _ConsultPaneState extends State<_ConsultPane> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(child: _picker(_channel, ConsultChannel.values, (c) => c.label, (c) => _channel = c)),
-                    const SizedBox(width: 8),
-                    Expanded(child: _picker(_type, ConsultType.values, (t) => t.label, (t) => _type = t)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                TextField(
-                  controller: _content,
-                  onSubmitted: (_) => _add(),
-                  style: const TextStyle(fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: '상담 내용 입력',
-                    isDense: true,
-                    suffixIcon: IconButton(
-                      tooltip: '상담 기록 추가',
-                      icon: const Icon(Icons.send, size: 18),
-                      onPressed: _add,
+          // 상담은 테스트 DB 에 저장할 곳이 없다.
+          if (!m.isLive)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: _picker(_channel, ConsultChannel.values, (c) => c.label, (c) => _channel = c)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _picker(_type, ConsultType.values, (t) => t.label, (t) => _type = t)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: _content,
+                    onSubmitted: (_) => _add(),
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: '상담 내용 입력',
+                      isDense: true,
+                      suffixIcon: IconButton(
+                        tooltip: '상담 기록 추가',
+                        icon: const Icon(Icons.send, size: 18),
+                        onPressed: _add,
+                      ),
                     ),
                   ),
-                ),
-                if (context_ != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 3),
-                    child: Text(
-                      '연결: $context_',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                  if (context_ != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(
+                        '연결: $context_',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
           const Divider(height: 8),
           Expanded(
             child: ListView(
@@ -454,11 +488,10 @@ class _AccountSummaryPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final real = accounts.where((a) => !a.isPaper).toList();
-    final paper = accounts.where((a) => a.isPaper).toList();
-    final snapshot = accounts
-        .map((a) => a.snapshotAt)
-        .fold<DateTime?>(null, (l, t) => l == null || t.isAfter(l) ? t : l);
+    final held = accounts.where((a) => a.hasBalance).toList();
+    final real = held.where((a) => !a.isPaper).toList();
+    final paper = held.where((a) => a.isPaper).toList();
+    final snapshot = held.map((a) => a.snapshotAt).fold<DateTime?>(null, (l, t) => l == null || t.isAfter(l) ? t : l);
 
     return _Pane(
       title: accountName ?? '통화별 총자산',
@@ -471,7 +504,7 @@ class _AccountSummaryPane extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         children: [
-          if (accounts.isEmpty) const Text('잔고가 없습니다.', style: TextStyle(color: AppColors.textTertiary)),
+          if (held.isEmpty) const Text('잔고가 없습니다.', style: TextStyle(color: AppColors.textTertiary)),
           if (real.isNotEmpty) ..._block('실전', real),
           if (paper.isNotEmpty) ..._block('모의', paper),
           _Facts({
@@ -528,7 +561,7 @@ class _PositionsPane extends StatelessWidget {
                       _Facts({
                         '보유':
                             '${p.position.sideLabel} ${_num(p.position.size)}${p.qtyUnit} @${_num(p.position.entryPrice)}',
-                        '현재가': _num(p.currentPrice),
+                        '현재가': p.currentPrice == null ? '-' : _num(p.currentPrice!),
                         '잡': p.jobName ?? '연결된 job이 없음',
                         '계좌': p.accountName,
                       }),
@@ -656,18 +689,21 @@ class _NotificationSettingsPane extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         children: [
-          _OnOffRow('푸시 알림 허용', s.pushAllowed),
-          const SizedBox(height: 10),
+          if (s.deviceSettingsKnown) ...[_OnOffRow('푸시 알림 허용', s.pushAllowed), const SizedBox(height: 10)],
           const _SectionTitle('푸시 진단'),
-          _DiagRow('푸시 지원', s.supported, '홈 화면에 추가한 앱에서만 됩니다'),
-          _DiagRow('알림 권한', s.permitted, '기기 설정에서 허용하세요'),
+          if (s.deviceSettingsKnown) ...[
+            _DiagRow('푸시 지원', s.supported, '홈 화면에 추가한 앱에서만 됩니다'),
+            _DiagRow('알림 권한', s.permitted, '기기 설정에서 허용하세요'),
+          ],
           _DiagRow('기기 토큰', s.hasToken, '토큰을 받지 못했습니다'),
           _DiagRow('서버 등록', s.onServer, '푸시가 나갈 곳이 없습니다'),
-          const SizedBox(height: 10),
-          const _SectionTitle('알림 방식'),
-          _OnOffRow('소리', s.sound),
-          _OnOffRow('진동', s.vibration),
-          _OnOffRow('앱 화면 배너', s.banner),
+          if (s.deviceSettingsKnown) ...[
+            const SizedBox(height: 10),
+            const _SectionTitle('알림 방식'),
+            _OnOffRow('소리', s.sound),
+            _OnOffRow('진동', s.vibration),
+            _OnOffRow('앱 화면 배너', s.banner),
+          ],
         ],
       ),
     );

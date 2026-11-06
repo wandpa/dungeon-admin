@@ -60,7 +60,7 @@ class SystemIncident {
   DateTime? handledAt;
 }
 
-/// 다른 화면에서 시스템 상태 메뉴를 열어 달라는 요청. 값이 바뀔 때마다 이동한다.
+/// 대시보드 탭에서 시스템 상태 탭을 열어 달라는 요청. 값이 바뀔 때마다 이동한다.
 final systemPageRequest = ValueNotifier<int>(0);
 
 final _checkedAt = DateTime(2026, 10, 30, 10, 45, 12);

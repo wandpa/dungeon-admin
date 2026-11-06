@@ -42,6 +42,21 @@ void unsuspendMember(Member m) {
   _log(m, '정지 해제', from: from);
 }
 
+/// 접속 차단: 회원 상태는 그대로 두고 앱 접속만 막는다. 관리자가 풀 때까지 유지된다.
+void blockAccess(Member m, {required String reason}) {
+  m
+    ..accessBlockReason = reason
+    ..accessBlockedAt = DateTime.now();
+  _log(m, '접속 차단 ($reason)');
+}
+
+void unblockAccess(Member m) {
+  m
+    ..accessBlockReason = null
+    ..accessBlockedAt = null;
+  _log(m, '접속 차단 해제');
+}
+
 /// 탈퇴 처리 완료: 회원 정보를 목록에서 지운다.
 void completeDeletion(Member m) {
   mockMembers.remove(m);

@@ -4,6 +4,8 @@
 /// alertName·side·price·triggeredAt)에 맞춰 두어, 나중에 API 로 바꾸기 쉽게 한다.
 library;
 
+import 'package:flutter/foundation.dart';
+
 /// 회원. 관리자 화면에서 상태를 바꾸므로 일부 필드는 바뀔 수 있다.
 class Member {
   Member(
@@ -19,6 +21,11 @@ class Member {
     this.suspendReason,
     this.suspendUntil,
     this.deleteRequestedAt,
+    this.accessBlockReason,
+    this.accessBlockedAt,
+    this.liveId,
+    this.liveWorkerCount = 0,
+    this.liveRunningCount = 0,
     List<MemberLog>? history,
   }) : history = history ?? [];
 
@@ -34,7 +41,22 @@ class Member {
   String? suspendReason;
   DateTime? suspendUntil; // 비어 있으면 영구 정지
   final DateTime? deleteRequestedAt;
+  String? accessBlockReason;
+  DateTime? accessBlockedAt; // 회원 상태와 따로 둔다. 비어 있으면 차단 아님
   final List<MemberLog> history; // 관리자 처리 이력
+
+  final String? liveId; // 테스트 DB 회원의 GUID. 샘플 회원은 비어 있다
+  final int liveWorkerCount;
+  final int liveRunningCount;
+
+  bool get accessBlocked => accessBlockedAt != null;
+  bool get isLive => liveId != null;
+
+  /// 테스트 DB 회원의 이메일은 서버가 이미 가려서 준다.
+  String get shownEmail => isLive ? email : maskEmail(email);
+
+  /// 목록에 보여 줄 번호. 테스트 DB 회원은 GUID 앞부분이다.
+  String get shownId => isLive ? liveId!.substring(0, 8) : '$id';
 }
 
 enum MemberStatus {
@@ -78,7 +100,6 @@ class Signal {
   final String side; // buy | sell
   final double price;
   final DateTime triggeredAt;
-  bool hidden = false; // 앱 신호 내역에서 숨김
 }
 
 class PushMessage {
@@ -129,6 +150,17 @@ class Notice {
 }
 
 final mockMembers = _seedMembers();
+
+/// 테스트 DB 회원의 화면용 ID 는 이 값부터 시작해 샘플 ID 와 겹치지 않는다.
+const liveIdBase = 1000000;
+
+/// 켜면 회원 목록·모니터링이 테스트 DB 를 본다. 앱을 실행하면 켜지고, 테스트는 샘플로 돈다.
+final useLiveData = ValueNotifier<bool>(false);
+
+final liveMembers = <Member>[];
+
+/// 회원 목록·모니터링이 보는 회원.
+List<Member> get currentMembers => useLiveData.value ? liveMembers : mockMembers;
 
 /// 샘플 회원을 처음 상태로 되돌린다. 화면에서 승인·정지 등을 하면 이 목록이 바뀐다.
 void resetMockMembers() {
@@ -254,12 +286,6 @@ final mockSignals = <Signal>[
   Signal(58227, 'NVDA', '엔비디아', '해외주식', '추세 이탈', 'sell', 214.37, DateTime(2026, 10, 30, 9, 31, 5)),
   Signal(58226, '101Z6', '코스피200 12월물', '국내선물', '돌파 매수', 'buy', 452.1, DateTime(2026, 10, 30, 9, 2, 48)),
 ];
-
-void resetMockSignals() {
-  for (final s in mockSignals) {
-    s.hidden = false;
-  }
-}
 
 final mockPushes = <PushMessage>[
   PushMessage(312, '오늘의 던전이 열렸습니다', '장 시작 전 체크할 신호 3개를 확인하세요.', '전체', DateTime(2026, 10, 30, 8, 30), 1018, 412),

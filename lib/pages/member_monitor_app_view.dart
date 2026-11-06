@@ -18,6 +18,16 @@ String _currencySymbol(String currency) => switch (currency) {
 /// 앱 formatPrice 표기. 예: $100.75, ₩98,400
 String _appPrice(double v, String currency) => '${v < 0 ? '-' : ''}${_currencySymbol(currency)}${_num(v.abs())}';
 
+/// 앱 이력의 금액. 원화가 아니면 소수 둘째 자리까지 쓴다.
+String _money(double v, String currency) {
+  final sign = v < 0 ? '-' : '';
+  final text = currency == 'KRW' ? formatNumber(v.abs().round()) : formatNumber(num.parse(v.abs().toStringAsFixed(2)));
+  final fixed = currency != 'KRW' && !text.contains('.')
+      ? '$text.00'
+      : (currency != 'KRW' && RegExp(r'\.\d$').hasMatch(text) ? '${text}0' : text);
+  return '$sign${_currencySymbol(currency)}$fixed';
+}
+
 String _appSigned(double v, String currency) => '${v > 0 ? '+' : ''}${_appPrice(v, currency)}';
 
 String _two(int v) => v.toString().padLeft(2, '0');
@@ -201,7 +211,7 @@ class _PnlLimitBody extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (hasPosition && !l.isTick)
+                    if (hasPosition && !l.isTick && worker.currentPrice != null)
                       Text(
                         '평가 포함 ${_appSigned(l.accumAmount + unreal, ccy)}  (평가 ${_appSigned(unreal, ccy)})',
                         style: TextStyle(
@@ -217,13 +227,6 @@ class _PnlLimitBody extends StatelessWidget {
             ],
           ),
         ),
-        if (l.stoppedAt != null) ...[
-          const SizedBox(height: 8),
-          _Notice(
-            '${(l.stopReason ?? '').contains('목표') ? '익절' : '손절'} 종료 · 매매 ${l.accumCount}회 · '
-            '총 청산손익 ${l.isTick ? _ticks(l.accumTicks) : _appSigned(l.accumAmount, ccy)}',
-          ),
-        ],
         const SizedBox(height: 12),
         const SizedBox(
           height: 44,
@@ -381,6 +384,36 @@ Widget _settingWidget(String key, String value) {
   return options == null ? _AppValue(value) : _AppSegment(options, value);
 }
 
+/// 앱 잡 상세의 [이력]·[설정 보기] 버튼과 같은 이름의 칸 제목.
+class _DetailTitle extends StatelessWidget {
+  const _DetailTitle(this.icon, this.title, {this.note});
+
+  final IconData icon;
+  final String title;
+  final String? note;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: AppColors.brand),
+        const SizedBox(width: 6),
+        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        if (note != null) ...[
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              '· $note',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class _JobSettings extends StatelessWidget {
   const _JobSettings(this.job, this.worker);
 
@@ -390,17 +423,22 @@ class _JobSettings extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = job.strategy;
+    final items = s.liveItems;
     const section = TextStyle(fontSize: 16, fontWeight: FontWeight.w700);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('${s.label} (상세보기)', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+        _DetailTitle(Icons.visibility_outlined, '설정 보기', note: s.label),
         const SizedBox(height: 12),
-        _AppField('계좌', _AppValue(_jobAccount(job))),
+        _AppField(
+          '계좌',
+          _AppValue(job.accountNumber == null ? _jobAccount(job) : '계좌 ${job.accountName} · ${job.accountNumber}'),
+        ),
         const Text('진입설정', style: section),
         const SizedBox(height: 10),
-        _AppField('전략 이름', _AppValue(job.name)),
-        if (!s.entrySettings.containsKey('거래 방향') && !job.isAlert && s.templateId != 'breakout')
+        _AppField('전략 이름', _AppValue(s.liveName ?? job.name)),
+        if (items != null) ...[for (final item in items) _liveItem(item)],
+        if (items == null && !s.entrySettings.containsKey('거래 방향') && !job.isAlert && s.templateId != 'breakout')
           _AppField('거래 방향', _settingWidget('거래 방향', job.entrySideLabel)),
         for (final MapEntry(:key, :value) in s.entrySettings.entries) _AppField(key, _settingWidget(key, value)),
         if (s.entryMode != null) _AppField('진입 방식', _settingWidget('진입 방식', s.entryMode!)),
@@ -418,11 +456,17 @@ class _JobSettings extends StatelessWidget {
               ),
             ),
         ],
-        if (!job.isAlert) ...[
-          _AppField('주문 유형', _AppSegment(const ['시장가', '지정가'], s.orderType)),
-          _AppField('주문 수량', _AppValue('${_num(s.qty)}${worker.qtyUnit}')),
+        if (items == null) ...[
+          if (!job.isAlert) ...[
+            _AppField('주문 유형', _AppSegment(const ['시장가', '지정가'], s.orderType)),
+            _AppField('주문 수량', _AppValue('${_num(s.qty)}${worker.qtyUnit}')),
+          ],
+          _AppField('반복 횟수', _AppValue('${job.repeatCount} 회')),
         ],
-        _AppField('반복 횟수', _AppValue('${job.repeatCount} 회')),
+        if (s.liveExitCards?.isNotEmpty ?? false) ...[
+          const Divider(height: 24),
+          for (final card in s.liveExitCards!) _liveItem(card),
+        ],
         if (!job.isAlert) ...[
           const SizedBox(height: 4),
           const Text('청산설정', style: section),
@@ -436,9 +480,9 @@ class _JobSettings extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _exitRow('익절', s.takeProfitPct, s.takeProfitUnit, signed: false),
+                _exitRow('익절', s.takeProfitPct, s.takeProfitUnit, signed: false, strategy: s),
                 const Divider(height: 1),
-                _exitRow('손절', s.stopLossPct, s.stopLossUnit, signed: true),
+                _exitRow('손절', s.stopLossPct, s.stopLossUnit, signed: true, strategy: s),
                 const Divider(height: 1),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -447,11 +491,16 @@ class _JobSettings extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          _AppToggle(s.trailingStop != null),
+                          _AppToggle(items == null ? s.trailingStop != null : s.liveTrailingOn),
                           const SizedBox(width: 8),
                           const Text('트레일링 스탑', style: TextStyle(fontWeight: FontWeight.w700)),
                         ],
                       ),
+                      if (items != null && s.stopLossPct != null)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 6),
+                          child: Text('손절과 함께 사용할 수 없습니다', style: TextStyle(color: AppColors.warning, fontSize: 12)),
+                        ),
                       for (final MapEntry(:key, :value) in (s.trailingStop ?? const <String, String>{}).entries)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 6),
@@ -472,14 +521,67 @@ class _JobSettings extends StatelessWidget {
         ],
         const SizedBox(height: 14),
         const Center(
-          child: Text('읽기 전용', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+          child: Text('읽기 전용 (모니터링 중)', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
         ),
       ],
     );
   }
 
+  /// 앱 상세보기 항목 하나. 스위치 카드, 고르는 버튼, 값 칸 중 하나로 그린다.
+  Widget _liveItem(LiveSetting item) {
+    if (item.isToggle) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceSoft,
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(item.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text(item.value, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            _AppToggle(item.on!),
+          ],
+        ),
+      );
+    }
+    final field = item.options.isEmpty ? _AppValue(item.value) : _AppSegment(item.options, item.value);
+    return _AppField(
+      item.label,
+      item.note == null
+          ? field
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                field,
+                const SizedBox(height: 6),
+                Text(item.note!, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+              ],
+            ),
+    );
+  }
+
   /// 앱 ExitTickRow: [토글] 익절 값 단위. 손절은 음수로 보인다.
-  Widget _exitRow(String label, double? value, String unit, {required bool signed}) {
+  Widget _exitRow(String label, double? value, String unit, {required bool signed, required JobStrategy strategy}) {
+    final size = strategy.tickSize;
+    final tickValue = strategy.tickValue;
+    final shown = signed ? -(value ?? 0) : (value ?? 0);
+    String point(double v) => num.parse(v.toStringAsFixed(6)).toString();
+    // 앱 환산 줄: "30tick / 0.3point / 30.00$"
+    final convert = value == null || value == 0 || size == null || tickValue == null || unit != '틱'
+        ? null
+        : '${_num(shown)}tick / ${point(shown * size)}point / ${(shown * tickValue).toStringAsFixed(2)}\$';
     final unitLabel = switch (unit) {
       '틱' => 'Tick',
       '포인트' => 'Point',
@@ -487,17 +589,27 @@ class _JobSettings extends StatelessWidget {
     };
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _AppToggle(value != null),
-          const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-          const Spacer(),
-          if (value != null) ...[
-            Text('${signed ? '-' : ''}${_num(value)}', style: const TextStyle(fontWeight: FontWeight.w700)),
-            const SizedBox(width: 6),
-            Text(unitLabel, style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
-          ],
+          Row(
+            children: [
+              _AppToggle(value != null),
+              const SizedBox(width: 8),
+              Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+              const Spacer(),
+              if (value != null) ...[
+                Text('${signed ? '-' : ''}${_num(value)}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(width: 6),
+                Text(unitLabel, style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+              ],
+            ],
+          ),
+          if (convert != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(convert, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+            ),
         ],
       ),
     );
@@ -529,12 +641,46 @@ class _JobHistory extends StatelessWidget {
   final WorkerJob job;
   final MemberWorker worker;
 
-  /// 서버가 줄 group 을 샘플에서 만든다. 체결 전은 진입, 체결 뒤는 청산이다.
+  /// 앱 서버가 이력으로 내려주는 종류. 신호·접수·잔고·회차 종료는 앱에 나오지 않는다.
+  static const _shownEvents = {
+    'job_started',
+    'job_closed_complete',
+    'job_closed_by_user',
+    'close_keep_position',
+    'order_submitted',
+    'fill',
+    'order_rejected',
+    'order_cancelled',
+    'sold_elsewhere',
+    'alert_signal',
+  };
+
+  /// 시각이 같으면 앱과 같은 순서로 놓는다.
+  static int _rank(String type) => switch (type) {
+    'job_started' => -1,
+    'order_submitted' => 1,
+    'job_closed_complete' || 'job_closed_by_user' || 'close_keep_position' => 6,
+    _ => 3,
+  };
+
+  /// 샘플은 체결 전을 진입, 체결 뒤를 청산으로 본다. 테스트 DB 는 서버가 준 group 을 쓴다.
   List<_TimelineEvent> get _events {
     final list = <_TimelineEvent>[];
     for (final c in job.cycles) {
       var filled = false;
       for (final e in c.events) {
+        final server = e.group;
+        if (server != null) {
+          if (!_shownEvents.contains(e.type)) continue;
+          list.add(
+            _TimelineEvent(e, switch (server) {
+              'entry' => _EventGroup.entry,
+              'exit' => _EventGroup.exit,
+              _ => _EventGroup.job,
+            }),
+          );
+          continue;
+        }
         final group = switch (e.type) {
           'cycle_closed' || 'sold_elsewhere' => _EventGroup.job,
           _ => filled ? _EventGroup.exit : _EventGroup.entry,
@@ -543,10 +689,34 @@ class _JobHistory extends StatelessWidget {
         if (e.type == 'fill') filled = true;
       }
     }
-    return list..sort((a, b) => a.event.at.compareTo(b.event.at));
+    int byTime(_TimelineEvent a, _TimelineEvent b) {
+      final order = a.event.at.compareTo(b.event.at);
+      return order != 0 ? order : _rank(a.event.type).compareTo(_rank(b.event.type));
+    }
+
+    return list..sort(byTime);
   }
 
+  /// 앱과 같은 문장: "진입 매도 주문 전송  1계약", "청산 매수 체결  1계약 @$95.95".
+  String? _liveLabel(JobEvent e) {
+    final group = e.group;
+    if (group == null) return null;
+    final phase = group == 'exit' ? '청산' : '진입';
+    final qty = e.qty == null ? '' : '  ${_num(e.qty!)}${worker.qtyUnit}';
+    final at = e.price == null ? '' : ' @${_money(e.price!, worker.currency)}';
+    return switch (e.type) {
+      'job_started' => '잡 감시 시작',
+      'job_closed_complete' || 'job_closed_by_user' || 'close_keep_position' => '잡 감시 종료',
+      'order_submitted' => '$phase ${e.sideLabel} 주문 전송$qty',
+      'fill' => '$phase ${e.sideLabel} 체결$qty$at',
+      _ => null,
+    };
+  }
+
+  /// 앱은 서버 문구를 쓴다. 메시지는 거부 사유처럼 문장에 없는 것만 보여 준다.
   String _label(JobEvent e) {
+    final live = _liveLabel(e);
+    if (live != null) return live;
     final unit = worker.qtyUnit;
     final side = e.sideLabel;
     final qty = e.qty == null ? '' : '${_num(e.qty!)}$unit';
@@ -566,7 +736,8 @@ class _JobHistory extends StatelessWidget {
 
   Widget _row(_TimelineEvent t, {required bool last}) {
     final e = t.event;
-    final showMessage = e.message != null && e.type != 'alert_fired' && e.type != 'order_rejected';
+    final showMessage = e.group == null && e.message != null && e.type != 'alert_fired' && e.type != 'order_rejected';
+    final reason = _exitLabel(e.exitReason);
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -596,7 +767,29 @@ class _JobHistory extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_label(e), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                  Wrap(
+                    spacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(_label(e), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                      if (reason != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: (reason == '손절' ? AppColors.down : AppColors.up).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            reason,
+                            style: TextStyle(
+                              color: reason == '손절' ? AppColors.down : AppColors.up,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     [_appTime(e.at), if (showMessage) e.message!].join(' · '),
@@ -617,9 +810,11 @@ class _JobHistory extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('${job.name} 이력', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+        const _DetailTitle(Icons.timeline, '이력'),
         const SizedBox(height: 12),
-        for (final c in job.cycles) _CycleCard(c, worker),
+        // 회차 밖 이벤트(잡 감시 시작 등)는 카드 없이 타임라인에만 나온다.
+        for (final c in job.cycles)
+          if (c.cycleNo != 0) _CycleCard(c, worker),
         if (events.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 32),
@@ -672,6 +867,44 @@ class _CycleCard extends StatelessWidget {
   final JobCycle cycle;
   final MemberWorker worker;
 
+  /// 앱 회차 카드: 주문 수량(방향 색)과 보유시간.
+  List<Widget> _liveRows(JobCycle c) {
+    final short = c.side == 'short';
+    final qty = (short ? c.filledSellQty : c.filledBuyQty) ?? c.filledBuyQty ?? c.filledSellQty;
+    // 보유는 첫 체결부터다. 체결 기록이 없으면 회차 시작 시각을 쓴다.
+    final open = c.events.where((e) => e.type == 'fill').firstOrNull?.at ?? c.openedAt;
+    final close = c.closedAt;
+    String time(DateTime t) => formatDateTime(t, seconds: true);
+    final sameDay = open != null && close != null && time(open).substring(0, 10) == time(close).substring(0, 10);
+    final held = open == null
+        ? '-'
+        : '${time(open)} ~ ${close == null ? '' : (sameDay ? time(close).substring(11) : time(close))}';
+    return [
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('주문 수량', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+            Text.rich(
+              TextSpan(
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                children: [
+                  TextSpan(
+                    text: short ? '매도 ' : '매수 ',
+                    style: TextStyle(color: short ? AppColors.down : AppColors.up),
+                  ),
+                  TextSpan(text: qty == null ? '-' : '${_num(qty)}${worker.qtyUnit}'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      _kv('보유시간', held),
+    ];
+  }
+
   Widget _kv(String key, String value) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 3),
     child: Row(
@@ -723,17 +956,19 @@ class _CycleCard extends StatelessWidget {
                 style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.w700),
               ),
               const Spacer(),
-              if (c.status != 'open')
+              if (c.status != 'open' && c.cycleNo != 0)
                 Text(
-                  '실현손익 ${_appSigned(pnl, worker.currency)}',
+                  '실현손익 ${pnl > 0 ? '+' : ''}${_money(pnl, worker.currency)}',
                   style: TextStyle(color: _pnlColor(pnl), fontSize: 13, fontWeight: FontWeight.w700),
                 ),
             ],
           ),
           const SizedBox(height: 10),
-          if (s == null)
+          if (c.side != null)
+            ..._liveRows(c)
+          else if (s == null && c.cycleNo != 0)
             const Text('설정 정보 없음', style: TextStyle(color: AppColors.textTertiary, fontSize: 13))
-          else ...[
+          else if (s != null) ...[
             _kv('전략', s.label),
             _kv('주문 수량', '${_num(s.qty)}${worker.qtyUnit}'),
             if (s.stopLossPct != null) _kv('손절', '${_num(s.stopLossPct!)}${s.stopLossUnit}'),
@@ -745,7 +980,14 @@ class _CycleCard extends StatelessWidget {
   }
 }
 
-/// 앱 잡 시트의 체결 내역에 건수 요약을 더한 것.
+String? _exitLabel(String? reason) => switch (reason) {
+  'take_profit' => '익절',
+  'stop_loss' => '손절',
+  null => null,
+  final other => other,
+};
+
+/// 앱 잡 시트의 체결 내역에 건수 요약을 더한 것. 한 줄이 한 회차다.
 class _JobFills extends StatelessWidget {
   const _JobFills(this.job, this.worker);
 
@@ -756,7 +998,8 @@ class _JobFills extends StatelessWidget {
   Widget build(BuildContext context) {
     final events = job.cycles.expand((c) => c.events).toList();
     int count(String type) => events.where((e) => e.type == type).length;
-    final fills = events.where((e) => e.type == 'fill').toList()..sort((a, b) => b.at.compareTo(a.at));
+    final rows = job.cycles.where((c) => c.events.any((e) => e.type == 'fill')).toList()
+      ..sort((a, b) => b.cycleNo.compareTo(a.cycleNo));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -777,20 +1020,85 @@ class _JobFills extends StatelessWidget {
           '주문 ${count('order_submitted')}건 · 체결 ${count('fill')}건 · 거부 ${count('order_rejected')}건',
           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
         ),
-        const SizedBox(height: 4),
-        if (fills.isEmpty)
+        const SizedBox(height: 8),
+        if (rows.isEmpty)
           const Text('아직 체결 내역이 없어요', style: TextStyle(color: AppColors.textTertiary, fontSize: 12))
         else
-          for (final f in fills)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Text(
-                '${_appTime(f.at)}  ${f.sideLabel} ${_num(f.qty ?? 0)}${worker.qtyUnit} '
-                '@${_appPrice(f.price ?? 0, worker.currency)}',
-                style: const TextStyle(fontSize: 12),
-              ),
-            ),
+          for (final c in rows) _FillRow(c, job, worker),
       ],
+    );
+  }
+}
+
+/// 앱 체결 내역 한 줄: 방향, 종목, 계좌, 회차 손익과 청산 사유.
+class _FillRow extends StatelessWidget {
+  const _FillRow(this.cycle, this.job, this.worker);
+
+  final JobCycle cycle;
+  final WorkerJob job;
+  final MemberWorker worker;
+
+  bool get _short {
+    final side = cycle.side;
+    if (side != null) return side == 'short';
+    return cycle.events.firstWhere((e) => e.type == 'fill').side == 'sell';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final open = cycle.status == 'open';
+    final pnl = cycle.realizedPnl ?? 0;
+    final exit = cycle.events.where((e) => e.exitReason != null).lastOrNull?.exitReason;
+    final color = open ? AppColors.textPrimary : _pnlColor(pnl);
+    final note = open ? '보유중' : _exitLabel(exit) ?? cycle.statusLabel;
+    final noteColor = open || pnl < 0
+        ? AppColors.down
+        : pnl > 0
+        ? AppColors.up
+        : AppColors.textTertiary;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(color: AppColors.surfaceSoft, borderRadius: BorderRadius.circular(10)),
+      child: Row(
+        children: [
+          Text(
+            _short ? '매도' : '매수',
+            style: TextStyle(color: _short ? AppColors.down : AppColors.up, fontSize: 14, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${worker.symbolCode} ${worker.symbolName}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                ),
+                Text(
+                  job.accountLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                open ? '-' : '${pnl > 0 ? '+' : ''}${_num(pnl)}',
+                style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w700),
+              ),
+              Text(note, style: TextStyle(color: noteColor, fontSize: 12)),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

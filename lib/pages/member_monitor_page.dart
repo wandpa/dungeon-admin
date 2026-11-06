@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../live_api.dart';
 import '../mock_accounts.dart';
 import '../mock_admin.dart';
 import '../mock_consultations.dart';
@@ -14,6 +15,7 @@ import 'members_page.dart' show memberStatusColor;
 
 part 'member_monitor_accounts.dart';
 part 'member_monitor_app_view.dart';
+part 'member_monitor_cards.dart';
 part 'member_monitor_trades.dart';
 
 /// 다른 화면에서 이 회원을 모니터링으로 열어 달라는 요청. [issue] 를 주면 그 문제 위치로 간다.
@@ -25,8 +27,12 @@ class MonitorRequest {
 
 final memberMonitorRequest = ValueNotifier<MonitorRequest?>(null);
 
-/// 샘플 데이터의 마지막 날을 오늘로 본다. API 를 붙이면 실제 날짜로 바꾼다.
-final _mockToday = DateTime(2026, 10, 30);
+/// 샘플은 데이터의 마지막 날을 오늘로 본다. 테스트 DB 는 실제 날짜다.
+DateTime get _mockToday {
+  if (!useLiveData.value) return DateTime(2026, 10, 30);
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day);
+}
 
 enum _LogPeriod {
   all('전체 기간'),
@@ -59,11 +65,16 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
   _LogPeriod _logPeriod = _LogPeriod.all;
   DateTimeRange? _logRange; // 날짜 선택 기간
   int? _viewedMemberId; // 열람 기록을 남긴 회원
+  int? _loadingMemberId; // 테스트 DB 에서 받는 중인 회원
+  String? _loadingJobId; // 테스트 DB 에서 받는 중인 잡
+  bool _loadingLogs = false;
+  String? _liveError;
   final _scroll = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    liveStatus.addListener(_onLiveChanged);
     final request = memberMonitorRequest.value;
     memberMonitorRequest.value = null;
     if (request == null) return;
@@ -73,6 +84,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
 
   @override
   void dispose() {
+    liveStatus.removeListener(_onLiveChanged);
     _scroll.dispose();
     super.dispose();
   }
@@ -87,7 +99,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
 
   /// 승인 전 회원은 로그인할 수 없어 볼 내용이 없다.
   List<Member> get _members => [
-    for (final m in mockMembers)
+    for (final m in currentMembers)
       if (m.status != MemberStatus.pending) m,
   ];
 
@@ -106,7 +118,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
       if (m.id == _memberId) return m;
     }
     for (final m in members) {
-      if (workersOf(m.id).isNotEmpty) return m;
+      if (workersOf(m.id).isNotEmpty || m.liveWorkerCount > 0) return m;
     }
     return members.firstOrNull;
   }
@@ -210,9 +222,98 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
     return '${day(r.start)} ~ ${day(r.end)}';
   }
 
+  /// 회원 목록을 다시 받으면 보던 화면은 그대로 두고 지금 회원의 값을 새로 받는다.
+  void _onLiveChanged() {
+    if (mounted) setState(() => _liveError = null);
+  }
+
+  /// 값을 새로 받은 뒤 열어 둔 잡을 새 값으로 바꾼다. 잡 내역은 다음 그리기에서 다시 받는다.
+  void _refreshOpenJob(Member m) {
+    final id = _job?.liveId;
+    if (id == null || !mounted) return;
+    final jobs = workersOf(m.id).expand((w) => w.jobs);
+    setState(() => _job = jobs.where((j) => j.liveId == id).firstOrNull);
+  }
+
+  /// 테스트 DB 회원은 처음 볼 때 받아 온다. 실패하면 다시 시도하지 않고 오류를 보여 준다.
+  Future<void> _loadMember(Member m) async {
+    setState(() {
+      _loadingMemberId = m.id;
+      _liveError = null;
+    });
+    try {
+      await loadLiveMember(m);
+      _refreshOpenJob(m);
+    } on LiveApiException catch (e) {
+      if (mounted) setState(() => _liveError = e.message);
+    }
+    if (mounted) setState(() => _loadingMemberId = null);
+  }
+
+  /// 재조회: 지금 회원의 값을 새로 받는다. 열어 둔 잡은 새 값으로 바꿔 내역도 다시 받는다.
+  /// 실패하면 받아 둔 값을 그대로 두고 오류를 보여 준다.
+  Future<void> _reload(Member m) async {
+    setState(() {
+      _loadingMemberId = m.id;
+      _liveError = null;
+    });
+    try {
+      await reloadLiveMember(m);
+      _refreshOpenJob(m);
+    } on LiveApiException catch (e) {
+      if (mounted) setState(() => _liveError = e.message);
+    }
+    if (mounted) setState(() => _loadingMemberId = null);
+  }
+
+  /// 잡 설정과 회차는 잡을 고를 때 받는다.
+  Future<void> _loadJob(Member m, WorkerJob job) async {
+    setState(() {
+      _loadingJobId = job.liveId;
+      _liveError = null;
+    });
+    try {
+      final filled = await loadLiveJobDetail(m, job);
+      if (mounted && _job == job) setState(() => _job = filled);
+    } on LiveApiException catch (e) {
+      if (mounted) setState(() => _liveError = e.message);
+    }
+    if (mounted) setState(() => _loadingJobId = null);
+  }
+
+  Future<void> _loadLogs(Member m, int workerId) async {
+    setState(() {
+      _loadingLogs = true;
+      _liveError = null;
+    });
+    try {
+      await loadLiveWorkerLogs(m, workerId);
+    } on LiveApiException catch (e) {
+      if (mounted) setState(() => _liveError = e.message);
+    }
+    if (mounted) setState(() => _loadingLogs = false);
+  }
+
+  /// 화면을 그린 뒤 아직 받지 않은 테스트 DB 값을 받는다.
+  void _loadMissing(Member? member, MemberWorker? worker) {
+    if (member == null || !member.isLive || _liveError != null) return;
+    final job = _job;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!isLiveLoaded(member)) {
+        if (_loadingMemberId == null) _loadMember(member);
+      } else if (job != null && !job.detailLoaded && _loadingJobId == null) {
+        _loadJob(member, job);
+      } else if (worker != null && !isLiveWorkerLogsLoaded(worker.id) && !_loadingLogs) {
+        _loadLogs(member, worker.id);
+      }
+    });
+  }
+
   /// 회원을 바꾸면 워커부터 다시 본다.
   void _selectMember(Member m) => setState(() {
     _memberId = m.id;
+    _liveError = null;
     _tab = _MonitorTab.workers;
     _workerId = null;
     _job = null;
@@ -240,6 +341,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
               if (w.usesAccount(accountName)) w.onlyAccount(accountName),
           ];
     final worker = _workerIn(workers);
+    _loadMissing(member, worker);
     final memberLogs = member == null
         ? const <CustomerLog>[]
         : customerLogsOf(member.id, workerId: worker?.id, jobName: _job?.name);
@@ -303,12 +405,27 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           const gap = SizedBox(width: 12, height: 12);
-          const header = _Header();
+          final header = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _Header(),
+              if (_loadingMemberId != null || _loadingJobId != null || _loadingLogs) ...[
+                const SizedBox(height: 8),
+                const LinearProgressIndicator(),
+              ],
+              if (_liveError != null) ...[
+                const SizedBox(height: 8),
+                Text(' API 서버가 실행 중인지 확인하세요.', style: const TextStyle(color: AppColors.up)),
+              ],
+            ],
+          );
 
           final narrow = constraints.maxWidth < 1000;
           final bar = _MemberBar(
             member: member,
             tab: _tab,
+            onReload: member == null || !member.isLive ? null : () => _reload(member),
+            reloading: _loadingMemberId != null || _loadingJobId != null || _loadingLogs,
             onDetail: () async {
               if (member == null) return;
               await showMemberDetail(context, member);
@@ -374,7 +491,10 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
             orders: scopedOrders,
             onOpen: _openWorker,
           );
-          final issueBar = member == null ? null : _IssueBar(issues: issuesOf(member), onOpen: _openIssue);
+          // 테스트 DB 회원은 받기 전에 '문제 없음'으로 보이지 않게 한다.
+          final issueBar = member == null || (member.isLive && !isLiveLoaded(member))
+              ? null
+              : _IssueBar(issues: issuesOf(member), onOpen: _openIssue);
           final memoPane = member == null
               ? const _Pane(title: '상담 이력', child: _Empty('회원을 선택하세요.'))
               : _ConsultPane(
@@ -670,7 +790,10 @@ class _MemberPane extends StatelessWidget {
                     itemBuilder: (context, i) {
                       final m = members[i];
                       final workers = workersOf(m.id);
-                      final running = workers.where((w) => w.status == WorkerStatus.running).length;
+                      final count = m.isLive ? m.liveWorkerCount : workers.length;
+                      final running = m.isLive
+                          ? m.liveRunningCount
+                          : workers.where((w) => w.status == WorkerStatus.running).length;
                       final issues = issuesOf(m).length;
                       return ListTile(
                         dense: true,
@@ -687,7 +810,7 @@ class _MemberPane extends StatelessWidget {
                           TextSpan(
                             style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
                             children: [
-                              TextSpan(text: workers.isEmpty ? '워커 없음' : '워커 ${workers.length}개 · 실행 $running'),
+                              TextSpan(text: count == 0 ? '워커 없음' : '워커 $count개 · 실행 $running'),
                               if (issues > 0)
                                 TextSpan(
                                   text: ' · 문제 $issues',
@@ -792,37 +915,9 @@ class _WorkersPane extends StatelessWidget {
     return sums.entries.map((e) => _signedMoney(e.value, e.key)).join(' · ');
   }
 
-  Widget _row({
-    required Widget name,
-    required Widget status,
-    required Widget realized,
-    required Widget unrealized,
-    required Widget jobs,
-  }) {
-    return Row(
-      children: [
-        Expanded(child: name),
-        SizedBox(width: 64, child: status),
-        SizedBox(
-          width: 104,
-          child: Align(alignment: Alignment.centerRight, child: realized),
-        ),
-        SizedBox(
-          width: 104,
-          child: Align(alignment: Alignment.centerRight, child: unrealized),
-        ),
-        SizedBox(
-          width: 36,
-          child: Align(alignment: Alignment.centerRight, child: jobs),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final running = workers.where((w) => w.status == WorkerStatus.running).length;
-    const head = TextStyle(color: AppColors.textTertiary, fontSize: 12);
     final real = _totals(paper: false);
     final paper = _totals(paper: true);
     // 오류 워커를 맨 위로 올린다.
@@ -842,66 +937,10 @@ class _WorkersPane extends StatelessWidget {
             ),
       child: workers.isEmpty
           ? const _Empty('등록한 워커가 없습니다.')
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: _row(
-                    name: const Text('종목', style: head),
-                    status: const Text('상태', style: head),
-                    realized: const Text('실현 손익', style: head),
-                    unrealized: const Text('평가 손익', style: head),
-                    jobs: const Text('잡', style: head),
-                  ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: sorted.length,
-                    itemBuilder: (context, i) {
-                      final w = sorted[i];
-                      final allPaper = w.jobs.isNotEmpty && w.jobs.every((j) => j.isPaper);
-                      return Material(
-                        color: w.id == selected?.id ? AppColors.brand.withValues(alpha: 0.18) : Colors.transparent,
-                        child: InkWell(
-                          onTap: () => onSelect(w),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            child: _row(
-                              name: Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      '${w.symbolName} (${w.symbolCode})',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                                    ),
-                                  ),
-                                  if (allPaper) ...[
-                                    const SizedBox(width: 6),
-                                    const StatusBadge('모의', color: AppColors.down),
-                                  ],
-                                ],
-                              ),
-                              status: Align(
-                                alignment: Alignment.centerLeft,
-                                child: StatusBadge(w.status.label, color: _workerStatusColor(w.status)),
-                              ),
-                              realized: _PnlValue(w.realizedPnl, w.currency),
-                              unrealized: _PnlValue(w.unrealizedPnl, w.currency),
-                              jobs: Text(
-                                '${w.jobs.where((j) => !j.isFinished).length}',
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
+                for (final w in sorted) _WorkerCard(w, selected: w.id == selected?.id, onTap: () => onSelect(w)),
               ],
             ),
     );
@@ -917,7 +956,6 @@ class _WorkerSettingsPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final w = worker;
-    final limit = w?.pnlLimit;
     return _Pane(
       title: w == null ? '워커 설정' : '${w.symbolName} 워커 설정',
       child: w == null
@@ -925,12 +963,12 @@ class _WorkerSettingsPane extends StatelessWidget {
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               children: [
-                _Facts({'시장': w.marketType, '현재가': _num(w.currentPrice), '등록일': formatDateTime(w.insertedAt)}),
+                _Facts({
+                  '시장': w.marketType,
+                  '현재가': w.currentPrice == null ? '-' : _num(w.currentPrice!),
+                  '등록일': formatDateTime(w.insertedAt),
+                }),
                 if (w.errorMessage != null) ...[const SizedBox(height: 8), _Notice(w.errorMessage!)],
-                if (limit?.stoppedAt != null) ...[
-                  const SizedBox(height: 8),
-                  _Notice('${formatDateTime(limit!.stoppedAt!)} ${limit.stopReason ?? '한도 도달'}로 종료'),
-                ],
                 const SizedBox(height: 10),
                 _WorkerSettings(w),
               ],
@@ -977,47 +1015,69 @@ class _JobsPaneState extends State<_JobsPane> {
     final finished = w.jobs.where((j) => j.isFinished).toList();
     final visible = _showFinished ? finished : current;
     List<WorkerJob> slot(JobSlot s) => current.where((j) => j.slot == s).toList();
-    Widget card(WorkerJob j, {int? order}) =>
-        _JobCard(j, w, order: order, selected: identical(j, widget.selected), onTap: () => widget.onSelect(j));
-
-    Widget tab(String label, bool forFinished) => ChoiceChip(
-      label: Text(label, style: const TextStyle(fontSize: 12)),
-      visualDensity: VisualDensity.compact,
-      selected: _showFinished == forFinished,
-      onSelected: (_) {
-        if (_showFinished == forFinished) return;
-        setState(() => _showFinished = forFinished);
-        widget.onTabChanged();
-      },
-    );
+    Widget card(WorkerJob j) =>
+        _JobCard(j, w, selected: identical(j, widget.selected), onTap: () => widget.onSelect(j));
 
     return _Pane(
       title: '${w.symbolName} 잡',
-      trailing: Wrap(
-        spacing: 6,
-        children: [tab('현재 잡 ${current.length}', false), tab('종료된 전략 ${finished.length}', true)],
-      ),
-      child: visible.isEmpty
-          ? _Empty(_showFinished ? '종료된 전략이 없습니다.' : '실행 중인 잡이 없습니다.')
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              children: _showFinished
-                  ? [for (final j in visible) card(j)]
-                  : [
-                      if (slot(JobSlot.running).isNotEmpty) ...[
-                        const _SlotHeader('실행 슬롯'),
-                        for (final j in slot(JobSlot.running)) card(j),
-                      ],
-                      if (slot(JobSlot.stopped).isNotEmpty) ...[
-                        const _SlotHeader('중지됨', note: '꺼져 있어 매매하지 않습니다'),
-                        for (final j in slot(JobSlot.stopped)) card(j),
-                      ],
-                      if (slot(JobSlot.queued).isNotEmpty) ...[
-                        const _SlotHeader('대기열', note: '완료 시 다음 잡 자동 시작'),
-                        for (final (i, j) in slot(JobSlot.queued).indexed) card(j, order: i + 1),
-                      ],
-                    ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+            child: _JobTabs(
+              finished: _showFinished,
+              onChanged: (value) {
+                if (_showFinished == value) return;
+                setState(() => _showFinished = value);
+                widget.onTabChanged();
+              },
             ),
+          ),
+          Expanded(
+            child: _showFinished && visible.isEmpty
+                ? const _Empty('종료된 전략이 없습니다.')
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    children: _showFinished
+                        ? [
+                            const _FinishedActions(),
+                            for (final j in visible)
+                              _FinishedJobCard(
+                                j,
+                                w,
+                                selected: identical(j, widget.selected),
+                                onTap: () => widget.onSelect(j),
+                              ),
+                          ]
+                        : [
+                            // 앱과 같은 순서: 워커 카드(실행 슬롯 포함) → 중지됨 → 대기열.
+                            _WorkerSlotCard(
+                              w,
+                              slot: _RunSlot(
+                                workerRunning: w.status == WorkerStatus.running,
+                                children: [for (final j in slot(JobSlot.running)) card(j)],
+                              ),
+                            ),
+                            if (slot(JobSlot.stopped).isNotEmpty) ...[
+                              const _SlotHeader('중지됨', note: '꺼져 있어 매매하지 않습니다'),
+                              for (final j in slot(JobSlot.stopped)) card(j),
+                            ],
+                            const _QueueHeader(),
+                            if (slot(JobSlot.queued).isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.only(left: 2),
+                                child: Text(
+                                  '대기 중인 잡이 없습니다.',
+                                  style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                                ),
+                              ),
+                            for (final j in slot(JobSlot.queued)) card(j),
+                          ],
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1152,83 +1212,6 @@ Color _jobStatusColor(WorkerJob job) => switch (job.status) {
 
 String _jobAccount(WorkerJob job) => '${job.accountName} (${job.isPaper ? '모의' : '실전'})';
 
-/// 잡 목록의 카드. 누르면 아래 잡 상세 패널에 설정과 이력이 나온다.
-class _JobCard extends StatelessWidget {
-  const _JobCard(this.job, this.worker, {required this.selected, required this.onTap, this.order});
-
-  final WorkerJob job;
-  final MemberWorker worker;
-  final bool selected;
-  final VoidCallback onTap;
-  final int? order; // 대기열 순서
-
-  @override
-  Widget build(BuildContext context) {
-    final w = worker;
-    final p = job.position;
-    final unrealized = p?.pnlAt(w.currentPrice);
-    final rejects = job.rejectReasons;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: selected ? AppColors.brand.withValues(alpha: 0.18) : AppColors.surfaceSoft,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-          side: BorderSide(color: selected ? AppColors.brand : AppColors.border),
-        ),
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    if (order != null) StatusBadge('대기 $order', color: AppColors.textSecondary),
-                    Text(job.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                    if (job.isAlert) const StatusBadge('알람', color: AppColors.accent),
-                    StatusBadge(job.statusLabel, color: _jobStatusColor(job)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                _Facts({
-                  '전략': job.strategy.label,
-                  '계좌': _jobAccount(job),
-                  if (!job.isAlert) '반복': '${job.repeatCurrent}/${job.repeatCount}',
-                  if (p != null) '보유': '${p.sideLabel} ${_num(p.size)}${w.qtyUnit} @${_num(p.entryPrice)}',
-                }),
-                if (!job.isAlert) ...[
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 4,
-                    children: [
-                      _Pnl('실현', job.realizedPnl, w.currency),
-                      if (unrealized != null) _Pnl('평가', unrealized, w.currency),
-                    ],
-                  ),
-                ],
-                // 앱과 같이 실패로 끝난 잡에만 거부 사유를 붙인다.
-                if (job.isFinished)
-                  for (final r in rejects)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(r, style: const TextStyle(color: AppColors.up, fontSize: 12)),
-                    ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// 선택한 잡의 상세. 앱은 설정·체결 내역·이력이 여러 화면으로 나뉘지만 상담용으로 한 패널에 모은다.
 class _JobDetailPane extends StatelessWidget {
   const _JobDetailPane({required this.job, required this.worker});
@@ -1259,10 +1242,8 @@ class _JobDetailPane extends StatelessWidget {
         if (unrealized != null) _Pnl('평가 손익', unrealized, w.currency),
       ],
     );
-    final settings = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [_JobSettings(j, w), const Divider(height: 24), _JobFills(j, w)],
-    );
+    final settings = _JobSettings(j, w);
+    final fills = _JobFills(j, w);
     final history = _JobHistory(j, w);
 
     return _Pane(
@@ -1278,13 +1259,28 @@ class _JobDetailPane extends StatelessWidget {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   if (constraints.maxWidth < 680) {
-                    return ListView(children: [settings, const SizedBox(height: 12), history]);
+                    return ListView(
+                      children: [settings, const Divider(height: 24), fills, const SizedBox(height: 12), history],
+                    );
                   }
+                  // 넓으면 체결 내역을 설정 아래에 묻지 않고 따로 세운다.
+                  final wide = constraints.maxWidth >= 1000;
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SizedBox(width: 380, child: SingleChildScrollView(child: settings)),
+                      SizedBox(
+                        width: 380,
+                        child: SingleChildScrollView(
+                          child: wide
+                              ? settings
+                              : Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [settings, const Divider(height: 24), fills],
+                                ),
+                        ),
+                      ),
                       const SizedBox(width: 16),
+                      if (wide) ...[Expanded(child: SingleChildScrollView(child: fills)), const SizedBox(width: 16)],
                       Expanded(child: SingleChildScrollView(child: history)),
                     ],
                   );

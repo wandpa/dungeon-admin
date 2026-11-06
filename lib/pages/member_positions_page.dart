@@ -133,7 +133,7 @@ class _MemberPositionsPageState extends State<MemberPositionsPage> {
                 ),
                 Text('${_num(r.position.position.size)}${r.position.qtyUnit}'),
                 Text(_num(r.position.position.entryPrice)),
-                Text(_num(r.position.currentPrice)),
+                Text(_num(r.position.currentPrice ?? 0)),
                 Text(
                   r.position.unrealizedPnl == null ? '-' : _signed(r.position.unrealizedPnl!, r.position.currency),
                   style: TextStyle(

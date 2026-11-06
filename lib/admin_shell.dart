@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 
 import 'mock_admin.dart';
-import 'mock_system.dart';
+import 'mock_data.dart';
 import 'pages/admin_users_page.dart';
-import 'pages/dashboard_page.dart';
+import 'pages/dashboard_hub_page.dart';
+import 'pages/live_notifications_page.dart';
+import 'pages/live_symbol_page.dart';
 import 'pages/member_monitor_page.dart';
 import 'pages/members_hub_page.dart';
 import 'pages/notices_page.dart';
 import 'pages/push_page.dart';
-import 'pages/signals_page.dart';
 import 'pages/symbol_master_page.dart';
-import 'pages/system_page.dart';
 import 'theme.dart';
 
 class _Menu {
@@ -22,13 +22,11 @@ class _Menu {
 }
 
 const _menus = [
-  _Menu('대시보드', Icons.space_dashboard_outlined, DashboardPage()),
+  _Menu('대시보드', Icons.space_dashboard_outlined, DashboardHubPage()),
   _Menu('회원 관리', Icons.people_outline, MembersHubPage()),
   _Menu('종목 마스터', Icons.schedule, SymbolMasterPage()),
-  _Menu('신호 관리', Icons.show_chart, SignalsPage()),
   _Menu('푸시 알림', Icons.notifications_outlined, PushPage()),
   _Menu('공지사항', Icons.campaign_outlined, NoticesPage()),
-  _Menu('시스템 상태', Icons.monitor_outlined, SystemPage()),
   _Menu('관리자', Icons.admin_panel_settings_outlined, AdminUsersPage(), permission: AdminPermission.viewActivity),
 ];
 
@@ -51,19 +49,27 @@ class _AdminShellState extends State<AdminShell> {
 
   void _select(int i) => setState(() => _index = i);
 
+  /// 테스트 DB 를 볼 때는 조회 전용 화면으로 바꾼다.
+  Widget _shown(Widget page) {
+    if (!useLiveData.value) return page;
+    return switch (page) {
+      SymbolMasterPage() => const LiveSymbolPage(),
+      PushPage() => const LiveNotificationsPage(),
+      _ => page,
+    };
+  }
+
   @override
   void initState() {
     super.initState();
     memberMonitorRequest.addListener(_openMonitor);
     pushTargetRequest.addListener(_openPush);
-    systemPageRequest.addListener(_openSystem);
   }
 
   @override
   void dispose() {
     memberMonitorRequest.removeListener(_openMonitor);
     pushTargetRequest.removeListener(_openPush);
-    systemPageRequest.removeListener(_openSystem);
     super.dispose();
   }
 
@@ -72,8 +78,6 @@ class _AdminShellState extends State<AdminShell> {
     if (memberMonitorRequest.value == null) return;
     _select(_visible.indexWhere((m) => m.page is MembersHubPage));
   }
-
-  void _openSystem() => _select(_visible.indexWhere((m) => m.page is SystemPage));
 
   void _openPush() {
     if (pushTargetRequest.value == null) return;
@@ -100,7 +104,8 @@ class _AdminShellState extends State<AdminShell> {
       body: Row(
         children: [
           if (wide) SizedBox(width: 232, child: sidebar),
-          Expanded(child: menus[index].page),
+          // 웹은 기본으로 글자를 고를 수 없어 본문 전체를 복사할 수 있게 연다.
+          Expanded(child: SelectionArea(child: _shown(menus[index].page))),
         ],
       ),
     );
@@ -170,9 +175,12 @@ class _Sidebar extends StatelessWidget {
                   ],
                 ),
               ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 4, 20, 20),
-              child: Text('샘플 데이터 · API 연결 전', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+              child: Text(
+                useLiveData.value ? '테스트 DB 조회 · 공지·관리자는 샘플' : '샘플 데이터',
+                style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+              ),
             ),
           ],
         ),

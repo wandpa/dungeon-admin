@@ -88,6 +88,8 @@ class AdminTable extends StatelessWidget {
     super.key,
     required this.columns,
     required this.rows,
+    this.columnSpacing = 32,
+    this.onRowDoubleTap,
     this.selected,
     this.onSelectChanged,
     this.onSelectAll,
@@ -95,11 +97,13 @@ class AdminTable extends StatelessWidget {
   });
 
   final List<String> columns;
+  final double columnSpacing;
   final List<List<Widget>> rows;
   final Set<int>? selected;
   final void Function(int index, bool selected)? onSelectChanged;
   final ValueChanged<bool>? onSelectAll;
   final String emptyText;
+  final ValueChanged<int>? onRowDoubleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -116,7 +120,7 @@ class AdminTable extends StatelessWidget {
                 constraints: BoxConstraints(minWidth: constraints.maxWidth),
                 child: DataTable(
                   showCheckboxColumn: selectable,
-                  columnSpacing: 32,
+                  columnSpacing: columnSpacing,
                   onSelectAll: selectable ? (v) => onSelectAll?.call(v ?? false) : null,
                   columns: [for (final c in columns) DataColumn(label: Text(c))],
                   rows: [
@@ -124,7 +128,16 @@ class AdminTable extends StatelessWidget {
                       DataRow(
                         selected: selected?.contains(i) ?? false,
                         onSelectChanged: selectable ? (v) => onSelectChanged?.call(i, v ?? false) : null,
-                        cells: [for (final cell in r) DataCell(cell)],
+                        cells: [
+                          // 마지막 칸은 버튼 자리다. 두 번 누르기를 걸면 버튼 반응이 늦어진다.
+                          for (final (c, cell) in r.indexed)
+                            DataCell(
+                              cell,
+                              onDoubleTap: onRowDoubleTap == null || c == r.length - 1
+                                  ? null
+                                  : () => onRowDoubleTap!(i),
+                            ),
+                        ],
                       ),
                   ],
                 ),

@@ -5,6 +5,7 @@ import 'package:dungeon_admin/mock_consultations.dart';
 import 'package:dungeon_admin/mock_data.dart';
 import 'package:dungeon_admin/mock_symbols.dart';
 import 'package:dungeon_admin/mock_system.dart';
+import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -26,7 +27,6 @@ void main() {
     resetMockAdmins();
     resetMockMembers();
     resetMockNotices();
-    resetMockSignals();
     resetSentPushes();
     resetMockConsultations();
     resetMockIncidents();
@@ -44,11 +44,9 @@ void main() {
 
     const pages = {
       '회원 관리': 'risingkang',
-      '신호 관리': '마이크로 WTI 원유 12월물',
       '푸시 알림': '오늘의 던전이 열렸습니다',
       '공지사항': '던전우상향 정식 출시 안내',
       '종목 마스터': '주문 가능',
-      '시스템 상태': '증권사 연결',
       '관리자': '활동 기록',
       '대시보드': '오늘 발생 신호',
     };
@@ -92,16 +90,18 @@ void main() {
     expect(find.text('risingkang 워커'), findsOneWidget);
     expect(find.text('newbie_slime'), findsNothing);
     expect(find.textContaining('실행 5 / 7'), findsOneWidget);
-    expect(find.text('테슬라 (TSLA)'), findsOneWidget);
-    expect(find.text('+7,000 KRW'), findsOneWidget);
+    expect(find.text('TSLA'), findsOneWidget);
+    expect(find.textContaining('+7,000', findRichText: true), findsOneWidget); // 앱 카드처럼 줄 안에 손익이 있다
+    expect(find.text('[계좌 해외선물 메인 외 1]'), findsOneWidget); // 잡마다 계좌가 달라도 어느 계좌인지 보인다
+    expect(find.textContaining('+35T +\$70', findRichText: true), findsOneWidget);
 
     // 워커를 누르면 잡으로 넘어가고 위치가 표시된다. 워커 설정도 같이 나온다.
-    await tester.tap(find.text('마이크로 WTI 원유 12월물 (MCLZ26)'));
+    await tester.tap(find.text('MCLZ26'));
     await tester.pumpAndSettle();
     expect(find.text('마이크로 WTI 원유 12월물 잡'), findsOneWidget);
     expect(find.text('마이크로 WTI 원유 12월물 워커 설정'), findsOneWidget);
     expect(find.text('전체 워커'), findsOneWidget);
-    expect(find.text('마이크로 WTI 원유 12월물'), findsOneWidget);
+    expect(find.text('마이크로 WTI 원유 12월물'), findsWidgets);
     expect(find.text('장 마감 시 자동 청산'), findsOneWidget);
     expect(find.text('누적 손익으로 워커 종료'), findsOneWidget);
     expect(find.text('일 · 매일 장 시작 10분 전'), findsOneWidget);
@@ -115,7 +115,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsNothing);
     expect(find.text('돌파 매수 전략 상세'), findsOneWidget);
-    expect(find.text('돌파 (상세보기)'), findsOneWidget);
+    expect(find.text('· 돌파'), findsOneWidget);
     expect(find.text('진입설정'), findsOneWidget);
     expect(find.text('청산설정'), findsOneWidget);
     expect(find.text('현재가 대비'), findsOneWidget);
@@ -123,9 +123,10 @@ void main() {
     expect(find.text('지정가'), findsOneWidget);
     expect(find.text('체결 내역'), findsOneWidget);
     expect(find.text('주문 5건 · 체결 5건 · 거부 0건'), findsOneWidget);
+    expect(find.text('+40'), findsOneWidget); // 체결 내역은 회차마다 한 줄이다
     expect(find.text('1회차'), findsOneWidget);
-    expect(find.text('실현손익 +\$100'), findsOneWidget); // 회차 손익 합이 잡 실현손익이다
-    expect(find.text('실현손익 +\$40'), findsOneWidget);
+    expect(find.text('실현손익 +\$100.00'), findsOneWidget); // 회차 손익 합이 잡 실현손익이다
+    expect(find.text('실현손익 +\$40.00'), findsOneWidget);
     expect(find.text('체결 2계약 @\$100.75'), findsOneWidget); // 앱과 같은 표기
     expect(find.textContaining('10/30 10:02:41'), findsWidgets);
     expect(find.text('사이클 종료'), findsNWidgets(2));
@@ -154,7 +155,7 @@ void main() {
 
     // 알람 잡도 설정을 볼 수 있다.
     await flowTab(tester, '워커');
-    await tester.tap(find.text('마이크로 WTI 원유 12월물 (MCLZ26)'));
+    await tester.tap(find.text('MCLZ26'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('고점 이탈 알람'));
     await tester.pumpAndSettle();
@@ -164,24 +165,25 @@ void main() {
 
     // 끝난 잡은 종료된 전략 탭에 있고, 카드와 상세에서 거부 사유를 볼 수 있다.
     await flowTab(tester, '잡');
-    await tester.tap(find.text('종료된 전략 1'));
+    await tester.tap(find.text('종료된 전략'));
     await tester.pumpAndSettle();
     expect(find.text('돌파 매수 전략'), findsNothing);
     expect(find.text('주문 가능 금액 부족'), findsOneWidget);
     await tester.tap(find.text('갭 상승 진입'));
     await tester.pumpAndSettle();
-    expect(find.text('갭 트레이딩 (상세보기)'), findsOneWidget);
+    expect(find.text('· 갭 트레이딩'), findsOneWidget);
     expect(find.text('매수 거부 · 주문 가능 금액 부족'), findsOneWidget);
 
     // 회원을 바꾸면 워커부터 다시 시작한다. 틱 기준과 비정상종료가 그대로 드러난다.
     await tester.tap(find.text('uptrend99'));
+    await tester.pump(kDoubleTapTimeout);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('나스닥100 12월물 (NQZ26)'));
+    await tester.tap(find.text('NQZ26'));
     await tester.pumpAndSettle();
     expect(find.text('−400틱 이하'), findsOneWidget);
-    expect(find.textContaining('-125틱'), findsOneWidget);
+    expect(find.textContaining('-125틱'), findsWidgets);
     expect(find.text('사용 안 함'), findsWidgets);
-    await tester.tap(find.text('종료된 전략 1'));
+    await tester.tap(find.text('종료된 전략'));
     await tester.pumpAndSettle();
     expect(find.text('비정상종료'), findsOneWidget);
     await flowTab(tester, '로그');
@@ -191,6 +193,8 @@ void main() {
     expect(find.text('Android 앱 로그인'), findsNothing);
 
     await tester.tap(find.text('f_rank_trader'));
+
+    await tester.pump(kDoubleTapTimeout);
     await tester.pumpAndSettle();
     expect(find.text('등록한 워커가 없습니다.'), findsOneWidget);
     await flowTab(tester, '잡');
@@ -243,6 +247,7 @@ void main() {
 
     // 알림: 진단에서 막힌 곳이 앱 문구로 보인다.
     await tester.tap(find.text('uptrend99'));
+    await tester.pump(kDoubleTapTimeout);
     await tester.pumpAndSettle();
     await flowTab(tester, '알림');
     expect(find.text('푸시 알림 허용'), findsOneWidget);
@@ -264,7 +269,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('마이크로 WTI 원유 12월물 (MCLZ26)'));
+    await tester.tap(find.text('MCLZ26'));
     await tester.pumpAndSettle();
     expect(find.text('돌파 매수 전략'), findsOneWidget);
     expect(find.text('눌림목 소액 매수'), findsOneWidget); // 한 워커에 계좌가 다른 잡이 섞여 있다
@@ -273,10 +278,10 @@ void main() {
     await pickAccount(tester, '해외선물 서브 ****3405');
     expect(find.text('눌림목 소액 매수'), findsOneWidget);
     expect(find.text('돌파 매수 전략'), findsNothing);
-    expect(find.textContaining('+\$140'), findsOneWidget);
+    expect(find.textContaining('+\$140'), findsWidgets);
     expect(find.textContaining('평가 포함 +\$210'), findsOneWidget);
     await flowTab(tester, '워커');
-    expect(find.text('삼성전자 (005930)'), findsNothing);
+    expect(find.text('005930'), findsNothing);
     expect(find.textContaining('실행 1 / 1'), findsOneWidget);
     await flowTab(tester, '로그');
     expect(find.text('Android 앱 로그인'), findsNothing);
@@ -308,11 +313,13 @@ void main() {
     // 회원 목록에 문제가 보이고, 없는 회원은 없다고 나온다.
     expect(find.text('워커 4개 · 실행 2 · 문제 3', findRichText: true), findsOneWidget);
     await tester.tap(find.text('f_rank_trader'));
+    await tester.pump(kDoubleTapTimeout);
     await tester.pumpAndSettle();
     expect(find.text('확인할 문제가 없습니다.'), findsOneWidget);
 
     // 오류 워커를 누르면 그 워커로 간다. 오류 워커는 목록 맨 위에 있다.
     await tester.tap(find.text('uptrend99'));
+    await tester.pump(kDoubleTapTimeout);
     await tester.pumpAndSettle();
     expect(find.text('푸시 서버 미등록'), findsOneWidget);
     await tester.tap(find.text('오류 워커 1'));
@@ -372,10 +379,12 @@ void main() {
     await tester.enterText(find.widgetWithText(TextField, '아이디·이메일 검색'), 'rising');
     await tester.pumpAndSettle();
     await tester.tap(find.text('risingkang'));
+    await tester.pump(kDoubleTapTimeout);
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, '아이디·이메일 검색'), 'bottom');
     await tester.pumpAndSettle();
     await tester.tap(find.text('bottomhunter'));
+    await tester.pump(kDoubleTapTimeout);
     await tester.pumpAndSettle();
     expect(find.text('2명에게 보내기'), findsOneWidget);
 
@@ -525,30 +534,6 @@ void main() {
     expect(mockActivities.first.text, 'uptrend99 회원 모니터링 열람');
   });
 
-  testWidgets('신호: 검색·시장 필터·숨기기가 동작한다', (tester) async {
-    await openMenu(tester, '신호 관리');
-    await tester.tap(find.widgetWithText(FilterChip, '국내주식 2'));
-    await tester.pumpAndSettle();
-    expect(find.text('삼성전자'), findsOneWidget);
-    expect(find.text('엔비디아'), findsNothing);
-
-    await tester.enterText(find.widgetWithText(TextField, '종목명·종목코드 검색'), '000660');
-    await tester.pumpAndSettle();
-    expect(find.text('SK하이닉스'), findsOneWidget);
-    expect(find.text('삼성전자'), findsNothing);
-
-    await tester.tap(find.text('숨기기'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '숨기기'));
-    await tester.pumpAndSettle();
-    expect(find.text('SK하이닉스'), findsNothing);
-    expect(mockActivities.first.kind, ActivityKind.signal);
-
-    await tester.tap(find.widgetWithText(FilterChip, '숨긴 신호 포함 1'));
-    await tester.pumpAndSettle();
-    expect(find.text('다시 보이기'), findsOneWidget);
-  });
-
   testWidgets('회원: 내보내기, 재설정 메일, 상세에서 푸시로 이어진다', (tester) async {
     await openMenu(tester, '회원 관리');
     await tester.tap(find.text('엑셀 내보내기'));
@@ -556,6 +541,8 @@ void main() {
     expect(mockActivities.first.text, '회원 12명 내보내기');
 
     await tester.tap(find.text('uptrend99'));
+
+    await tester.pump(kDoubleTapTimeout);
     await tester.pumpAndSettle();
     await tester.tap(find.text('비밀번호 재설정 메일'));
     await tester.pumpAndSettle();
@@ -573,6 +560,7 @@ void main() {
   testWidgets('회원 처리: 승인·정지·휴면 내역이 처리자·대상·상태 변화와 함께 남는다', (tester) async {
     await openMenu(tester, '회원 관리');
     await tester.tap(find.text('uptrend99'));
+    await tester.pump(kDoubleTapTimeout);
     await tester.pumpAndSettle();
     await tester.tap(find.text('휴면 전환'));
     await tester.pumpAndSettle();
@@ -643,6 +631,7 @@ void main() {
 
     // 회원을 누르면 모니터링으로 간다.
     await tester.tap(find.text('risingkang'));
+    await tester.pump(kDoubleTapTimeout);
     await tester.pumpAndSettle();
     expect(find.text('risingkang 워커'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -651,33 +640,32 @@ void main() {
   testWidgets('잡: 앱처럼 실행 슬롯·중지됨·대기열로 나누고 전략별 설정을 보여 준다', (tester) async {
     await openMenu(tester, '회원 모니터링');
     await tester.tap(find.text('bottomhunter'));
+    await tester.pump(kDoubleTapTimeout);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('SK하이닉스 (000660)'));
+    await tester.tap(find.text('000660'));
     await tester.pumpAndSettle();
 
-    expect(find.text('실행 슬롯'), findsOneWidget);
-    expect(find.text('대기열'), findsNWidgets(3)); // 머리글 + 대기 잡 2개의 상태
     expect(find.text('완료 시 다음 잡 자동 시작'), findsOneWidget);
-    expect(find.text('대기 1'), findsOneWidget);
-    expect(find.text('대기 2'), findsOneWidget);
+    expect(find.text('대기열'), findsNWidgets(3)); // 머리글 + 대기 잡 2개의 상태
 
     // 트레일링 진입: 앱 설정 항목과 트레일링 스탑 값이 나온다.
     await tester.tap(find.text('눌림목 반등'));
     await tester.pumpAndSettle();
-    expect(find.text('트레일링 진입 (상세보기)'), findsOneWidget);
+    expect(find.text('· 트레일링 진입'), findsOneWidget);
     expect(find.text('진입 간격'), findsOneWidget);
     expect(find.text('추종 폭'), findsOneWidget);
     expect(find.text('1회차 2% · 2회차 4%'), findsOneWidget);
 
     // 꺼진 잡은 중지됨에 있고, 틱 단위 손절이 그대로 보인다.
     await tester.tap(find.text('risingkang'));
+    await tester.pump(kDoubleTapTimeout);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('삼성전자 (005930)'));
+    await tester.tap(find.text('005930'));
     await tester.pumpAndSettle();
     expect(find.text('중지됨'), findsWidgets);
     expect(find.text('꺼져 있어 매매하지 않습니다'), findsOneWidget);
     await flowTab(tester, '워커');
-    await tester.tap(find.text('마이크로 WTI 원유 12월물 (MCLZ26)'));
+    await tester.tap(find.text('MCLZ26'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('돌파 매수 전략'));
     await tester.pumpAndSettle();
@@ -689,6 +677,8 @@ void main() {
 
   testWidgets('시스템 상태: 대시보드 경보에서 이동해 장애를 확인·해결한다', (tester) async {
     await openMenu(tester, '대시보드');
+    expect(find.widgetWithText(ListTile, '시스템 상태'), findsNothing); // 대시보드 안의 탭으로 옮겼다
+    expect(find.widgetWithText(ListTile, '신호 관리'), findsNothing);
     expect(find.text('시스템 모니터링'), findsOneWidget);
     expect(find.text('국내 수신'), findsOneWidget);
     expect(find.text('해외 수신'), findsOneWidget);
@@ -930,6 +920,7 @@ void main() {
     await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('uptrend99'));
+    await tester.pump(kDoubleTapTimeout);
     await tester.pumpAndSettle();
     await tester.tap(find.byType(DropdownButton<ConsultChannel>));
     await tester.pumpAndSettle();
@@ -975,7 +966,9 @@ void main() {
     expect(find.textContaining('총 2건'), findsOneWidget);
 
     // 장애는 내용을 눌러 상세를 본다.
-    await tester.tap(find.widgetWithText(ListTile, '시스템 상태'));
+    await tester.tap(find.widgetWithText(ListTile, '대시보드'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '시스템 상태'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('잔고 불일치 감지'));
     await tester.pumpAndSettle();
@@ -1060,6 +1053,7 @@ void main() {
     await tester.enterText(find.widgetWithText(TextField, '아이디·이메일 검색'), 'rising');
     await tester.pumpAndSettle();
     await tester.tap(find.text('risingkang'));
+    await tester.pump(kDoubleTapTimeout);
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, '제목'), '개별 안내');
     await tester.enterText(find.widgetWithText(TextField, '내용'), '확인 부탁드립니다.');
@@ -1146,9 +1140,6 @@ void main() {
     await tester.tap(find.widgetWithText(ListTile, '공지사항'));
     await tester.pumpAndSettle();
     expect(find.text('공지 작성'), findsNothing);
-    await tester.tap(find.widgetWithText(ListTile, '신호 관리'));
-    await tester.pumpAndSettle();
-    expect(find.text('숨기기'), findsNothing);
     await tester.tap(find.widgetWithText(ListTile, '종목 마스터'));
     await tester.pumpAndSettle();
     expect(find.text('상품 추가'), findsNothing);
@@ -1162,7 +1153,9 @@ void main() {
     expect(find.text('월물 추가'), findsNothing);
     await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
     await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextButton, '차단'), findsNothing); // 목록의 차단 버튼도 숨긴다
     await tester.tap(find.text('uptrend99'));
+    await tester.pump(kDoubleTapTimeout);
     await tester.pumpAndSettle();
     expect(find.text('이용 정지'), findsNothing);
     expect(find.text('이 권한은 조회와 상담 기록만 할 수 있습니다.'), findsOneWidget);
@@ -1261,6 +1254,65 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('회원: 목록에서 접속을 차단하고 해제한다', (tester) async {
+    await openMembers(tester);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'uptrend99');
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.widgetWithText(TextButton, '차단')); // 좁은 창에서는 표를 옆으로 민다
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, '차단'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('멈추지 않습니다'), findsOneWidget);
+    final confirm = find.widgetWithText(FilledButton, '차단');
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+
+    await tester.enterText(find.widgetWithText(TextField, '차단 사유'), '계정 도용 의심');
+    await tester.pump();
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
+
+    final m = mockMembers.firstWhere((m) => m.username == 'uptrend99');
+    expect(m.accessBlocked, isTrue);
+    expect(m.status, MemberStatus.active);
+    expect(m.history.first.text, '접속 차단 (계정 도용 의심)');
+    expect(issuesOf(m).any((i) => i.label == '접속 차단: 계정 도용 의심'), isTrue);
+    expect(find.text('접속 차단'), findsOneWidget); // 상태 옆 표시. 버튼은 차단 해제로 바뀐다
+    expect(find.text('접속 차단 1'), findsOneWidget);
+
+    await tester.ensureVisible(find.widgetWithText(TextButton, '해제'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, '해제'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '해제'));
+    await tester.pumpAndSettle();
+    expect(m.accessBlocked, isFalse);
+    expect(m.history.first.text, '접속 차단 해제');
+    expect(find.widgetWithText(TextButton, '차단'), findsOneWidget);
+  });
+
+  testWidgets('회원: 승인 전 회원은 접속 차단 대상이 아니다', (tester) async {
+    await openMembers(tester);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'newbie_slime');
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextButton, '차단'), findsNothing);
+  });
+
+  testWidgets('회원: 줄을 두 번 누르면 모니터링에서 그 회원의 워커가 열린다', (tester) async {
+    await openMembers(tester);
+    final row = find.text('bottomhunter');
+    await tester.tap(row);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+
+    expect(find.text('bottomhunter 워커'), findsOneWidget);
+    expect(find.text('000660'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('회원: 검색하고 상세에서 정지·해제한다', (tester) async {
     await openMembers(tester);
     await tester.enterText(find.byType(TextField), 'uptrend');
@@ -1270,6 +1322,7 @@ void main() {
     expect(find.text('up**@example.com'), findsOneWidget); // 목록은 이메일을 가린다
 
     await tester.tap(find.text('uptrend99')); // 아이디를 눌러도 상세가 열린다
+    await tester.pump(kDoubleTapTimeout);
     await tester.pumpAndSettle();
     await tester.tap(find.text('이용 정지'));
     await tester.pumpAndSettle();
@@ -1297,6 +1350,7 @@ void main() {
     await tester.tap(find.text('탈퇴 요청 1'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('dungeon_walker'));
+    await tester.pump(kDoubleTapTimeout);
     await tester.pumpAndSettle();
     await tester.tap(find.text('탈퇴 처리 완료'));
     await tester.pumpAndSettle();

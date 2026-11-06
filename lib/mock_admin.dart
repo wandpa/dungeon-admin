@@ -7,11 +7,10 @@ import 'package:flutter/foundation.dart';
 import 'mock_data.dart';
 
 enum AdminPermission {
-  memberActions('회원 승인·정지·탈퇴'),
+  memberActions('회원 승인·정지·차단·탈퇴'),
   exportMembers('회원 내보내기'),
   sendPush('푸시 발송'),
   editNotices('공지 관리'),
-  hideSignals('신호 숨김'),
   handleIncidents('장애 처리'),
   manageSymbols('종목 마스터 관리'),
   viewActivity('활동 기록 조회'),
@@ -28,7 +27,6 @@ enum AdminRole {
     AdminPermission.exportMembers,
     AdminPermission.sendPush,
     AdminPermission.editNotices,
-    AdminPermission.hideSignals,
     AdminPermission.handleIncidents,
     AdminPermission.manageSymbols,
     AdminPermission.viewActivity,
@@ -58,7 +56,6 @@ enum ActivityKind {
   consult('상담'),
   push('푸시'),
   notice('공지'),
-  signal('신호'),
   system('시스템'),
   symbol('종목'),
   admin('계정');
