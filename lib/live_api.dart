@@ -271,20 +271,147 @@ Future<void> loadLiveMember(Member m) async {
   }
 
   final exits = await _exitCycles(base, orders);
+  // 진행 중인 회차는 계약승수가 비어 1 로 온다. 같은 종목의 끝난 회차 값을 쓴다.
+  final multipliers = <Object?, double>{};
+  for (final o in orders) {
+    final value = _double(o['multiplier']) ?? 1;
+    if (value > (multipliers[o['symbolCode']] ?? 0)) multipliers[o['symbolCode']] = value;
+  }
 
   putLiveAccounts(
     m.id,
     accounts: [for (final a in accountRows) _account(a, balanceRows)],
     positions: [for (final p in positions) _position(p)],
-    orders: [for (final o in orders) _order(o, jobNames, exits[o])],
+    orders: [for (final o in orders) _order(o, jobNames, exits[o], multipliers[o['symbolCode']])],
     notifications: [for (final n in notifications) _notification(n)],
     state: _notificationState(state),
   );
+  _rememberWorkers(workerRows);
+  await _loadLogEvents(base, logs);
   putLiveWorkers(m.id, workers, [for (final l in logs) _log(l, jobNames)]);
   final issues = overview['issues'] as List? ?? const [];
   putLiveIssues(m.id, [for (final i in issues.cast<Map<String, dynamic>>()) _issue(i)]);
   _loaded.add(m.id);
   _loadedAt[m.id] = DateTime.now();
+}
+
+/// 전체 워커 표의 한 줄.
+class LiveWorkerRow {
+  const LiveWorkerRow({
+    required this.memberId,
+    required this.username,
+    required this.workerId,
+    required this.symbolCode,
+    required this.symbolName,
+    required this.market,
+    required this.running,
+    required this.accounts,
+    required this.paper,
+    required this.round,
+    required this.holding,
+    required this.jobs,
+    required this.finishedJobs,
+    required this.pnl,
+    required this.insertedAt,
+  });
+
+  final int memberId;
+  final String username;
+  final int workerId;
+  final String symbolCode;
+  final String symbolName;
+  final String market;
+  final bool running;
+  final String accounts;
+  final bool? paper; // 잡이 없으면 알 수 없다
+  final String round;
+  final String holding;
+  final int jobs;
+  final int finishedJobs;
+  final Map<String, double> pnl; // 통화별 실현손익
+  final DateTime? insertedAt;
+}
+
+LiveWorkerRow _workerRow(Member m, Map<String, dynamic> w, List<Map<String, dynamic>> jobs) {
+  final accounts = {
+    for (final j in jobs)
+      if (j['accountName'] != null) '${j['accountName']}(${j['maskedAccountNumber']})',
+  };
+  final held = jobs.where((j) => j['position'] != null).firstOrNull;
+  final job = held ?? jobs.where((j) => (j['repeatCount'] as int? ?? 0) > 1).firstOrNull;
+  final position = held?['position'] as Map<String, dynamic>?;
+  final unit = w['qtyUnit'] as String? ?? '';
+  final pnl = <String, double>{};
+  for (final p in (w['pnl'] as List? ?? const []).cast<Map<String, dynamic>>()) {
+    final amount = _double(p['realizedPnl']) ?? 0;
+    if (amount != 0) pnl.update(p['currency'] as String? ?? '-', (v) => v + amount, ifAbsent: () => amount);
+  }
+  final papers = {for (final j in jobs) j['isPaper'] as bool?}.nonNulls;
+  return LiveWorkerRow(
+    memberId: m.id,
+    username: m.username,
+    workerId: liveIntId(w['id'] as String),
+    symbolCode: w['symbolCode'] as String? ?? '-',
+    symbolName: w['symbolName'] as String? ?? '-',
+    market: w['marketType'] as String? ?? '-',
+    running: w['status'] == 'running',
+    accounts: accounts.isEmpty
+        ? '-'
+        : accounts.length == 1
+        ? accounts.single
+        : '${accounts.first} 외 ${accounts.length - 1}',
+    paper: papers.isEmpty ? null : papers.every((p) => p),
+    round: job == null ? '-' : '${job['repeatCurrent'] ?? 0}/${job['repeatCount'] ?? '-'}',
+    holding: position == null
+        ? '-'
+        : '${position['side'] == 'short' ? '매도' : '매수'} ${_double(position['size'])?.toInt() ?? 0}$unit',
+    jobs: w['jobCount'] as int? ?? jobs.length,
+    finishedJobs: w['finishedJobCount'] as int? ?? 0,
+    pnl: pnl,
+    insertedAt: _time(w['insertedAt']),
+  );
+}
+
+/// 승인된 회원 전체의 같은 목록을 모은다. 회원마다 앞쪽 [liveListLimit] 건까지다.
+Future<List<(Member, Map<String, dynamic>)>> liveRowsOfAllMembers(String path) async {
+  await ensureLiveMembers();
+  final members = liveMembers.where((m) => m.status != MemberStatus.pending).toList();
+  final rows = <(Member, Map<String, dynamic>)>[];
+  for (var i = 0; i < members.length; i += _batchSize) {
+    final pages = await Future.wait(
+      members.skip(i).take(_batchSize).map((m) async {
+        final items = await _items('/members/${m.liveId}$path');
+        return [for (final r in items) (m, r)];
+      }),
+    );
+    rows.addAll(pages.expand((p) => p));
+  }
+  return rows;
+}
+
+/// 전체 회원의 워커. 전체를 한 번에 주는 API 가 없어 워커가 있는 회원을 돌며 모은다.
+Future<List<LiveWorkerRow>> liveAllWorkers() async {
+  await ensureLiveMembers();
+  final members = liveMembers.where((m) => m.liveWorkerCount > 0).toList();
+  final rows = <LiveWorkerRow>[];
+  for (var i = 0; i < members.length; i += _batchSize) {
+    final batch = members.skip(i).take(_batchSize);
+    final pages = await Future.wait(
+      batch.map((m) async {
+        final base = '/members/${m.liveId}';
+        final data = await Future.wait([_items('$base/workers'), _items('$base/jobs?status=current&pageSize=100')]);
+        return [
+          for (final w in data[0])
+            _workerRow(m, w, [
+              for (final j in data[1])
+                if (j['workerId'] == w['id']) j,
+            ]),
+        ];
+      }),
+    );
+    rows.addAll(pages.expand((r) => r));
+  }
+  return rows;
 }
 
 /// 주문 목록에는 손익이 없어 회차에서 찾는다. 회차 방향의 반대 주문이 그 회차 안에 있으면 청산이다.
@@ -385,6 +512,7 @@ Future<void> loadLiveWorkerLogs(Member m, int workerId) async {
 
 Future<void> _mergeLogs(Member m, String query) async {
   final rows = await _items('/members/${m.liveId}/logs?$query&pageSize=$liveListLimit');
+  await _loadLogEvents('/members/${m.liveId}', rows);
   addLiveLogs(m.id, [for (final l in rows) _log(l, _jobNames[m.id] ?? const {})]);
 }
 
@@ -599,7 +727,12 @@ AccountPosition _position(Map<String, dynamic> p) {
   );
 }
 
-AccountOrder _order(Map<String, dynamic> o, Map<String, String> jobNames, Map<String, dynamic>? exit) {
+AccountOrder _order(
+  Map<String, dynamic> o,
+  Map<String, String> jobNames,
+  Map<String, dynamic>? exit,
+  double? multiplier,
+) {
   final workerId = o['workerId'] as String?;
   return AccountOrder(
     at: _time(o['orderedAt'])!,
@@ -613,7 +746,7 @@ AccountOrder _order(Map<String, dynamic> o, Map<String, String> jobNames, Map<St
     jobName: jobNames[o['jobId']] ?? o['jobName'] as String? ?? '-',
     workerId: workerId == null ? null : liveIntId(workerId),
     currency: o['currency'] as String? ?? '',
-    multiplier: _double(o['multiplier']) ?? 1,
+    multiplier: multiplier ?? 1,
     isPaper: o['isPaper'] as bool? ?? false,
     avgFillPrice: _double(o['avgFillPrice']),
     message: o['message'] as String?,
@@ -646,15 +779,116 @@ String liveLogText(String text) => switch (text) {
   'engine_detach_failed' => '엔진 해제 실패',
   _ when _orderNumber.hasMatch(text) => '주문 접수 · 주문번호 $text',
   _ when _eventCode.hasMatch(text) => '기타 이력', // 영어 코드를 그대로 보이지 않는다
-  _ => text,
+  // 워커 켜기·끄기 기록은 "종목 start 수동" 처럼 온다.
+  _ => text.replaceAll(RegExp(r'\bstart\b'), '시작').replaceAll(RegExp(r'\bstop\b'), '중지'),
 };
+
+final _logEvents = <String, Map<String, dynamic>>{}; // 로그 번호와 같은 잡 이벤트
+final _workerInfo = <String, Map<String, dynamic>>{}; // 로그에 종목을 붙일 워커
+
+void _rememberWorkers(Iterable<Map<String, dynamic>> rows) {
+  for (final w in rows) {
+    _workerInfo[w['id'] as String] = w;
+  }
+}
+
+/// 로그 API 는 이벤트 코드만 주므로 잡 이벤트에서 방향·수량·가격을 찾아 둔다.
+/// 잡 이력을 못 받아도 로그는 보여야 하므로 그 잡만 건너뛴다.
+Future<void> _loadLogEvents(String base, List<Map<String, dynamic>> logs) async {
+  final jobs = {
+    for (final l in logs)
+      if (l['id'] != null && l['jobId'] != null && !_logEvents.containsKey(l['id'])) l['jobId'] as String,
+  }.toList();
+  for (var i = 0; i < jobs.length; i += _batchSize) {
+    await Future.wait(
+      jobs.skip(i).take(_batchSize).map((id) async {
+        try {
+          for (final e in await _items('$base/jobs/$id/events')) {
+            _logEvents[e['id'] as String] = e;
+          }
+        } on LiveApiException {
+          // 코드 문구로 둔다.
+        }
+      }),
+    );
+  }
+}
+
+String _plain(double v) {
+  final r = (v * 100).round() / 100;
+  return formatNumber(r == r.truncateToDouble() ? r.toInt() : r);
+}
+
+String _eventText(Map<String, dynamic> e, Map<String, dynamic>? worker, String fallback) {
+  final side = switch (e['side']) {
+    'buy' => '매수',
+    'sell' => '매도',
+    _ => '',
+  };
+  final phase = switch (e['group']) {
+    'entry' => '진입',
+    'exit' => '청산',
+    _ => '',
+  };
+  final unit = worker?['qtyUnit'] as String? ?? '';
+  final qty = _double(e['qty']);
+  final qtyText = qty == null ? null : '${_plain(qty)}$unit';
+  final price = _double(e['price']);
+  final at = price == null || price == 0 ? '' : ' @${_plain(price)} ${worker?['currency'] ?? ''}'.trimRight();
+  final reason = switch (e['exitReason']) {
+    'take_profit' => '익절',
+    'stop_loss' => '손절',
+    'trailing' => '트레일링',
+    'signal' => '신호 청산',
+    'pnl_limit' => '누적 손익 종료',
+    _ => null,
+  };
+  final who = [phase, side].where((t) => t.isNotEmpty).join(' ');
+  final balance = _double(e['balanceQty']);
+  final line = switch (e['eventType']) {
+    'alert_fired' => ['$side 신호 발생'.trim(), ?qtyText],
+    'order_submitted' => ['$who 주문 전송'.trim(), ?qtyText],
+    'order_accepted' => ['$who 주문 접수'.trim(), if (e['message'] != null) '주문번호 ${e['message']}'],
+    'fill' => ['$who 체결'.trim(), if (qtyText != null) '$qtyText$at'],
+    'balance_updated' => ['잔고 반영', if (balance != null) '잔량 ${_plain(balance)}$unit'],
+    'cycle_closed' => [e['cycleNo'] == null ? '사이클 종료' : '${e['cycleNo']}회차 종료'],
+    'job_started' => ['잡 감시 시작'], // 서버 문구가 잡 이름이라 이름이 두 번 나온다
+    _ => [fallback],
+  };
+  return [...line, ?reason].join(' · ');
+}
+
+/// 로그 한 줄: 종목 · 잡 · 내용. 잡 이벤트가 없는 로그는 서버 문구를 그대로 쓴다.
+String liveLogDetail(Map<String, dynamic> l) {
+  final fallback = liveLogText(l['text'] as String? ?? '');
+  final event = _logEvents[l['id']];
+  final worker = _workerInfo[l['workerId']];
+  final text = event == null ? fallback : _eventText(event, worker, fallback);
+  return [?worker?['symbolCode'] as String?, ?l['jobName'] as String?, text].join(' · ');
+}
+
+/// 전체 회원의 고객 로그. 최신순이다.
+Future<List<(Member, Map<String, dynamic>)>> liveAllLogs() async {
+  final data = await Future.wait([
+    liveRowsOfAllMembers('/logs?pageSize=$liveListLimit'),
+    liveRowsOfAllMembers('/workers'),
+  ]);
+  _rememberWorkers([for (final (_, w) in data[1]) w]);
+  final byMember = <Member, List<Map<String, dynamic>>>{};
+  for (final (m, l) in data[0]) {
+    (byMember[m] ??= []).add(l);
+  }
+  await Future.wait(byMember.entries.map((e) => _loadLogEvents('/members/${e.key.liveId}', e.value)));
+  int at((Member, Map<String, dynamic>) r) => _time(r.$2['at'])?.millisecondsSinceEpoch ?? 0;
+  return data[0]..sort((a, b) => at(b).compareTo(at(a)));
+}
 
 CustomerLog _log(Map<String, dynamic> l, Map<String, String> jobNames) {
   final workerId = l['workerId'] as String?;
   return CustomerLog(
     _time(l['at'])!,
     CustomerLogCategory.values.asNameMap()[l['category']] ?? CustomerLogCategory.worker,
-    liveLogText(l['text'] as String? ?? ''),
+    liveLogDetail(l),
     workerId: workerId == null ? null : liveIntId(workerId),
     jobName: jobNames[l['jobId']] ?? l['jobName'] as String?,
   );

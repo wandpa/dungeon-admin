@@ -176,17 +176,19 @@ class JobStrategy {
   final double? tickSize; // 틱 환산 줄에 쓴다
   final double? tickValue;
 
-  /// 앱 strategyTemplateLabel 과 같은 표기.
-  String get label => switch (templateId) {
-    'breakout' => '돌파',
-    'candle_direction_breakout' => '캔들 방향',
-    'first_fill_breakout' => '선입파 돌파',
-    'gap_trading_breakout' => '갭 트레이딩',
-    'indicator_combination' => '지표 조합',
-    'trailing_entry' => '트레일링 진입',
-    _ => templateId,
-  };
+  String get label => strategyTemplateLabel(templateId);
 }
+
+/// 앱 strategyTemplateLabel 과 같은 표기.
+String strategyTemplateLabel(String templateId) => switch (templateId) {
+  'breakout' => '돌파',
+  'candle_direction_breakout' => '캔들 방향',
+  'first_fill_breakout' => '선입파 돌파',
+  'gap_trading_breakout' => '갭 트레이딩',
+  'indicator_combination' => '지표 조합',
+  'trailing_entry' => '트레일링 진입',
+  _ => templateId,
+};
 
 /// 앱 상세보기 화면의 항목 하나.
 class LiveSetting {

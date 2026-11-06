@@ -243,7 +243,50 @@ void main() {
     expect(liveLogText('익절'), '신호 발생 · 익절');
     expect(liveLogText('MOCK****0038'), '주문 접수 · 주문번호 MOCK****0038');
     expect(liveLogText('new_event_type'), '기타 이력');
+    expect(liveLogText('Hang Seng Index-202611 start 수동'), 'Hang Seng Index-202611 시작 수동');
     expect(liveLogText('캔5분30틱100회'), '캔5분30틱100회'); // 서버 문장은 그대로 둔다
+  });
+
+  test('고객 로그: 같은 번호의 잡 이벤트로 종목·방향·수량·가격을 채운다', () async {
+    Map<String, Object?> log(String id, String text) => {
+      'id': id,
+      'at': '2026-11-04T12:37:17Z',
+      'category': 'order',
+      'text': text,
+      'workerId': _workerId,
+      'jobId': _jobId,
+      'jobName': '돌파',
+    };
+    Map<String, Object?> event(String id, String type, {Object? group, Object? side, Object? reason}) => {
+      'id': id,
+      'cycleNo': 3,
+      'eventType': type,
+      'side': side,
+      'qty': 1,
+      'price': 24572,
+      'balanceQty': 0,
+      'group': group,
+      'exitReason': reason,
+      'eventAt': '2026-11-04T12:37:17Z',
+    };
+    serve(
+      routes: {
+        ..._routes,
+        '$_base/logs': _page([log('a', 'fill'), log('b', 'balance_updated'), log('c', 'cycle_closed')]),
+        '$_base/jobs/$_jobId/events': _page([
+          event('a', 'fill', group: 'exit', side: 'buy', reason: 'stop_loss'),
+          event('b', 'balance_updated'),
+          event('c', 'cycle_closed'),
+        ]),
+      },
+    );
+    await refreshLiveMembers();
+    final m = liveMembers.single;
+    await loadLiveMember(m);
+    final texts = customerLogsOf(m.id).map((l) => l.text).toList();
+    expect(texts, contains('MCLZ26 · 돌파 · 청산 매수 체결 · 1 @24,572 USD · 손절'));
+    expect(texts, contains('MCLZ26 · 돌파 · 잔고 반영 · 잔량 0'));
+    expect(texts, contains('MCLZ26 · 돌파 · 3회차 종료'));
   });
 
   test('거래: 청산 주문에만 회차의 매수가·매도가·손익을 붙인다', () async {
@@ -257,6 +300,8 @@ void main() {
       'filledQty': 1,
       'avgFillPrice': price,
       'status': 'filled',
+      'symbolCode': 'CLZ26',
+      'multiplier': at.contains('13:10') ? 1 : 50, // 진행 중 회차는 승수가 비어 1 로 온다
     };
     serve(
       routes: {
@@ -290,6 +335,7 @@ void main() {
     expect(orders[1].buyPrice, 94);
     expect(orders[1].sellPrice, 96);
     expect(orders[0].buyPrice, isNull);
+    expect(orders[0].filledAmount, 95 * 50);
   });
 
   test('재조회하면 새 값으로 바뀌고, 실패하면 받아 둔 값이 남는다', () async {

@@ -9,11 +9,19 @@ enum _MonitorTab {
   positions('포지션'),
   logs('로그'),
   accounts('계좌'),
-  notifications('알림');
+  notifications('알림'),
+  signals('신호', liveOnly: true),
+  strategies('전략', liveOnly: true),
+  watchlist('관심종목', liveOnly: true),
+  symbols('종목', liveOnly: true);
 
-  const _MonitorTab(this.label);
+  const _MonitorTab(this.label, {this.liveOnly = false});
   final String label;
+  final bool liveOnly; // 샘플 데이터에는 없는 화면
 }
+
+/// 지금 보여 줄 탭.
+Iterable<_MonitorTab> get _shownTabs => _MonitorTab.values.where((t) => useLiveData.value || !t.liveOnly);
 
 /// 지금 보고 있는 범위. 누르면 그 단계로 돌아간다.
 class _ScopeBar extends StatelessWidget {
@@ -61,9 +69,11 @@ class _MemberBar extends StatelessWidget {
     required this.onDetail,
     this.onReload,
     this.reloading = false,
+    this.tabsOnly = false,
   });
 
   final Member? member;
+  final bool tabsOnly; // 회원 이름과 재조회는 위 줄에 있다
   final _MonitorTab tab;
   final ValueChanged<_MonitorTab> onTabChanged;
   final VoidCallback onDetail;
@@ -81,6 +91,9 @@ class _MemberBar extends StatelessWidget {
       onSelected: (_) => onTabChanged(t),
     );
     final mode = m == null || m.isLive ? null : tradeModeOf(m.id);
+    if (tabsOnly) {
+      return Wrap(spacing: 6, runSpacing: 6, children: [for (final t in _shownTabs) chip(t, t.label)]);
+    }
     return Wrap(
       alignment: WrapAlignment.spaceBetween,
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -115,7 +128,7 @@ class _MemberBar extends StatelessWidget {
           runSpacing: 6,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            for (final t in _MonitorTab.values) chip(t, t.label),
+            for (final t in _shownTabs) chip(t, t.label),
             if (onReload != null) ...[
               if (loadedAt != null)
                 Text(
@@ -657,13 +670,25 @@ class _OrdersPane extends StatelessWidget {
                             formatDateTime(o.at, seconds: true),
                             style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
                           ),
+                          if (o.realizedPnl != null)
+                            Text(
+                              '손익 ${_appSigned(o.realizedPnl!, o.currency)}',
+                              style: TextStyle(
+                                color: _pnlColor(o.realizedPnl!),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 3),
                       _Facts({
                         '주문': '${_num(o.qty)}${o.qtyUnit}',
                         '체결': '${_num(o.filledQty)}${o.qtyUnit}',
-                        if (o.avgFillPrice != null) '평균단가': _num(o.avgFillPrice!),
+                        if (o.avgFillPrice != null) '체결가': _appPrice(o.avgFillPrice!, o.currency),
+                        if (o.isFilled) '체결금액': _appPrice(o.filledAmount, o.currency),
+                        if (o.buyPrice != null) '매수가': _appPrice(o.buyPrice!, o.currency),
+                        if (o.sellPrice != null) '매도가': _appPrice(o.sellPrice!, o.currency),
                         '잡': o.jobName,
                         '계좌': o.accountName,
                       }),
@@ -709,6 +734,13 @@ class _NotificationSettingsPane extends StatelessWidget {
             _OnOffRow('진동', s.vibration),
             _OnOffRow('앱 화면 배너', s.banner),
           ],
+          const SizedBox(height: 10),
+          // 앱 알림 설정의 테스트 푸시와 같다. 상담 중 푸시가 가는지 확인할 때 쓴다.
+          OutlinedButton.icon(
+            onPressed: s.hasToken && can(AdminPermission.sendPush) ? () => showNotConnected(context) : null,
+            icon: const Icon(Icons.send, size: 16),
+            label: const Text('테스트 푸시 보내기'),
+          ),
         ],
       ),
     );

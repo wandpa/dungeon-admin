@@ -5,6 +5,7 @@ import '../mock_admin.dart';
 import '../mock_data.dart';
 import '../theme.dart';
 import '../widgets/admin_page.dart';
+import 'member_edit_panel.dart' show memberGrades;
 
 Color _statusColor(NoticeStatus s) => switch (s) {
   NoticeStatus.published => AppColors.success,
@@ -31,6 +32,10 @@ class _NoticesPageState extends State<NoticesPage> {
   bool _pinned = false;
   bool _notifyPush = false;
   DateTime? _publishAt; // 예약 게시 시각
+  String _category = noticeCategories.first;
+  final _grades = <String>{}; // 비어 있으면 전체 회원
+  bool _popup = false;
+  DateTime? _endAt; // 게시 종료 시각
 
   @override
   void dispose() {
@@ -63,6 +68,12 @@ class _NoticesPageState extends State<NoticesPage> {
     _pinned = n?.pinned ?? false;
     _publishAt = n?.status == NoticeStatus.scheduled ? n?.publishAt : null;
     _notifyPush = false;
+    _category = n?.category ?? noticeCategories.first;
+    _grades
+      ..clear()
+      ..addAll(n?.grades ?? const {});
+    _popup = n?.popup ?? false;
+    _endAt = n?.endAt;
   });
 
   void _close() => setState(() {
@@ -89,6 +100,19 @@ class _NoticesPageState extends State<NoticesPage> {
     });
   }
 
+  Future<void> _pickEnd() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      helpText: '게시 종료일',
+      initialDate: _endAt ?? now.add(const Duration(days: 7)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+    );
+    if (date == null || !mounted) return;
+    setState(() => _endAt = DateTime(date.year, date.month, date.day, 23, 59));
+  }
+
   void _write(NoticeStatus status) {
     final n = _target;
     final now = DateTime.now();
@@ -104,6 +128,10 @@ class _NoticesPageState extends State<NoticesPage> {
           _pinned,
           status,
           publishAt: _publishAt,
+          category: _category,
+          grades: {..._grades},
+          popup: _popup,
+          endAt: _endAt,
         ),
       );
     } else {
@@ -113,7 +141,11 @@ class _NoticesPageState extends State<NoticesPage> {
         ..pinned = _pinned
         ..status = status
         ..publishAt = _publishAt
-        ..updatedAt = now;
+        ..updatedAt = now
+        ..category = _category
+        ..grades = {..._grades}
+        ..popup = _popup
+        ..endAt = _endAt;
     }
   }
 
@@ -197,9 +229,56 @@ class _NoticesPageState extends State<NoticesPage> {
   Widget _editor() {
     final n = _target;
     final live = n?.status == NoticeStatus.published;
+    Widget choice(String label, bool selected, VoidCallback onTap) => ChoiceChip(
+      label: Text(label),
+      visualDensity: VisualDensity.compact,
+      selected: selected,
+      onSelected: (_) => onTap(),
+    );
+    Widget row(String label, Widget child) => Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 64,
+            child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+          ),
+          Expanded(child: child),
+        ],
+      ),
+    );
     final form = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        row(
+          '분류',
+          Wrap(
+            spacing: 6,
+            children: [
+              for (final c in noticeCategories) choice(c, c == _category, () => setState(() => _category = c)),
+            ],
+          ),
+        ),
+        row(
+          '노출 대상',
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              choice('전체 회원', _grades.isEmpty, () => setState(_grades.clear)),
+              for (final g in memberGrades)
+                FilterChip(
+                  label: Text(g),
+                  visualDensity: VisualDensity.compact,
+                  selected: _grades.contains(g),
+                  onSelected: (on) => setState(() {
+                    on ? _grades.add(g) : _grades.remove(g);
+                    if (_grades.isNotEmpty) _notifyPush = false;
+                  }),
+                ),
+            ],
+          ),
+        ),
         TextField(
           controller: _title,
           onChanged: (_) => setState(() {}),
@@ -220,8 +299,14 @@ class _NoticesPageState extends State<NoticesPage> {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             _Toggle('상단 고정', _pinned, (v) => setState(() => _pinned = v)),
+            _Toggle('앱 팝업', _popup, (v) => setState(() => _popup = v)),
             // 예약 게시 때 나갈 푸시는 아직 처리할 곳이 없어 지금 게시할 때만 고른다.
-            _Toggle('게시할 때 푸시 보내기', _notifyPush, _publishAt != null ? null : (v) => setState(() => _notifyPush = v)),
+            // 샘플 회원에 등급이 없어 등급을 고르면 푸시 대상을 정할 수 없다.
+            _Toggle(
+              '게시할 때 푸시 보내기',
+              _notifyPush,
+              _publishAt != null || _grades.isNotEmpty ? null : (v) => setState(() => _notifyPush = v),
+            ),
             OutlinedButton.icon(
               onPressed: _pickSchedule,
               icon: const Icon(Icons.schedule, size: 18),
@@ -229,6 +314,12 @@ class _NoticesPageState extends State<NoticesPage> {
             ),
             if (_publishAt != null)
               TextButton(onPressed: () => setState(() => _publishAt = null), child: const Text('예약 취소')),
+            OutlinedButton.icon(
+              onPressed: _pickEnd,
+              icon: const Icon(Icons.event_busy, size: 18),
+              label: Text(_endAt == null ? '게시 종료일' : '${formatDateTime(_endAt!)} 종료'),
+            ),
+            if (_endAt != null) TextButton(onPressed: () => setState(() => _endAt = null), child: const Text('종료일 취소')),
           ],
         ),
         const SizedBox(height: 12),
@@ -254,9 +345,9 @@ class _NoticesPageState extends State<NoticesPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '미리보기',
-            style: TextStyle(color: AppColors.accent, fontSize: 12, fontWeight: FontWeight.w700),
+          Text(
+            '미리보기 · $_category${_popup ? ' · 앱 팝업' : ''}',
+            style: const TextStyle(color: AppColors.accent, fontSize: 12, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           Text(
@@ -323,12 +414,13 @@ class _NoticesPageState extends State<NoticesPage> {
           onSearchChanged: (v) => setState(() => _query = v),
         ),
         AdminTable(
-          columns: const ['번호', '제목', '작성자', '작성일', '조회수', '상태', ''],
+          columns: const ['번호', '분류', '제목', '대상', '작성자', '작성일', '조회수', '상태', ''],
           emptyText: '조건에 맞는 공지가 없습니다.',
           rows: [
             for (final n in visible)
               [
                 Text('${n.id}'),
+                Text(n.category),
                 InkWell(
                   onTap: canEdit ? () => _open(n) : null,
                   child: Row(
@@ -339,9 +431,11 @@ class _NoticesPageState extends State<NoticesPage> {
                         const SizedBox(width: 6),
                       ],
                       Text(n.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      if (n.popup) ...[const SizedBox(width: 6), const StatusBadge('팝업', color: AppColors.brand)],
                     ],
                   ),
                 ),
+                Text(n.audience),
                 Text(n.author),
                 Text(formatDateTime(n.createdAt)),
                 Text(formatNumber(n.views)),
@@ -353,6 +447,11 @@ class _NoticesPageState extends State<NoticesPage> {
                     if (n.status == NoticeStatus.scheduled && n.publishAt != null)
                       Text(
                         formatDateTime(n.publishAt!),
+                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                      ),
+                    if (n.endAt != null)
+                      Text(
+                        '~ ${formatDateTime(n.endAt!)}',
                         style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
                       ),
                   ],

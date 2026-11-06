@@ -983,7 +983,15 @@ class _CycleCardState extends State<_CycleCard> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(key, style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
-        Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+        const SizedBox(width: 12),
+        // 날짜를 넘긴 보유시간처럼 길면 줄을 바꾼다.
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          ),
+        ),
       ],
     ),
   );
@@ -1157,55 +1165,59 @@ class _FillRow extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(color: AppColors.surfaceSoft, borderRadius: BorderRadius.circular(10)),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            _short ? '매도' : '매수',
-            style: TextStyle(color: _short ? AppColors.down : AppColors.up, fontSize: 14, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${worker.symbolCode} ${worker.symbolName}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                ),
-                Text(
-                  job.accountLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
-                ),
-                Text(
-                  '매수가 ${_price(cycle.avgBuyPrice)} · 매도가 ${_price(cycle.avgSellPrice)}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                ),
-                Text(
-                  _times(open),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          Row(
             children: [
               Text(
-                open ? '-' : '${pnl > 0 ? '+' : ''}${_num(pnl)}',
-                style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w700),
+                _short ? '매도' : '매수',
+                style: TextStyle(
+                  color: _short ? AppColors.down : AppColors.up,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              Text(note, style: TextStyle(color: noteColor, fontSize: 12)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${worker.symbolCode} ${worker.symbolName}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                    ),
+                    Text(
+                      job.accountLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    open ? '-' : '${pnl > 0 ? '+' : ''}${_num(pnl)}',
+                    style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w700),
+                  ),
+                  Text(note, style: TextStyle(color: noteColor, fontSize: 12)),
+                ],
+              ),
             ],
           ),
+          // 가격과 시각은 잘리지 않게 줄 전체를 쓴다.
+          const SizedBox(height: 2),
+          Text(
+            '매수가 ${_price(cycle.avgBuyPrice)} · 매도가 ${_price(cycle.avgSellPrice)}',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+          ),
+          Text(_times(open), style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
         ],
       ),
     );

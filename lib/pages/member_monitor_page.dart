@@ -10,6 +10,8 @@ import '../mock_workers.dart';
 import '../theme.dart';
 import '../widgets/admin_page.dart';
 import 'consultations_page.dart' show consultStatusColor;
+import 'live_lists.dart';
+import 'live_workers_table.dart';
 import 'member_detail_dialog.dart';
 import 'members_page.dart' show memberStatusColor;
 
@@ -60,6 +62,8 @@ class MemberMonitorPage extends StatefulWidget {
 class _MemberMonitorPageState extends State<MemberMonitorPage> {
   String _query = '';
   int? _memberId;
+  bool _allMembers = false; // 회원을 고르지 않아 전체 워커 표를 본다
+  bool _showConsult = false; // 상담 이력 칸을 열었는지
   int? _workerId; // null 이면 전체 워커: 고객 로그도 전체가 나온다
   WorkerJob? _job; // 아래 잡 상세 패널에 보여 줄 잡
   _MonitorTab _tab = _MonitorTab.workers;
@@ -81,6 +85,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
     liveStatus.addListener(_onLiveChanged);
     final request = memberMonitorRequest.value;
     memberMonitorRequest.value = null;
+    _allMembers = useLiveData.value && request == null;
     if (request == null) return;
     _memberId = request.memberId;
     if (request.issue != null) _applyIssue(request.issue!);
@@ -146,6 +151,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
 
   /// 고른 회원이 없으면 워커가 있는 첫 회원을 보여 준다.
   Member? get _member {
+    if (_allMembers) return null;
     final members = _members;
     for (final m in members) {
       if (m.id == _memberId) return m;
@@ -345,6 +351,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
 
   /// 회원을 바꾸면 워커부터 다시 본다.
   void _selectMember(Member m) => setState(() {
+    _allMembers = false;
     _memberId = m.id;
     _liveError = null;
     _tab = _MonitorTab.workers;
@@ -357,6 +364,26 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
     _logPeriod = _LogPeriod.all;
     _logRange = null;
   });
+
+  void _showAllMembers() => setState(() {
+    _allMembers = true;
+    _memberId = null;
+    _tab = _MonitorTab.workers;
+    _workerId = null;
+    _job = null;
+    _accountName = null;
+  });
+
+  /// 전체 워커 표에서 고른 워커의 잡으로 간다.
+  void _openRow(LiveWorkerRow row) {
+    final member = _members.where((m) => m.id == row.memberId).firstOrNull;
+    if (member == null) return;
+    _selectMember(member);
+    setState(() {
+      _workerId = row.workerId;
+      _tab = _MonitorTab.jobs;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -395,6 +422,8 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
       selected: member,
       onSearchChanged: (v) => setState(() => _query = v),
       onSelect: _selectMember,
+      allSelected: _allMembers,
+      onAll: useLiveData.value ? _showAllMembers : null,
     );
     final workerPane = _WorkersPane(
       member: member,
@@ -468,7 +497,15 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
               if (t == _MonitorTab.accounts && t != _tab && member != null) {
                 logActivity(ActivityKind.view, '${member.username} 계좌·주문 열람');
               }
-              setState(() => _tab = t);
+              setState(() {
+                _tab = t;
+                // 테스트 DB 는 거래·포지션·로그·계좌·알림을 그 회원 전체로 본다.
+                if (useLiveData.value &&
+                    !const {_MonitorTab.workers, _MonitorTab.jobs, _MonitorTab.jobDetail}.contains(t)) {
+                  _workerId = null;
+                  _job = null;
+                }
+              });
             },
           );
 
@@ -547,7 +584,32 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
               ? _AccountFilterBar(accounts: accounts, selected: _accountName, onSelect: _selectAccount)
               : null;
 
+          // 회원의 신호·전략·관심종목·종목.
+          Widget liveList(LiveListDef def) => member == null
+              ? const _Empty('회원을 선택하세요.')
+              : LiveMemberList(key: ValueKey((member.id, def.title, liveLoadedAt(member))), member: member, def: def);
+
+          final allWorkersTable = LiveWorkersTable(
+            onOpen: _openRow,
+            onOpenMember: (id) {
+              final m = _members.where((x) => x.id == id).firstOrNull;
+              if (m != null) _selectMember(m);
+            },
+          );
+
           // 좁으면 패널마다 높이를 정해 세로로 쌓는다.
+          if (narrow && _allMembers) {
+            return ListView(
+              controller: _scroll,
+              children: [
+                header,
+                gap,
+                SizedBox(height: 300, child: memberPane),
+                gap,
+                SizedBox(height: 720, child: allWorkersTable),
+              ],
+            );
+          }
           if (narrow) {
             return ListView(
               controller: _scroll,
@@ -588,6 +650,10 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
                     gap,
                     SizedBox(height: 420, child: notifyHistoryPane),
                   ],
+                  _MonitorTab.signals => [SizedBox(height: 720, child: liveList(liveSignalList))],
+                  _MonitorTab.strategies => [SizedBox(height: 720, child: liveList(liveStrategyList))],
+                  _MonitorTab.watchlist => [SizedBox(height: 720, child: liveList(liveWatchlist))],
+                  _MonitorTab.symbols => [SizedBox(height: 720, child: liveList(liveMemberSymbols))],
                 },
               ],
             );
@@ -632,54 +698,99 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
                 Expanded(child: notifyHistoryPane),
               ],
             ),
+            _MonitorTab.signals => liveList(liveSignalList),
+            _MonitorTab.strategies => liveList(liveStrategyList),
+            _MonitorTab.watchlist => liveList(liveWatchlist),
+            _MonitorTab.symbols => liveList(liveMemberSymbols),
           };
 
           final height = constraints.maxHeight;
+          final live = useLiveData.value;
+          final main = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              bar,
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 16,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [scopeBar, ?accountBar, ?issueBar],
+              ),
+              const SizedBox(height: 8),
+              Expanded(child: body),
+            ],
+          );
+          final memberView = Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (!live) ...[
+                SizedBox(
+                  width: 220,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(flex: 1, child: memberPane),
+                      gap,
+                      Expanded(flex: 1, child: memoPane),
+                    ],
+                  ),
+                ),
+                gap,
+              ],
+              Expanded(child: live ? body : main),
+              // 평소에는 본문을 넓게 쓰고 상담 이력 버튼을 누르면 오른쪽에 연다.
+              if (live && _showConsult) ...[gap, SizedBox(width: 260, child: memoPane)],
+            ],
+          );
           return SingleChildScrollView(
             controller: _scroll,
             child: SizedBox(
               height: height,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: Row(
+              child: _allMembers
+                  ? allWorkersTable
+                  : !live
+                  ? memberView
+                  : Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        SizedBox(
-                          width: 220,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(flex: 1, child: memberPane),
-                              gap,
-                              Expanded(flex: 1, child: memoPane),
-                            ],
-                          ),
+                        _MemberPicker(
+                          members: _members,
+                          selected: member,
+                          onSelect: _selectMember,
+                          onAll: _showAllMembers,
+                          onBack: _tab == _MonitorTab.workers && widget.onExit == null ? null : _back,
+                          onDetail: () async {
+                            if (member == null) return;
+                            await showMemberDetail(context, member);
+                            if (mounted) setState(() {});
+                          },
+                          consultCount: member == null ? 0 : consultationsOf(member.id).length,
+                          consultOpen: _showConsult,
+                          onConsult: () => setState(() => _showConsult = !_showConsult),
+                          issues: member == null || issuesOf(member).isEmpty ? null : issueBar,
+                          loadedAt: member == null ? null : liveLoadedAt(member),
+                          onReload: member == null || _loadingMemberId != null ? null : () => _reload(member),
                         ),
-                        gap,
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              bar,
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 16,
-                                runSpacing: 6,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: [scopeBar, ?accountBar, ?issueBar],
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _MemberBar(
+                                member: member,
+                                tab: _tab,
+                                tabsOnly: true,
+                                onDetail: () {},
+                                onTabChanged: bar.onTabChanged,
                               ),
-                              const SizedBox(height: 8),
-                              Expanded(child: body),
-                            ],
-                          ),
+                            ),
+                            ?accountBar,
+                          ],
                         ),
+                        const SizedBox(height: 8),
+                        Expanded(child: memberView),
                       ],
                     ),
-                  ),
-                ],
-              ),
             ),
           );
         },
@@ -786,18 +897,116 @@ class _Empty extends StatelessWidget {
   }
 }
 
+/// 맨 위 회원 검색. 고른 회원의 화면에서 바로 다른 회원으로 옮기거나 전체 워커로 돌아간다.
+class _MemberPicker extends StatelessWidget {
+  const _MemberPicker({
+    required this.members,
+    required this.selected,
+    required this.onSelect,
+    required this.onAll,
+    required this.onDetail,
+    required this.consultCount,
+    required this.consultOpen,
+    required this.onConsult,
+    this.onBack,
+    this.issues,
+    this.loadedAt,
+    this.onReload,
+  });
+
+  final List<Member> members;
+  final Member? selected;
+  final ValueChanged<Member> onSelect;
+  final VoidCallback onAll;
+  final VoidCallback onDetail;
+  final int consultCount;
+  final bool consultOpen;
+  final VoidCallback onConsult;
+  final VoidCallback? onBack;
+  final Widget? issues; // 문제가 있을 때만 보여 준다
+  final DateTime? loadedAt;
+  final VoidCallback? onReload;
+
+  @override
+  Widget build(BuildContext context) {
+    final at = loadedAt;
+    return Row(
+      children: [
+        if (onBack != null) ...[
+          OutlinedButton.icon(onPressed: onBack, icon: const Icon(Icons.arrow_back, size: 16), label: const Text('뒤로')),
+          const SizedBox(width: 12),
+        ],
+        const Text('회원 선택', style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 240,
+          child: Autocomplete<Member>(
+            key: ValueKey(selected?.id),
+            initialValue: TextEditingValue(text: selected?.username ?? ''),
+            displayStringForOption: (m) => m.username,
+            optionsBuilder: (value) {
+              final q = value.text.trim().toLowerCase();
+              // 고른 회원의 이름이 그대로 있으면 전체를 보여 줘 바로 다른 회원을 고르게 한다.
+              if (q.isEmpty || q == selected?.username.toLowerCase()) return members;
+              return members.where(
+                (m) => m.username.toLowerCase().contains(q) || m.shownEmail.toLowerCase().contains(q),
+              );
+            },
+            onSelected: onSelect,
+            fieldViewBuilder: (context, controller, focus, onSubmitted) => TextField(
+              controller: controller,
+              focusNode: focus,
+              onSubmitted: (_) => onSubmitted(),
+              decoration: const InputDecoration(prefixIcon: Icon(Icons.search, size: 20), hintText: '회원 아이디·이메일 검색'),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        OutlinedButton(onPressed: onAll, child: const Text('전체 회원')),
+        const SizedBox(width: 6),
+        OutlinedButton(onPressed: onDetail, child: const Text('회원 정보·처리')),
+        const SizedBox(width: 6),
+        OutlinedButton(
+          onPressed: onConsult,
+          style: consultOpen
+              ? OutlinedButton.styleFrom(backgroundColor: AppColors.brand.withValues(alpha: 0.12))
+              : null,
+          child: Text('상담 이력 $consultCount'),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Align(alignment: Alignment.centerRight, child: issues ?? const SizedBox.shrink()),
+        ),
+        const SizedBox(width: 12),
+        if (at != null) ...[
+          Text(
+            '조회 ${formatDateTime(at, seconds: true).substring(11)}',
+            style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+          ),
+          const SizedBox(width: 6),
+        ],
+        OutlinedButton.icon(onPressed: onReload, icon: const Icon(Icons.refresh, size: 16), label: const Text('재조회')),
+      ],
+    );
+  }
+}
+
 class _MemberPane extends StatelessWidget {
   const _MemberPane({
     required this.members,
     required this.selected,
     required this.onSearchChanged,
     required this.onSelect,
+    this.allSelected = false,
+    this.onAll,
   });
 
   final List<Member> members;
   final Member? selected;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<Member> onSelect;
+  final bool allSelected;
+  final VoidCallback? onAll; // 테스트 DB 만 전체 워커 표가 있다
 
   @override
   Widget build(BuildContext context) {
@@ -813,6 +1022,16 @@ class _MemberPane extends StatelessWidget {
               decoration: const InputDecoration(prefixIcon: Icon(Icons.search, size: 20), hintText: '아이디·이메일 검색'),
             ),
           ),
+          if (onAll != null)
+            ListTile(
+              dense: true,
+              selected: allSelected,
+              selectedTileColor: AppColors.brand.withValues(alpha: 0.18),
+              selectedColor: AppColors.textPrimary,
+              title: const Text('전체 회원', style: TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: const Text('전체 워커 보기', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+              onTap: onAll,
+            ),
           Expanded(
             child: members.isEmpty
                 ? const _Empty('조건에 맞는 회원이 없습니다.')
@@ -1369,12 +1588,14 @@ class _CustomerLogPane extends StatelessWidget {
         runSpacing: 6,
         children: [
           for (final c in <CustomerLogCategory?>[null, ...CustomerLogCategory.values])
-            ChoiceChip(
-              label: Text(c?.label ?? '전체', style: const TextStyle(fontSize: 12)),
-              visualDensity: VisualDensity.compact,
-              selected: c == category,
-              onSelected: (_) => onCategoryChanged(c),
-            ),
+            // 테스트 DB 로그에는 접속 기록이 없어 눌러도 비어 있다.
+            if (!useLiveData.value || c != CustomerLogCategory.access)
+              ChoiceChip(
+                label: Text(c?.label ?? '전체', style: const TextStyle(fontSize: 12)),
+                visualDensity: VisualDensity.compact,
+                selected: c == category,
+                onSelected: (_) => onCategoryChanged(c),
+              ),
         ],
       ),
       child: Column(

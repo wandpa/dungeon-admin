@@ -167,6 +167,36 @@ void main() {
     expect(find.widgetWithText(AdminMenuItem, '대시보드'), findsOneWidget);
   });
 
+  testWidgets('공지: 분류, 노출 대상, 앱 팝업을 정해 게시한다', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(const AdminApp());
+    await tester.tap(find.widgetWithText(AdminMenuItem, '공지사항'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('공지 작성'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(ChoiceChip, '이벤트'));
+    await tester.tap(find.widgetWithText(FilterChip, 'VIP'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '제목'), 'VIP 이벤트');
+    await tester.enterText(find.widgetWithText(TextField, '내용'), '내용');
+    await tester.pumpAndSettle();
+    expect(find.text('미리보기 · 이벤트'), findsOneWidget);
+    await tester.tap(find.byType(Switch).at(1));
+    await tester.pumpAndSettle();
+    expect(find.text('미리보기 · 이벤트 · 앱 팝업'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, '임시저장'));
+    await tester.pumpAndSettle();
+
+    final saved = mockNotices.firstWhere((n) => n.title == 'VIP 이벤트');
+    expect(saved.category, '이벤트');
+    expect(saved.audience, 'VIP');
+    expect(saved.popup, isTrue);
+  });
+
   testWidgets('좁은 화면: 위쪽 메뉴를 밀어서 이동한다', (tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1;
@@ -547,7 +577,7 @@ void main() {
 
     // 게시하면서 푸시도 보낸다.
     final pushes = mockPushes.length;
-    await tester.tap(find.byType(Switch).at(1));
+    await tester.tap(find.byType(Switch).at(2));
     await tester.pumpAndSettle();
     await tester.tap(publish);
     await tester.pumpAndSettle();
@@ -1083,7 +1113,7 @@ void main() {
     // 장애는 내용을 눌러 상세를 본다.
     await tester.tap(find.widgetWithText(AdminMenuItem, '대시보드'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ChoiceChip, '시스템 상태'));
+    await tester.tap(find.widgetWithText(ChoiceChip, '시스템'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('잔고 불일치 감지'));
     await tester.pumpAndSettle();

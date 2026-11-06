@@ -1,12 +1,11 @@
 part of 'dashboard_page.dart';
 
 class _LiveData {
-  const _LiveData(this.summary, this.issues, this.symbols, this.strategies, this.system);
+  const _LiveData(this.summary, this.issues, this.symbols, this.strategies);
   final Map<String, dynamic> summary;
   final List<Map<String, dynamic>> issues;
   final List<Map<String, dynamic>> symbols;
   final List<Map<String, dynamic>> strategies;
-  final Map<String, dynamic> system;
 }
 
 Future<_LiveData> _loadLive() async {
@@ -16,14 +15,12 @@ Future<_LiveData> _loadLive() async {
     liveItems('/dashboard/issues?pageSize=100'),
     liveItems('/dashboard/jobs-by-symbol'),
     liveItems('/dashboard/jobs-by-strategy'),
-    liveGet('/system/status'),
   ]);
   return _LiveData(
     rows[0] as Map<String, dynamic>,
     rows[1] as List<Map<String, dynamic>>,
     rows[2] as List<Map<String, dynamic>>,
     rows[3] as List<Map<String, dynamic>>,
-    rows[4] as Map<String, dynamic>,
   );
 }
 
@@ -67,11 +64,9 @@ class LiveDashboardPage extends StatelessWidget {
           ],
         );
         return AdminPage(
-          title: '대시보드',
-          description: '시스템, 회원, 매매 현황을 나눠서 봅니다.',
+          title: '회원 현황',
+          description: '회원과 매매 현황을 봅니다. 서버 상태는 시스템 탭에서 봅니다.',
           children: [
-            const _DashHead('시스템', Icons.dns_outlined),
-            _LiveSystemMonitor(d.system),
             const _DashHead('회원', Icons.people_outline),
             Wrap(
               spacing: 8,
@@ -182,61 +177,6 @@ class _DashColumns extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _LiveSystemMonitor extends StatelessWidget {
-  const _LiveSystemMonitor(this.status);
-
-  final Map<String, dynamic> status;
-
-  @override
-  Widget build(BuildContext context) {
-    final components = (status['components'] as List? ?? const []).cast<Map<String, dynamic>>();
-    return Panel(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 12,
-            runSpacing: 4,
-            children: [
-              const Text('시스템 모니터링 (임시 기준)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-              TextButton(onPressed: () => systemPageRequest.value++, child: const Text('시스템 상태 보기')),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 24,
-            runSpacing: 10,
-            children: [
-              for (final c in components)
-                Builder(
-                  builder: (context) {
-                    final level = liveLevel(c['level']);
-                    return Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(systemLevelIcon(level), size: 18, color: systemLevelColor(level)),
-                        const SizedBox(width: 6),
-                        Text(
-                          c['name'] as String? ?? '-',
-                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(level.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                      ],
-                    );
-                  },
-                ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }

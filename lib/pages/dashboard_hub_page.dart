@@ -7,14 +7,14 @@ import 'live_system_page.dart';
 import 'system_page.dart';
 
 enum _Tab {
-  dashboard('대시보드'),
-  system('시스템 상태');
+  dashboard('회원 현황'),
+  system('시스템');
 
   const _Tab(this.label);
   final String label;
 }
 
-/// 대시보드 메뉴. 회사 전체 현황과 시스템 상태를 한곳에서 본다.
+/// 대시보드 메뉴. 회원 현황과 시스템을 나눠서 본다.
 class DashboardHubPage extends StatefulWidget {
   const DashboardHubPage({super.key});
 

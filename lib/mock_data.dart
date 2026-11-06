@@ -123,6 +123,8 @@ enum NoticeStatus {
 }
 
 /// 공지. 관리자 화면에서 고칠 수 있어 일부 필드는 바뀐다.
+const noticeCategories = ['공지', '점검', '업데이트', '이벤트'];
+
 class Notice {
   Notice(
     this.id,
@@ -135,6 +137,10 @@ class Notice {
     this.status, {
     this.publishAt,
     this.updatedAt,
+    this.category = '공지',
+    this.grades = const {},
+    this.popup = false,
+    this.endAt,
   });
 
   final int id;
@@ -147,6 +153,12 @@ class Notice {
   NoticeStatus status;
   DateTime? publishAt; // 예약 게시 시각
   DateTime? updatedAt;
+  String category;
+  Set<String> grades; // 볼 수 있는 회원등급. 비어 있으면 전체
+  bool popup; // 앱을 열 때 팝업으로 보여 준다
+  DateTime? endAt; // 게시 종료 시각. 비어 있으면 내릴 때까지 게시
+
+  String get audience => grades.isEmpty ? '전체' : grades.join('·');
 }
 
 final mockMembers = _seedMembers();
@@ -330,6 +342,7 @@ List<Notice> _seedNotices() => [
     864,
     false,
     NoticeStatus.published,
+    category: '점검',
   ),
   Notice(
     39,
@@ -340,6 +353,7 @@ List<Notice> _seedNotices() => [
     701,
     false,
     NoticeStatus.published,
+    category: '업데이트',
   ),
   Notice(
     38,
@@ -361,6 +375,7 @@ List<Notice> _seedNotices() => [
     false,
     NoticeStatus.scheduled,
     publishAt: DateTime(2026, 11, 10, 9, 0),
+    category: '점검',
   ),
 ];
 
