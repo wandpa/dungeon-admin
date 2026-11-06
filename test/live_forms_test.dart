@@ -487,6 +487,15 @@ void main() {
     expect(find.text('PAPER1'), findsNothing);
     expect(find.text('ALERT1'), findsNothing);
 
+    // 다른 탭을 다녀와도 체크가 남는다.
+    await tester.tap(find.widgetWithText(ChoiceChip, '거래'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '워커'));
+    await tester.pumpAndSettle();
+    expect(find.text('REAL1'), findsOneWidget);
+    expect(find.text('PAPER1'), findsNothing);
+    expect(find.text('ALERT1'), findsNothing);
+
     // 알람을 함께 고른다.
     await tester.tap(find.text('알람 1'));
     await tester.pumpAndSettle();

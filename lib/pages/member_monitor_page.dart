@@ -69,6 +69,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
   _MonitorTab _tab = _MonitorTab.workers;
   String? _accountName; // null 이면 전체 계좌. 모든 탭에 함께 적용한다.
   _OrderFilter _orderFilter = _OrderFilter.all;
+  final _workerKinds = {'real', 'paper', 'alert'}; // 체크한 워커 종류. 탭을 오가도 유지한다
   String _logQuery = '';
   _LogPeriod _logPeriod = _LogPeriod.all;
   DateTimeRange? _logRange; // 날짜 선택 기간
@@ -426,6 +427,8 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
       onAll: useLiveData.value ? _showAllMembers : null,
     );
     final workerPane = _WorkersPane(
+      kinds: _workerKinds,
+      onKindToggled: (k) => setState(() => _workerKinds.contains(k) ? _workerKinds.remove(k) : _workerKinds.add(k)),
       member: member,
       workers: workers,
       selected: worker,
@@ -1161,29 +1164,26 @@ class _Pnl extends StatelessWidget {
 }
 
 /// 워커 목록. 한 줄씩 표처럼 보여 주고, 누르면 아래 패널이 그 워커로 바뀐다.
-class _WorkersPane extends StatefulWidget {
+class _WorkersPane extends StatelessWidget {
   const _WorkersPane({
     required this.member,
     required this.workers,
     required this.selected,
     required this.onSelect,
     required this.onSelectAll,
+    required this.kinds,
+    required this.onKindToggled,
   });
 
+  final Set<String> kinds; // 체크한 워커 종류
+  final ValueChanged<String> onKindToggled;
   final Member? member;
   final List<MemberWorker> workers;
   final MemberWorker? selected;
   final ValueChanged<MemberWorker> onSelect;
   final VoidCallback onSelectAll;
 
-  @override
-  State<_WorkersPane> createState() => _WorkersPaneState();
-}
-
-class _WorkersPaneState extends State<_WorkersPane> {
   static const _kinds = [('real', '실전'), ('paper', '모의'), ('alert', '알람')];
-
-  final _checked = {for (final (key, _) in _kinds) key}; // 체크한 워커 종류
 
   /// 실전과 모의는 합치지 않는다. 값은 실현+평가 손익이고, 통화가 다르면 통화별로 보여 준다.
   String _totals(List<MemberWorker> workers, {required bool paper}) {
@@ -1207,19 +1207,19 @@ class _WorkersPaneState extends State<_WorkersPane> {
       children: [
         for (final (key, label) in _kinds)
           InkWell(
-            onTap: () => setState(() => _checked.contains(key) ? _checked.remove(key) : _checked.add(key)),
+            onTap: () => onKindToggled(key),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 IgnorePointer(
                   child: Checkbox(
-                    value: _checked.contains(key),
+                    value: kinds.contains(key),
                     visualDensity: VisualDensity.compact,
                     onChanged: (_) {},
                   ),
                 ),
                 Text(
-                  '$label ${widget.workers.where((w) => w.kindKey == key).length}',
+                  '$label ${workers.where((w) => w.kindKey == key).length}',
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
               ],
@@ -1231,11 +1231,9 @@ class _WorkersPaneState extends State<_WorkersPane> {
 
   @override
   Widget build(BuildContext context) {
-    final member = widget.member;
-    final selected = widget.selected;
-    final all = widget.workers;
+    final all = this.workers;
     final live = useLiveData.value && all.isNotEmpty;
-    final workers = live ? [for (final w in all) if (_checked.contains(w.kindKey)) w] : all;
+    final workers = live ? [for (final w in all) if (kinds.contains(w.kindKey)) w] : all;
     final running = workers.where((w) => w.status == WorkerStatus.running).length;
     final real = _totals(workers, paper: false);
     final paper = _totals(workers, paper: true);
@@ -1245,8 +1243,8 @@ class _WorkersPaneState extends State<_WorkersPane> {
       ...workers.where((w) => w.status != WorkerStatus.error),
     ];
     return _Pane(
-      title: member == null ? '워커' : '${member.username} 워커',
-      onTitleTap: widget.onSelectAll,
+      title: member == null ? '워커' : '${member!.username} 워커',
+      onTitleTap: onSelectAll,
       titleActive: selected == null,
       trailing: workers.isEmpty
           ? null
@@ -1265,7 +1263,7 @@ class _WorkersPaneState extends State<_WorkersPane> {
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
                     children: [
                       for (final w in sorted)
-                        _WorkerCard(w, selected: w.id == selected?.id, onTap: () => widget.onSelect(w)),
+                        _WorkerCard(w, selected: w.id == selected?.id, onTap: () => onSelect(w)),
                     ],
                   ),
           ),
