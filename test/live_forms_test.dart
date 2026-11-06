@@ -11,6 +11,7 @@ import 'package:dungeon_admin/pages/live_workers_table.dart';
 import 'package:dungeon_admin/pages/member_detail_dialog.dart';
 import 'package:dungeon_admin/pages/member_monitor_page.dart';
 import 'package:dungeon_admin/pages/push_page.dart' show pushTargetRequest;
+import 'package:dungeon_admin/view_store.dart';
 import 'package:dungeon_admin/widgets/admin_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -469,6 +470,7 @@ void main() {
         return http.Response.bytes(utf8.encode(jsonEncode(body(request.url.path))), 200);
       }),
     );
+    writeView('worker-kinds/admin', 'real,paper,alert');
     await refreshLiveMembers();
     memberMonitorRequest.value = MonitorRequest(liveMembers.single.id);
     await tester.pumpWidget(const MaterialApp(home: Scaffold(body: MemberMonitorPage())));
@@ -496,6 +498,15 @@ void main() {
     expect(find.text('PAPER1'), findsNothing);
     expect(find.text('ALERT1'), findsNothing);
 
+    // 화면을 나갔다가 다시 들어와도 그대로다.
+    await tester.pumpWidget(const MaterialApp(home: Scaffold()));
+    memberMonitorRequest.value = MonitorRequest(liveMembers.single.id);
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: MemberMonitorPage())));
+    await tester.pumpAndSettle();
+    expect(find.text('REAL1'), findsOneWidget);
+    expect(find.text('PAPER1'), findsNothing);
+    expect(find.text('ALERT1'), findsNothing);
+
     // 알람을 함께 고른다.
     await tester.tap(find.text('알람 1'));
     await tester.pumpAndSettle();
@@ -505,10 +516,12 @@ void main() {
     await tester.tap(find.text('실전 1'));
     await tester.tap(find.text('알람 1'));
     await tester.pumpAndSettle();
-    expect(find.text('선택한 종류의 워커가 없습니다.'), findsOneWidget);
-    await tester.tap(find.text('모의 1'));
+    expect(find.text('체크한 종류의 워커가 없습니다. 이 회원의 워커는 실전 1개, 모의 1개, 알람 1개입니다.'), findsOneWidget);
+    await tester.tap(find.widgetWithText(OutlinedButton, '모두 보기'));
     await tester.pumpAndSettle();
+    expect(find.text('REAL1'), findsOneWidget);
     expect(find.text('PAPER1'), findsOneWidget);
+    expect(find.text('ALERT1'), findsOneWidget);
   });
 
   testWidgets('회원 목록: 전략을 찾고 줄을 누르면 설정이 나온다', (tester) async {

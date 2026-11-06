@@ -8,6 +8,7 @@ import '../mock_data.dart';
 import '../mock_symbols.dart';
 import '../mock_workers.dart';
 import '../theme.dart';
+import '../view_store.dart';
 import '../widgets/admin_page.dart';
 import 'consultations_page.dart' show consultStatusColor;
 import 'live_lists.dart';
@@ -50,6 +51,15 @@ enum _LogPeriod {
 }
 
 /// 상담용 화면. 회원을 고르면 그 사용자가 앱에서 보는 워커·잡·이력과 고객 로그를 함께 본다.
+/// 체크한 워커 종류는 관리자별로 남긴다. 바꾸기 전까지 화면을 나갔다 와도, 새로고침해도 그대로다.
+String get _workerKindsKey => 'worker-kinds/${signedInAdmin.value?.loginId ?? ''}';
+
+Set<String> _savedWorkerKinds() {
+  const all = {'real', 'paper', 'alert'};
+  final saved = readView(_workerKindsKey);
+  return saved == null ? {...all} : saved.split(',').where(all.contains).toSet();
+}
+
 class MemberMonitorPage extends StatefulWidget {
   const MemberMonitorPage({super.key, this.onExit});
 
@@ -69,7 +79,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
   _MonitorTab _tab = _MonitorTab.workers;
   String? _accountName; // null 이면 전체 계좌. 모든 탭에 함께 적용한다.
   _OrderFilter _orderFilter = _OrderFilter.all;
-  final _workerKinds = {'real', 'paper', 'alert'}; // 체크한 워커 종류. 탭을 오가도 유지한다
+  late final _workerKinds = _savedWorkerKinds(); // 체크한 워커 종류
   String _logQuery = '';
   _LogPeriod _logPeriod = _LogPeriod.all;
   DateTimeRange? _logRange; // 날짜 선택 기간
@@ -428,7 +438,14 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
     );
     final workerPane = _WorkersPane(
       kinds: _workerKinds,
-      onKindToggled: (k) => setState(() => _workerKinds.contains(k) ? _workerKinds.remove(k) : _workerKinds.add(k)),
+      onKindToggled: (k) => setState(() {
+        _workerKinds.contains(k) ? _workerKinds.remove(k) : _workerKinds.add(k);
+        writeView(_workerKindsKey, _workerKinds.join(','));
+      }),
+      onShowAllKinds: () => setState(() {
+        _workerKinds.addAll(_WorkersPane._kinds.map((k) => k.$1));
+        writeView(_workerKindsKey, _workerKinds.join(','));
+      }),
       member: member,
       workers: workers,
       selected: worker,
@@ -1173,10 +1190,12 @@ class _WorkersPane extends StatelessWidget {
     required this.onSelectAll,
     required this.kinds,
     required this.onKindToggled,
+    required this.onShowAllKinds,
   });
 
   final Set<String> kinds; // 체크한 워커 종류
   final ValueChanged<String> onKindToggled;
+  final VoidCallback onShowAllKinds;
   final Member? member;
   final List<MemberWorker> workers;
   final MemberWorker? selected;
@@ -1196,6 +1215,28 @@ class _WorkersPane extends StatelessWidget {
       }
     }
     return sums.entries.map((e) => _signedMoney(e.value, e.key)).join(' · ');
+  }
+
+  /// 체크 때문에 워커가 다 가려졌을 때의 안내. 회원을 바꾸다 비어 보이면 이유를 알 수 있어야 한다.
+  Widget _hiddenNotice() {
+    final hidden = [
+      for (final (key, label) in _kinds)
+        if (!kinds.contains(key) && workers.any((w) => w.kindKey == key))
+          '$label ${workers.where((w) => w.kindKey == key).length}개',
+    ];
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '체크한 종류의 워커가 없습니다. 이 회원의 워커는 ${hidden.join(', ')}입니다.',
+            style: const TextStyle(color: AppColors.textTertiary),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton(onPressed: onShowAllKinds, child: const Text('모두 보기')),
+        ],
+      ),
+    );
   }
 
   /// 종류별 체크박스. 여러 개를 함께 고를 수 있다.
@@ -1258,7 +1299,7 @@ class _WorkersPane extends StatelessWidget {
           if (live) _kindFilter(),
           Expanded(
             child: workers.isEmpty
-                ? _Empty(all.isEmpty ? '등록한 워커가 없습니다.' : '선택한 종류의 워커가 없습니다.')
+                ? (all.isEmpty ? const _Empty('등록한 워커가 없습니다.') : _hiddenNotice())
                 : ListView(
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
                     children: [
