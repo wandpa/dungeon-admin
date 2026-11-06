@@ -197,6 +197,27 @@ void main() {
     expect(saved.popup, isTrue);
   });
 
+  testWidgets('로그인: 계정 버튼은 아이디만 채우고 비밀번호를 넣어야 들어간다', (tester) async {
+    signOut();
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(const AdminApp());
+    await tester.tap(find.widgetWithText(ActionChip, '상담 직원'));
+    await tester.pumpAndSettle();
+    final password = tester.widget<TextField>(find.widgetWithText(TextField, '비밀번호'));
+    expect(password.controller!.text, isEmpty);
+
+    await tester.tap(find.widgetWithText(FilledButton, '로그인'));
+    await tester.pumpAndSettle();
+    expect(find.text('아이디 또는 비밀번호가 맞지 않습니다.'), findsOneWidget);
+
+    await tester.enterText(find.widgetWithText(TextField, '비밀번호'), '11111111');
+    await tester.tap(find.widgetWithText(FilledButton, '로그인'));
+    await tester.pumpAndSettle();
+    expect(signedInAdmin.value?.role, AdminRole.consultant);
+  });
+
   testWidgets('좁은 화면: 위쪽 메뉴를 밀어서 이동한다', (tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1;
@@ -1275,6 +1296,8 @@ void main() {
     // 상담 직원: 조회만 된다.
     await tester.tap(find.text('상담 직원'));
     await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '비밀번호'), samplePassword);
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, '로그인'));
     await tester.pumpAndSettle();
     expect(find.textContaining('박상담'), findsOneWidget);
@@ -1311,6 +1334,8 @@ void main() {
 
     // 최고 관리자: 활동 기록에 상담 직원의 접속이 남고, 계정을 관리한다.
     await tester.tap(find.text('최고 관리자'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '비밀번호'), samplePassword);
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, '로그인'));
     await tester.pumpAndSettle();

@@ -74,7 +74,8 @@ class AdminActivity {
 }
 
 /// 샘플 계정의 공통 비밀번호.
-const samplePassword = '1234';
+/// 로컬 확인용 로그인 비밀번호. 실제 인증을 붙이기 전까지만 쓴다.
+const samplePassword = '11111111';
 
 final mockAdmins = _seedAdmins();
 

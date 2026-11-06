@@ -53,6 +53,9 @@ String? _token;
 String? _tokenFor;
 
 /// 지금 로그인한 샘플 계정으로 API 토큰을 받는다.
+/// API 샘플 계정의 비밀번호. 화면 로그인 비밀번호와 따로 둔다.
+const _apiPassword = '1234';
+
 Future<void> _signIn() async {
   final loginId = signedInAdmin.value?.loginId ?? 'admin';
   final http.Response res;
@@ -60,7 +63,7 @@ Future<void> _signIn() async {
     res = await _client.post(
       Uri.parse('$_baseUrl/auth/login'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'loginId': loginId, 'password': samplePassword}),
+      body: jsonEncode({'loginId': loginId, 'password': _apiPassword}),
     );
   } on http.ClientException {
     throw const LiveApiException('API 서버에 연결하지 못했습니다.');

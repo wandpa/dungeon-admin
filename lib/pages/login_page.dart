@@ -29,8 +29,8 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _fill(AdminUser a) => setState(() {
-    _id.text = a.loginId;
-    _password.text = samplePassword;
+    _id.text = a.loginId; // 비밀번호는 직접 입력한다
+    _password.clear();
     _error = null;
   });
 
@@ -73,10 +73,7 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 12),
                   FilledButton(onPressed: _submit, child: const Text('로그인')),
                   const SizedBox(height: 16),
-                  const Text(
-                    '샘플 계정으로 권한별 화면을 확인할 수 있습니다.',
-                    style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
-                  ),
+                  const Text('계정을 고르고 비밀번호를 입력하세요.', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
                   const SizedBox(height: 6),
                   Wrap(
                     spacing: 6,
