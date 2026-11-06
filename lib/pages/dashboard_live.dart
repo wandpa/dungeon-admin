@@ -44,18 +44,41 @@ class LiveDashboardPage extends StatelessWidget {
         int n(String key) => s[key] as int? ?? 0;
         final openRate = s['latestPushOpenRate'] as num?;
         final recent = (s['recentMembers'] as List? ?? const []).cast<Map<String, dynamic>>();
+        Widget issues = _IssuePanel(
+          live: [
+            for (final r in d.issues)
+              (
+                id: liveIntId(r['memberId'] as String),
+                username: r['username'] as String? ?? '-',
+                issues: [for (final i in (r['issues'] as List).cast<Map<String, dynamic>>()) liveIssue(i)],
+              ),
+          ],
+        );
+        Widget members = AdminTable(
+          columns: const ['최근 가입 회원', '이메일', '가입일'],
+          emptyText: '최근 가입 회원이 없습니다.',
+          rows: [
+            for (final m in recent)
+              [
+                Text(m['username'] as String? ?? '-', style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(m['maskedEmail'] as String? ?? '-'),
+                Text(formatDateTime(liveTime(m['joinedAt'])!)),
+              ],
+          ],
+        );
         return AdminPage(
           title: '대시보드',
-          description: '오늘의 던전 현황과 회사 전체 전략·잡·주문을 한눈에 봅니다.',
+          description: '시스템, 회원, 매매 현황을 나눠서 봅니다.',
           children: [
+            const _DashHead('시스템', Icons.dns_outlined),
             _LiveSystemMonitor(d.system),
+            const _DashHead('회원', Icons.people_outline),
             Wrap(
-              spacing: 16,
-              runSpacing: 16,
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 _StatTile(label: '전체 회원', value: formatNumber(n('totalMembers')), icon: Icons.people_outline),
                 _StatTile(label: '신규 가입 (어제·오늘)', value: '${n('newMembers')}', icon: Icons.person_add_alt),
-                _StatTile(label: '오늘 발생 신호', value: '${n('todaySignals')}', icon: Icons.show_chart),
                 _StatTile(
                   label: '최근 푸시 열람률',
                   value: openRate == null ? '-' : '${openRate.round()}%',
@@ -63,20 +86,13 @@ class LiveDashboardPage extends StatelessWidget {
                 ),
               ],
             ),
-            _IssuePanel(
-              live: [
-                for (final r in d.issues)
-                  (
-                    id: liveIntId(r['memberId'] as String),
-                    username: r['username'] as String? ?? '-',
-                    issues: [for (final i in (r['issues'] as List).cast<Map<String, dynamic>>()) liveIssue(i)],
-                  ),
-              ],
-            ),
+            _DashColumns(left: issues, right: members),
+            const _DashHead('매매', Icons.show_chart),
             Wrap(
-              spacing: 16,
-              runSpacing: 16,
+              spacing: 8,
+              runSpacing: 8,
               children: [
+                _StatTile(label: '오늘 발생 신호', value: '${n('todaySignals')}', icon: Icons.show_chart),
                 _StatTile(
                   label: '전체 전략',
                   value: formatNumber(n('strategyCount')),
@@ -104,50 +120,65 @@ class LiveDashboardPage extends StatelessWidget {
               ],
             ),
             const _LiveOrderTotals(),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final symbols = _BarPanel(title: '종목별 현재 잡', rows: _bars(d.symbols));
-                final strategies = _BarPanel(title: '전략별 현재 잡', rows: _bars(d.strategies));
-                if (constraints.maxWidth < 760) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [symbols, const SizedBox(height: 16), strategies],
-                  );
-                }
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(flex: 3, child: symbols),
-                    const SizedBox(width: 16),
-                    Expanded(flex: 2, child: strategies),
-                  ],
-                );
-              },
+            _DashColumns(
+              left: _BarPanel(title: '종목별 현재 잡', rows: _bars(d.symbols)),
+              right: _BarPanel(title: '전략별 현재 잡', rows: _bars(d.strategies)),
             ),
-            Panel(
-              title: '최근 가입 회원',
-              child: Column(
-                children: [
-                  for (final m in recent)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const CircleAvatar(
-                        backgroundColor: AppColors.surfaceSoft,
-                        child: Icon(Icons.person, color: AppColors.textTertiary),
-                      ),
-                      title: Text(m['username'] as String? ?? '-'),
-                      subtitle: Text(
-                        m['maskedEmail'] as String? ?? '-',
-                        style: const TextStyle(color: AppColors.textTertiary),
-                      ),
-                      trailing: Text(
-                        formatDateTime(liveTime(m['joinedAt'])!),
-                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
-                      ),
-                    ),
-                ],
-              ),
-            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// 대시보드 묶음 제목.
+class _DashHead extends StatelessWidget {
+  const _DashHead(this.title, this.icon);
+
+  final String title;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.brand),
+          const SizedBox(width: 6),
+          Text(
+            title,
+            style: const TextStyle(color: AppColors.brand, fontSize: 15, fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 두 칸 나란히. 좁으면 위아래로 쌓는다.
+class _DashColumns extends StatelessWidget {
+  const _DashColumns({required this.left, required this.right});
+
+  final Widget left;
+  final Widget right;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 760) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [left, const SizedBox(height: 8), right],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: left),
+            const SizedBox(width: 8),
+            Expanded(child: right),
           ],
         );
       },

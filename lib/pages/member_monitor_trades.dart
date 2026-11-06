@@ -183,6 +183,11 @@ class _TradesPaneState extends State<_TradesPane> {
                         '계좌 ${o.accountName} · ${o.jobName}',
                         style: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
                       ),
+                      if (o.buyPrice != null && o.sellPrice != null)
+                        Text(
+                          '매수가 ${_appPrice(o.buyPrice!, o.currency)} · 매도가 ${_appPrice(o.sellPrice!, o.currency)}',
+                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        ),
                       if (o.message != null)
                         Text(o.message!, style: const TextStyle(color: AppColors.up, fontSize: 12)),
                     ],
@@ -197,6 +202,11 @@ class _TradesPaneState extends State<_TradesPane> {
                           : '${_num(o.filledQty)}${o.qtyUnit} ${_appPrice(o.avgFillPrice!, o.currency)}',
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
                     ),
+                    if (o.realizedPnl != null)
+                      Text(
+                        '손익 ${_appSigned(o.realizedPnl!, o.currency)}',
+                        style: TextStyle(color: _pnlColor(o.realizedPnl!), fontSize: 14, fontWeight: FontWeight.w700),
+                      ),
                     Text(state, style: TextStyle(color: stateColor, fontSize: 13)),
                   ],
                 ),

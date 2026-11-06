@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
+import '../widgets/admin_page.dart';
 
 /// 테스트 DB 값을 받아 그린다. 실패하면 샘플로 채우지 않고 오류와 다시 시도 버튼을 보여 준다.
 class LiveLoader<T> extends StatefulWidget {
@@ -16,7 +17,22 @@ class LiveLoader<T> extends StatefulWidget {
 }
 
 class _LiveLoaderState<T> extends State<LiveLoader<T>> {
-  late Future<T> _future = widget.load();
+  late Future<T> _future = _load();
+
+  Future<T> _load() {
+    adminStatus.value = '조회 중입니다.';
+    return widget.load().then(
+      (data) {
+        final total = data is Map ? data['total'] : null;
+        adminStatus.value = total == null ? '조회가 완료되었습니다.' : '조회가 완료되었습니다($total건).';
+        return data;
+      },
+      onError: (Object e, StackTrace st) {
+        adminStatus.value = '조회하지 못했습니다.';
+        Error.throwWithStackTrace(e, st);
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,13 +48,16 @@ class _LiveLoaderState<T> extends State<LiveLoader<T>> {
               children: [
                 Text('${snapshot.error}', style: const TextStyle(color: AppColors.up)),
                 const SizedBox(height: 8),
-                OutlinedButton(onPressed: () => setState(() => _future = widget.load()), child: const Text('다시 시도')),
+                OutlinedButton(onPressed: () => setState(() => _future = _load()), child: const Text('다시 시도')),
               ],
             ),
           );
         }
         if (!snapshot.hasData) {
-          return const Padding(padding: EdgeInsets.all(24), child: LinearProgressIndicator());
+          return const Padding(
+            padding: EdgeInsets.all(24),
+            child: Text('조회 중입니다.', style: TextStyle(color: AppColors.textTertiary)),
+          );
         }
         return widget.builder(context, snapshot.requireData);
       },

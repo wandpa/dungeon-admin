@@ -270,11 +270,13 @@ Future<void> loadLiveMember(Member m) async {
     workers.addAll(await Future.wait(batch.map((w) => _worker(base, w, jobNames))));
   }
 
+  final exits = await _exitCycles(base, orders);
+
   putLiveAccounts(
     m.id,
     accounts: [for (final a in accountRows) _account(a, balanceRows)],
     positions: [for (final p in positions) _position(p)],
-    orders: [for (final o in orders) _order(o, jobNames)],
+    orders: [for (final o in orders) _order(o, jobNames, exits[o])],
     notifications: [for (final n in notifications) _notification(n)],
     state: _notificationState(state),
   );
@@ -283,6 +285,44 @@ Future<void> loadLiveMember(Member m) async {
   putLiveIssues(m.id, [for (final i in issues.cast<Map<String, dynamic>>()) _issue(i)]);
   _loaded.add(m.id);
   _loadedAt[m.id] = DateTime.now();
+}
+
+/// 주문 목록에는 손익이 없어 회차에서 찾는다. 회차 방향의 반대 주문이 그 회차 안에 있으면 청산이다.
+/// 한 회차를 여러 번 나눠 청산하면 회차 값이 합계이므로 마지막 주문에만 붙인다.
+Future<Map<Map<String, dynamic>, Map<String, dynamic>>> _exitCycles(
+  String base,
+  List<Map<String, dynamic>> orders,
+) async {
+  final filled = [
+    for (final o in orders)
+      if ((_double(o['filledQty']) ?? 0) > 0 && o['jobId'] != null) o,
+  ];
+  final jobIds = {for (final o in filled) o['jobId'] as String}.toList();
+  final cycles = <String, List<Map<String, dynamic>>>{};
+  for (var i = 0; i < jobIds.length; i += _batchSize) {
+    final batch = jobIds.skip(i).take(_batchSize);
+    await Future.wait(batch.map((id) async => cycles[id] = await _items('$base/jobs/$id/cycles')));
+  }
+  final exits = <Map<String, dynamic>, Map<String, dynamic>>{};
+  final used = <Map<String, dynamic>>{};
+  bool isExit(Map<String, dynamic> o, Map<String, dynamic> c) {
+    final opened = _time(c['openedAt']), closed = _time(c['closedAt']), at = _time(o['orderedAt']);
+    if (opened == null || closed == null || at == null) return false;
+    final exitSide = switch (c['side']) {
+      'long' => 'sell',
+      'short' => 'buy',
+      _ => null,
+    };
+    return o['side'] == exitSide && !at.isBefore(opened) && !at.isAfter(closed);
+  }
+
+  for (final o in filled) {
+    final cycle = cycles[o['jobId']]!.where((c) => !used.contains(c) && isExit(o, c)).firstOrNull;
+    if (cycle == null) continue;
+    used.add(cycle);
+    exits[o] = cycle;
+  }
+  return exits;
 }
 
 Future<MemberWorker> _worker(String base, Map<String, dynamic> w, Map<String, String> jobNames) async {
@@ -559,7 +599,7 @@ AccountPosition _position(Map<String, dynamic> p) {
   );
 }
 
-AccountOrder _order(Map<String, dynamic> o, Map<String, String> jobNames) {
+AccountOrder _order(Map<String, dynamic> o, Map<String, String> jobNames, Map<String, dynamic>? exit) {
   final workerId = o['workerId'] as String?;
   return AccountOrder(
     at: _time(o['orderedAt'])!,
@@ -577,15 +617,44 @@ AccountOrder _order(Map<String, dynamic> o, Map<String, String> jobNames) {
     isPaper: o['isPaper'] as bool? ?? false,
     avgFillPrice: _double(o['avgFillPrice']),
     message: o['message'] as String?,
+    buyPrice: exit == null ? null : _double(exit['avgBuyPrice']),
+    sellPrice: exit == null ? null : _double(exit['avgSellPrice']),
+    realizedPnl: exit == null ? null : _double(exit['realizedPnl']),
   );
 }
+
+final _orderNumber = RegExp(r'^[A-Za-z0-9]*\*{4}\d{4}$');
+final _eventCode = RegExp(r'^[a-z]+(_[a-z]+)*$');
+
+/// 서버 로그는 메시지가 없으면 이벤트 코드를, 주문 접수는 가린 주문번호만 준다. 앱 이력과 같은 말로 바꾼다.
+String liveLogText(String text) => switch (text) {
+  'job_started' => '잡 감시 시작',
+  'job_closed_complete' || 'job_closed_by_user' || 'close_keep_position' => '잡 감시 종료',
+  'alert_fired' => '신호 발생',
+  'alert_signal' => '알람 신호',
+  '익절' || '손절' => '신호 발생 · $text',
+  'order_submitted' => '주문 전송',
+  'order_accepted' => '주문 접수',
+  'order_rejected' => '주문 거부',
+  'order_cancelled' => '주문 취소',
+  'fill' => '체결',
+  'fill_dropped' => '체결 처리 실패',
+  'balance_updated' => '잔고 반영',
+  'cycle_closed' => '사이클 종료',
+  'cycle_canceled' => '사이클 취소',
+  'sold_elsewhere' => '타 매체 매도됨',
+  'engine_detach_failed' => '엔진 해제 실패',
+  _ when _orderNumber.hasMatch(text) => '주문 접수 · 주문번호 $text',
+  _ when _eventCode.hasMatch(text) => '기타 이력', // 영어 코드를 그대로 보이지 않는다
+  _ => text,
+};
 
 CustomerLog _log(Map<String, dynamic> l, Map<String, String> jobNames) {
   final workerId = l['workerId'] as String?;
   return CustomerLog(
     _time(l['at'])!,
     CustomerLogCategory.values.asNameMap()[l['category']] ?? CustomerLogCategory.worker,
-    l['text'] as String? ?? '',
+    liveLogText(l['text'] as String? ?? ''),
     workerId: workerId == null ? null : liveIntId(workerId),
     jobName: jobNames[l['jobId']] ?? l['jobName'] as String?,
   );

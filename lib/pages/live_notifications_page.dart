@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../live_api.dart';
-import '../mock_data.dart' show formatDateTime;
+import '../mock_admin.dart';
+import '../mock_data.dart';
 import '../theme.dart';
 import '../widgets/admin_page.dart';
 import 'live_view.dart';
+import 'push_page.dart' show pushTargetRequest;
 
 const _pageSize = 20;
 
@@ -20,11 +22,92 @@ class _LiveNotificationsPageState extends State<LiveNotificationsPage> {
   final _debounce = SearchDebounce();
   String _query = '';
   int _page = 1;
+  final _title = TextEditingController();
+  final _body = TextEditingController();
+  int? _targetId; // 비어 있으면 전체. 회원 목록을 다시 받아도 이어지게 번호로 둔다
+
+  @override
+  void initState() {
+    super.initState();
+    // 회원 상세의 푸시 보내기로 왔으면 그 회원을 받는 사람으로 골라 둔다.
+    _targetId = pushTargetRequest.value;
+    pushTargetRequest.value = null;
+    ensureLiveMembers().then((_) {
+      if (mounted) setState(() {});
+    }, onError: (_) {}); // 목록을 못 받으면 아래 표가 오류를 보여 준다
+  }
 
   @override
   void dispose() {
     _debounce.dispose();
+    _title.dispose();
+    _body.dispose();
     super.dispose();
+  }
+
+  Widget _composer() {
+    final members = [
+      for (final m in currentMembers)
+        if (m.status != MemberStatus.pending) m,
+    ];
+    final target = members.where((m) => m.id == _targetId).firstOrNull;
+    final ready = _title.text.trim().isNotEmpty && _body.text.trim().isNotEmpty;
+    return Panel(
+      title: '새 알림 보내기',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const SizedBox(
+                width: 64,
+                child: Text('받는 사람', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+              SizedBox(
+                width: 280,
+                child: DropdownButtonFormField<int?>(
+                  key: ValueKey(target?.id),
+                  initialValue: target?.id,
+                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('전체 회원')),
+                    for (final m in members) DropdownMenuItem(value: m.id, child: Text(m.username)),
+                  ],
+                  onChanged: (id) => setState(() => _targetId = id),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _title,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(hintText: '제목'),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _body,
+            onChanged: (_) => setState(() {}),
+            minLines: 3,
+            maxLines: 5,
+            decoration: const InputDecoration(hintText: '내용'),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Expanded(
+                child: Text('발송 API 연결 전입니다. 지금은 보내지지 않습니다.', style: TextStyle(color: AppColors.warning, fontSize: 12)),
+              ),
+              FilledButton.icon(
+                onPressed: ready ? () => showNotConnected(context) : null,
+                icon: const Icon(Icons.send, size: 18),
+                label: Text('${target?.username ?? '전체 회원'}에게 보내기'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Future<Map<String, dynamic>> _load() => liveNotifications(_query, page: _page, pageSize: _pageSize);
@@ -33,8 +116,9 @@ class _LiveNotificationsPageState extends State<LiveNotificationsPage> {
   Widget build(BuildContext context) {
     return AdminPage(
       title: '푸시 알림',
-      description: '회원이 받은 알림을 조회합니다. 테스트 DB 에서는 발송할 수 없습니다.',
+      description: '회원에게 알림을 보내고, 회원이 받은 알림을 조회합니다.',
       children: [
+        if (can(AdminPermission.sendPush)) _composer(),
         FilterBar(
           hint: '아이디·내용 검색',
           onSearchChanged: (v) => _debounce(() {

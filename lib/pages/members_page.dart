@@ -11,7 +11,9 @@ import 'member_detail_dialog.dart';
 import 'member_monitor_page.dart' show MonitorRequest, memberMonitorRequest;
 
 class MembersPage extends StatefulWidget {
-  const MembersPage({super.key});
+  const MembersPage({super.key, this.initialMemberId});
+
+  final int? initialMemberId; // 모니터링에서 돌아올 때 보던 회원
 
   @override
   State<MembersPage> createState() => _MembersPageState();
@@ -25,6 +27,8 @@ class _MembersPageState extends State<MembersPage> {
   bool _blockedOnly = false; // 접속 차단은 상태와 따로라 필터도 따로 둔다
   int _page = 0;
   final _selectedIds = <int>{};
+  late int? _openId = widget.initialMemberId; // 오른쪽 패널에 보여 주는 회원
+  bool _wide = false; // 오른쪽 패널을 둘 자리가 있는지
 
   List<Member> get _filtered {
     final q = _query.trim().toLowerCase();
@@ -105,7 +109,9 @@ class _MembersPageState extends State<MembersPage> {
 
   void _openMonitor(Member m) => memberMonitorRequest.value = MonitorRequest(m.id);
 
+  /// 넓은 화면은 오른쪽 패널에, 좁은 화면은 팝업으로 보여 준다.
   Future<void> _openDetail(Member m) async {
+    if (_wide) return setState(() => _openId = m.id);
     await showMemberDetail(context, m);
     if (mounted) setState(() => _selectedIds.removeWhere((id) => !mockMembers.any((m) => m.id == id)));
   }
@@ -119,10 +125,23 @@ class _MembersPageState extends State<MembersPage> {
     final pending = _count(MemberStatus.pending);
     final selectable = !useLiveData.value && _status == MemberStatus.pending && can(AdminPermission.memberActions);
     final statuses = <MemberStatus?>[null, ...MemberStatus.values];
+    final canBlock = !useLiveData.value;
+    _wide = MediaQuery.sizeOf(context).width >= 1200;
+    // 고른 회원이 목록에서 빠지면 첫 회원을 보여 준다.
+    final open = !_wide ? null : visible.where((m) => m.id == _openId).firstOrNull ?? visible.firstOrNull;
 
     return AdminPage(
       title: '회원 관리',
       description: '가입 회원을 조회하고 승인·정지·차단·탈퇴를 처리합니다.',
+      side: !_wide
+          ? null
+          : open == null
+          ? const Text('회원을 고르세요.', style: TextStyle(color: AppColors.textTertiary))
+          : MemberDetailView(
+              open,
+              key: ValueKey(open.id),
+              onChanged: () => setState(() => _selectedIds.removeWhere((id) => !mockMembers.any((m) => m.id == id))),
+            ),
       actions: [
         OutlinedButton.icon(
           onPressed: !can(AdminPermission.exportMembers)
@@ -169,9 +188,12 @@ class _MembersPageState extends State<MembersPage> {
             ],
           ),
         AdminTable(
-          columns: const ['번호', '아이디', '이메일', '가입일', '최근 접속', '상태', ''],
-          columnSpacing: 16, // 처리 버튼 3개가 옆으로 밀리지 않게 줄인다
-          // 줄을 두 번 누르면 그 회원의 워커 목록으로 간다. 승인 전 회원은 볼 내용이 없다.
+          // 버튼이 화면 밖으로 밀리지 않게 맨 왼쪽에 둔다. 테스트 DB 회원은 차단할 수 없어 끝 칸이 없다.
+          columns: ['보기', '번호', '아이디', '이메일', '가입일', '최근 접속', '상태', if (canBlock) ''],
+          buttonColumns: {0, if (canBlock) 7},
+          // 줄을 누르면 상세, 두 번 누르면 그 회원의 워커 목록이다. 승인 전 회원은 워커가 없다.
+          onRowTap: (i) => _openDetail(visible[i]),
+          highlightedRow: open == null ? null : visible.indexOf(open),
           onRowDoubleTap: (i) {
             if (visible[i].status != MemberStatus.pending) _openMonitor(visible[i]);
           },
@@ -192,6 +214,15 @@ class _MembersPageState extends State<MembersPage> {
           rows: [
             for (final m in visible)
               [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextButton(style: _rowButton, onPressed: () => _openDetail(m), child: const Text('상세')),
+                    // 승인 전 회원은 로그인한 적이 없어 모니터링할 내용이 없다.
+                    if (m.status != MemberStatus.pending)
+                      TextButton(style: _rowButton, onPressed: () => _openMonitor(m), child: const Text('모니터링')),
+                  ],
+                ),
                 Text(m.shownId),
                 InkWell(
                   onTap: () => _openDetail(m),
@@ -209,31 +240,28 @@ class _MembersPageState extends State<MembersPage> {
                     if (m.accessBlocked) ...[const SizedBox(width: 4), const StatusBadge('접속 차단', color: AppColors.up)],
                   ],
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextButton(style: _rowButton, onPressed: () => _openDetail(m), child: const Text('상세')),
-                    // 승인 전 회원은 로그인한 적이 없어 모니터링할 내용이 없다.
-                    if (m.status != MemberStatus.pending)
-                      TextButton(style: _rowButton, onPressed: () => _openMonitor(m), child: const Text('모니터링')),
-                    if (m.status != MemberStatus.pending && !m.isLive && can(AdminPermission.memberActions))
-                      m.accessBlocked
-                          ? TextButton(
-                              style: _rowButton,
-                              onPressed: () async {
-                                if (await unblockMemberAccess(context, m) && mounted) setState(() {});
-                              },
-                              child: const Text('해제'),
-                            )
-                          : TextButton(
-                              style: _rowButton.merge(TextButton.styleFrom(foregroundColor: AppColors.up)),
-                              onPressed: () async {
-                                if (await blockMemberAccess(context, m) && mounted) setState(() {});
-                              },
-                              child: const Text('차단'),
-                            ),
-                  ],
-                ),
+                if (canBlock)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (m.status != MemberStatus.pending && !m.isLive && can(AdminPermission.memberActions))
+                        m.accessBlocked
+                            ? TextButton(
+                                style: _rowButton,
+                                onPressed: () async {
+                                  if (await unblockMemberAccess(context, m) && mounted) setState(() {});
+                                },
+                                child: const Text('해제'),
+                              )
+                            : TextButton(
+                                style: _rowButton.merge(TextButton.styleFrom(foregroundColor: AppColors.up)),
+                                onPressed: () async {
+                                  if (await blockMemberAccess(context, m) && mounted) setState(() {});
+                                },
+                                child: const Text('차단'),
+                              ),
+                    ],
+                  ),
               ],
           ],
         ),

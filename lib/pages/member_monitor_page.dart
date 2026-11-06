@@ -18,11 +18,13 @@ part 'member_monitor_app_view.dart';
 part 'member_monitor_cards.dart';
 part 'member_monitor_trades.dart';
 
-/// 다른 화면에서 이 회원을 모니터링으로 열어 달라는 요청. [issue] 를 주면 그 문제 위치로 간다.
+/// 다른 화면에서 이 회원을 모니터링으로 열어 달라는 요청.
+/// [issue] 를 주면 그 문제 위치로, [logs] 면 고객 로그로 간다.
 class MonitorRequest {
-  const MonitorRequest(this.memberId, {this.issue});
+  const MonitorRequest(this.memberId, {this.issue, this.logs = false});
   final int memberId;
   final MemberIssue? issue;
+  final bool logs;
 }
 
 final memberMonitorRequest = ValueNotifier<MonitorRequest?>(null);
@@ -47,7 +49,9 @@ enum _LogPeriod {
 
 /// 상담용 화면. 회원을 고르면 그 사용자가 앱에서 보는 워커·잡·이력과 고객 로그를 함께 본다.
 class MemberMonitorPage extends StatefulWidget {
-  const MemberMonitorPage({super.key});
+  const MemberMonitorPage({super.key, this.onExit});
+
+  final ValueChanged<int?>? onExit; // 워커 목록에서 뒤로 가면 보던 회원을 들고 회원 목록으로 나간다
 
   @override
   State<MemberMonitorPage> createState() => _MemberMonitorPageState();
@@ -80,6 +84,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
     if (request == null) return;
     _memberId = request.memberId;
     if (request.issue != null) _applyIssue(request.issue!);
+    if (request.logs) _tab = _MonitorTab.logs;
   }
 
   @override
@@ -87,6 +92,34 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
     liveStatus.removeListener(_onLiveChanged);
     _scroll.dispose();
     super.dispose();
+  }
+
+  /// 전체 워커로 나간다. 워커·잡을 보던 화면이면 워커 목록을 보여 준다.
+  void _showAllWorkers() => setState(() {
+    _workerId = null;
+    _job = null;
+    if (_tab == _MonitorTab.jobs || _tab == _MonitorTab.jobDetail) _tab = _MonitorTab.workers;
+  });
+
+  /// 고른 워커의 잡 목록으로 나간다.
+  void _showWorkerJobs() => setState(() {
+    _job = null;
+    if (_tab == _MonitorTab.jobDetail) _tab = _MonitorTab.jobs;
+  });
+
+  /// 잡 내역 → 잡 → 워커 → 회원 목록 순서로 한 단계씩 나간다.
+  /// 잡 목록으로 갈 때는 보던 잡을 남겨 둔다. 종료된 전략 칸과 선택 표시가 그대로 이어진다.
+  void _back() {
+    switch (_tab) {
+      case _MonitorTab.jobDetail:
+        setState(() => _tab = _MonitorTab.jobs);
+      case _MonitorTab.jobs:
+        _showAllWorkers();
+      case _MonitorTab.workers:
+        widget.onExit?.call(_member?.id);
+      default:
+        setState(() => _tab = _MonitorTab.workers);
+    }
   }
 
   /// 잡을 고르면 잡 내역으로 넘어간다.
@@ -401,7 +434,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
     );
 
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(8),
       child: LayoutBuilder(
         builder: (context, constraints) {
           const gap = SizedBox(width: 12, height: 12);
@@ -469,11 +502,9 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
           final scopeBar = _ScopeBar(
             worker: worker,
             job: _job,
-            onAll: () => setState(() {
-              _workerId = null;
-              _job = null;
-            }),
-            onWorker: () => setState(() => _job = null),
+            onAll: _showAllWorkers,
+            onWorker: _showWorkerJobs,
+            onBack: _tab == _MonitorTab.workers && widget.onExit == null ? null : _back,
           );
           final positionsPane = _PositionsPane(
             positions: scopedPositions,
@@ -1258,30 +1289,31 @@ class _JobDetailPane extends StatelessWidget {
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
+                  // 체결 내역, 이력, 설정 보기 순서다. 좁아지면 앞의 둘부터 묶는다.
                   if (constraints.maxWidth < 680) {
                     return ListView(
-                      children: [settings, const Divider(height: 24), fills, const SizedBox(height: 12), history],
+                      children: [fills, const SizedBox(height: 12), history, const Divider(height: 24), settings],
                     );
                   }
-                  // 넓으면 체결 내역을 설정 아래에 묻지 않고 따로 세운다.
                   final wide = constraints.maxWidth >= 1000;
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SizedBox(
-                        width: 380,
-                        child: SingleChildScrollView(
-                          child: wide
-                              ? settings
-                              : Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [settings, const Divider(height: 24), fills],
-                                ),
+                      if (wide) ...[
+                        Expanded(child: SingleChildScrollView(child: fills)),
+                        const SizedBox(width: 16),
+                        Expanded(child: SingleChildScrollView(child: history)),
+                      ] else
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [fills, const Divider(height: 24), history],
+                            ),
+                          ),
                         ),
-                      ),
                       const SizedBox(width: 16),
-                      if (wide) ...[Expanded(child: SingleChildScrollView(child: fills)), const SizedBox(width: 16)],
-                      Expanded(child: SingleChildScrollView(child: history)),
+                      SizedBox(width: 380, child: SingleChildScrollView(child: settings)),
                     ],
                   );
                 },

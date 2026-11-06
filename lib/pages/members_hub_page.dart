@@ -29,6 +29,7 @@ class MembersHubPage extends StatefulWidget {
 class _MembersHubPageState extends State<MembersHubPage> {
   // 다른 화면에서 회원을 열어 달라고 왔으면 모니터링부터 보여 준다.
   late _Tab _tab = memberMonitorRequest.value != null ? _Tab.monitor : _Tab.list;
+  int? _memberId; // 모니터링에서 보던 회원. 회원 목록으로 돌아오면 그 줄을 고른다
 
   @override
   void initState() {
@@ -65,7 +66,7 @@ class _MembersHubPageState extends State<MembersHubPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
           child: Wrap(
             spacing: 6,
             runSpacing: 6,
@@ -89,10 +90,10 @@ class _MembersHubPageState extends State<MembersHubPage> {
           ),
         ),
         if (live && status.loading)
-          const Padding(padding: EdgeInsets.fromLTRB(24, 8, 24, 0), child: LinearProgressIndicator()),
+          const Padding(padding: EdgeInsets.fromLTRB(8, 0, 8, 4), child: LinearProgressIndicator()),
         if (live && status.error != null)
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
             child: Text('${status.error} API 서버가 실행 중인지 확인하세요.', style: const TextStyle(color: AppColors.up)),
           ),
         Expanded(
@@ -100,8 +101,13 @@ class _MembersHubPageState extends State<MembersHubPage> {
             // 모니터링은 보던 워커·잡을 유지해야 하므로 새로 만들지 않고 스스로 다시 받는다.
             key: ValueKey((live, tab == _Tab.monitor ? 0 : status.revision)),
             child: switch (tab) {
-              _Tab.list => const MembersPage(),
-              _Tab.monitor => const MemberMonitorPage(),
+              _Tab.list => MembersPage(initialMemberId: _memberId),
+              _Tab.monitor => MemberMonitorPage(
+                onExit: (id) => setState(() {
+                  _memberId = id;
+                  _tab = _Tab.list;
+                }),
+              ),
               _Tab.positions => const MemberPositionsPage(),
               _Tab.consultations => const ConsultationsPage(),
             },

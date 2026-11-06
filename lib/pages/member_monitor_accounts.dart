@@ -17,12 +17,13 @@ enum _MonitorTab {
 
 /// 지금 보고 있는 범위. 누르면 그 단계로 돌아간다.
 class _ScopeBar extends StatelessWidget {
-  const _ScopeBar({required this.worker, required this.job, required this.onAll, required this.onWorker});
+  const _ScopeBar({required this.worker, required this.job, required this.onAll, required this.onWorker, this.onBack});
 
   final MemberWorker? worker;
   final WorkerJob? job;
   final VoidCallback onAll;
   final VoidCallback onWorker;
+  final VoidCallback? onBack; // 한 단계 위로 나간다
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +40,10 @@ class _ScopeBar extends StatelessWidget {
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
+        if (onBack != null) ...[
+          OutlinedButton.icon(onPressed: onBack, icon: const Icon(Icons.arrow_back, size: 16), label: const Text('뒤로')),
+          const SizedBox(width: 8),
+        ],
         step('전체 워커', w == null ? null : onAll),
         if (w != null) ...[arrow, step(w.symbolName, j == null ? null : onWorker)],
         if (j != null) ...[arrow, step(j.name, null)],
@@ -193,6 +198,7 @@ class _ConsultPaneState extends State<_ConsultPane> {
   void _add() {
     final text = _content.text.trim();
     if (text.isEmpty) return;
+    if (widget.member.isLive) return showNotConnected(context);
     setState(
       () => addConsultation(
         widget.member,
@@ -283,48 +289,47 @@ class _ConsultPaneState extends State<_ConsultPane> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 상담은 테스트 DB 에 저장할 곳이 없다.
-          if (!m.isLive)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(child: _picker(_channel, ConsultChannel.values, (c) => c.label, (c) => _channel = c)),
-                      const SizedBox(width: 8),
-                      Expanded(child: _picker(_type, ConsultType.values, (t) => t.label, (t) => _type = t)),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  TextField(
-                    controller: _content,
-                    onSubmitted: (_) => _add(),
-                    style: const TextStyle(fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: '상담 내용 입력',
-                      isDense: true,
-                      suffixIcon: IconButton(
-                        tooltip: '상담 기록 추가',
-                        icon: const Icon(Icons.send, size: 18),
-                        onPressed: _add,
-                      ),
+          // 상담은 테스트 DB 에 저장할 곳이 없어 저장 때 안내만 한다.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: _picker(_channel, ConsultChannel.values, (c) => c.label, (c) => _channel = c)),
+                    const SizedBox(width: 8),
+                    Expanded(child: _picker(_type, ConsultType.values, (t) => t.label, (t) => _type = t)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                TextField(
+                  controller: _content,
+                  onSubmitted: (_) => _add(),
+                  style: const TextStyle(fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: '상담 내용 입력',
+                    isDense: true,
+                    suffixIcon: IconButton(
+                      tooltip: '상담 기록 추가',
+                      icon: const Icon(Icons.send, size: 18),
+                      onPressed: _add,
                     ),
                   ),
-                  if (context_ != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 3),
-                      child: Text(
-                        '연결: $context_',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
-                      ),
+                ),
+                if (context_ != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Text(
+                      '연결: $context_',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
+          ),
           const Divider(height: 8),
           Expanded(
             child: ListView(

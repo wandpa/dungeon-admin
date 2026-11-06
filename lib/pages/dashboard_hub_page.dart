@@ -45,7 +45,7 @@ class _DashboardHubPageState extends State<DashboardHubPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
           child: Wrap(
             spacing: 6,
             children: [

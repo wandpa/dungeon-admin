@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../theme.dart';
 
-/// 관리 화면 공통 틀: 제목, 설명, 우측 버튼, 본문.
+const adminSideWidth = 470.0;
+
+/// 아래 상태줄에 보여 줄 문구. 화면이 조회를 마치면 건수를 알린다.
+final adminStatus = ValueNotifier('준비되었습니다.');
+
+/// 관리 화면 공통 틀: 제목줄(제목·설명·우측 버튼), 본문.
 class AdminPage extends StatelessWidget {
   const AdminPage({
     super.key,
@@ -10,37 +15,64 @@ class AdminPage extends StatelessWidget {
     required this.description,
     required this.children,
     this.actions = const [],
+    this.side,
   });
 
   final String title;
   final String description;
   final List<Widget> actions;
   final List<Widget> children;
+  final Widget? side; // 본문 오른쪽에 붙는 패널
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(24),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Wrap(
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 16,
-          runSpacing: 12,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 4),
-                Text(description, style: const TextStyle(color: AppColors.textTertiary)),
-              ],
-            ),
-            Wrap(spacing: 8, runSpacing: 8, children: actions),
-          ],
+        Container(
+          color: AppColors.strip,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  description,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Wrap(spacing: 6, runSpacing: 6, children: actions),
+            ],
+          ),
         ),
-        const SizedBox(height: 20),
-        for (final c in children) ...[c, const SizedBox(height: 16)],
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.all(8),
+                  children: [
+                    for (final c in children) ...[c, const SizedBox(height: 8)],
+                  ],
+                ),
+              ),
+              if (side != null)
+                Container(
+                  width: adminSideWidth,
+                  decoration: const BoxDecoration(
+                    color: AppColors.surfaceSoft,
+                    border: Border(left: BorderSide(color: AppColors.border)),
+                  ),
+                  child: SingleChildScrollView(padding: const EdgeInsets.all(8), child: side),
+                ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -48,7 +80,7 @@ class AdminPage extends StatelessWidget {
 
 /// 테두리 있는 카드.
 class Panel extends StatelessWidget {
-  const Panel({super.key, required this.child, this.title, this.padding = const EdgeInsets.all(20)});
+  const Panel({super.key, required this.child, this.title, this.padding = const EdgeInsets.all(12)});
 
   final String? title;
   final Widget child;
@@ -60,7 +92,7 @@ class Panel extends StatelessWidget {
     return Material(
       color: AppColors.surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(4),
         side: const BorderSide(color: AppColors.border),
       ),
       child: Padding(
@@ -69,8 +101,8 @@ class Panel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (title != null) ...[
-              Text(title!, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 12),
+              Text(title!, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
             ],
             child,
           ],
@@ -88,8 +120,11 @@ class AdminTable extends StatelessWidget {
     super.key,
     required this.columns,
     required this.rows,
-    this.columnSpacing = 32,
+    this.columnSpacing = 16,
+    this.onRowTap,
     this.onRowDoubleTap,
+    this.highlightedRow,
+    this.buttonColumns = const {},
     this.selected,
     this.onSelectChanged,
     this.onSelectAll,
@@ -103,13 +138,16 @@ class AdminTable extends StatelessWidget {
   final void Function(int index, bool selected)? onSelectChanged;
   final ValueChanged<bool>? onSelectAll;
   final String emptyText;
+  final ValueChanged<int>? onRowTap;
   final ValueChanged<int>? onRowDoubleTap;
+  final int? highlightedRow; // 오른쪽 패널에 보여 주는 줄
+  final Set<int> buttonColumns; // 버튼이 있는 칸
 
   @override
   Widget build(BuildContext context) {
     final selectable = selected != null;
     return Panel(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.zero,
       child: LayoutBuilder(
         builder: (context, constraints) => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -120,20 +158,33 @@ class AdminTable extends StatelessWidget {
                 constraints: BoxConstraints(minWidth: constraints.maxWidth),
                 child: DataTable(
                   showCheckboxColumn: selectable,
+                  dividerThickness: 0.5,
                   columnSpacing: columnSpacing,
+                  border: const TableBorder(
+                    horizontalInside: BorderSide(color: AppColors.grid),
+                    verticalInside: BorderSide(color: AppColors.grid),
+                  ),
                   onSelectAll: selectable ? (v) => onSelectAll?.call(v ?? false) : null,
                   columns: [for (final c in columns) DataColumn(label: Text(c))],
                   rows: [
                     for (final (i, r) in rows.indexed)
                       DataRow(
                         selected: selected?.contains(i) ?? false,
+                        color: WidgetStateProperty.resolveWith(
+                          (states) => states.contains(WidgetState.selected) || i == highlightedRow
+                              ? AppColors.brand.withValues(alpha: 0.12)
+                              : i.isOdd
+                              ? AppColors.surfaceSoft
+                              : null,
+                        ),
                         onSelectChanged: selectable ? (v) => onSelectChanged?.call(i, v ?? false) : null,
                         cells: [
-                          // 마지막 칸은 버튼 자리다. 두 번 누르기를 걸면 버튼 반응이 늦어진다.
+                          // 버튼 칸에 두 번 누르기를 걸면 버튼 반응이 늦어진다.
                           for (final (c, cell) in r.indexed)
                             DataCell(
                               cell,
-                              onDoubleTap: onRowDoubleTap == null || c == r.length - 1
+                              onTap: onRowTap == null || buttonColumns.contains(c) ? null : () => onRowTap!(i),
+                              onDoubleTap: onRowDoubleTap == null || buttonColumns.contains(c)
                                   ? null
                                   : () => onRowDoubleTap!(i),
                             ),
@@ -281,7 +332,7 @@ class StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(3)),
       child: Text(
         label,
         style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700),

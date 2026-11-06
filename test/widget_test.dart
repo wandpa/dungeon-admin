@@ -1,3 +1,4 @@
+import 'package:dungeon_admin/admin_shell.dart';
 import 'package:dungeon_admin/main.dart';
 import 'package:dungeon_admin/mock_accounts.dart';
 import 'package:dungeon_admin/mock_admin.dart';
@@ -51,22 +52,130 @@ void main() {
       '대시보드': '오늘 발생 신호',
     };
     for (final MapEntry(key: menu, value: content) in pages.entries) {
-      await tester.tap(find.widgetWithText(ListTile, menu));
+      await tester.tap(find.widgetWithText(AdminMenuItem, menu));
       await tester.pumpAndSettle();
       expect(find.text(content), findsWidgets, reason: menu);
     }
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('좁은 화면: 서랍 메뉴로 이동한다', (tester) async {
+  testWidgets('모니터링: 뒤로 버튼으로 잡 내역에서 회원 목록까지 나오고 위치 표시로도 나온다', (tester) async {
+    tester.view.physicalSize = const Size(1400, 3000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(const AdminApp());
+    await tester.tap(find.widgetWithText(AdminMenuItem, '회원 관리'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
+    await tester.pumpAndSettle();
+
+    Future<void> open() async {
+      await tester.tap(find.text('MCLZ26'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('돌파 매수 전략'));
+      await tester.pumpAndSettle();
+      expect(find.text('돌파 매수 전략 상세'), findsOneWidget);
+    }
+
+    await open();
+    await tester.tap(find.text('뒤로'));
+    await tester.pumpAndSettle();
+    expect(find.text('마이크로 WTI 원유 12월물 잡'), findsOneWidget);
+    await tester.tap(find.text('뒤로'));
+    await tester.pumpAndSettle();
+    expect(find.text('risingkang 워커'), findsOneWidget);
+    expect(find.text('MCLZ26'), findsOneWidget);
+
+    // 워커 목록에서 뒤로 가면 회원 목록이다.
+    await tester.tap(find.text('뒤로'));
+    await tester.pumpAndSettle();
+    expect(find.text('뒤로'), findsNothing);
+    expect(find.text('엑셀 내보내기'), findsOneWidget);
+    expect(find.text('risingkang'), findsNWidgets(2)); // 보던 회원이 오른쪽 패널에 남는다
+    await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
+    await tester.pumpAndSettle();
+
+    // 거래 탭에서는 워커 목록으로 돌아간다.
+    await flowTab(tester, '거래');
+    await tester.tap(find.text('뒤로'));
+    await tester.pumpAndSettle();
+    expect(find.text('risingkang 워커'), findsOneWidget);
+
+    // 위치 표시를 눌러도 빈 화면에 남지 않는다.
+    await open();
+    await tester.tap(find.widgetWithText(TextButton, '마이크로 WTI 원유 12월물'));
+    await tester.pumpAndSettle();
+    expect(find.text('마이크로 WTI 원유 12월물 잡'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, '전체 워커'));
+    await tester.pumpAndSettle();
+    expect(find.text('MCLZ26'), findsOneWidget);
+  });
+
+  testWidgets('열린 화면 탭: 대시보드도 닫고, 끌어서 순서를 바꾸며, 다 닫으면 대시보드로 돌아간다', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(const AdminApp());
+    expect(find.byTooltip('대시보드 닫기'), findsNothing); // 대시보드 하나뿐이면 닫을 것이 없다
+
+    await tester.tap(find.widgetWithText(AdminMenuItem, '공지사항'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(AdminMenuItem, '회원 관리'));
+    await tester.pumpAndSettle();
+
+    double x(String tab) => tester.getTopLeft(find.byKey(ValueKey(tab))).dx;
+    expect(x('대시보드'), lessThan(x('공지사항')));
+    expect(x('공지사항'), lessThan(x('회원 관리')));
+
+    // 맨 뒤 탭을 맨 앞으로 끈다.
+    final gesture = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('회원 관리'))));
+    await tester.pump(const Duration(milliseconds: 100));
+    for (var i = 0; i < 8; i++) {
+      await gesture.moveBy(const Offset(-40, 0));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(x('회원 관리'), lessThan(x('대시보드')));
+
+    await tester.tap(find.byTooltip('대시보드 닫기'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('대시보드')), findsNothing);
+
+    await tester.tap(find.byTooltip('회원 관리 닫기'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('공지사항 닫기'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('대시보드')), findsOneWidget);
+    expect(find.byTooltip('대시보드 닫기'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('시작 화면: 로그인하면 던전 관리자를 1초 보여 주고 대시보드로 넘어간다', (tester) async {
+    signOut();
+    showStartScreen = true;
+    addTearDown(() => showStartScreen = false);
+    await tester.pumpWidget(const AdminApp());
+    signIn('admin', samplePassword);
+    await tester.pump();
+    expect(find.text('던전 관리자'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 900));
+    expect(find.text('던전 관리자'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('던전 관리자'), findsNothing);
+    expect(find.widgetWithText(AdminMenuItem, '대시보드'), findsOneWidget);
+  });
+
+  testWidgets('좁은 화면: 위쪽 메뉴를 밀어서 이동한다', (tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(const AdminApp());
-    await tester.tap(find.byTooltip('Open navigation menu'));
+    await tester.ensureVisible(find.widgetWithText(AdminMenuItem, '공지사항'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, '공지사항'));
+    await tester.tap(find.widgetWithText(AdminMenuItem, '공지사항'));
     await tester.pumpAndSettle();
 
     expect(find.text('던전우상향 정식 출시 안내'), findsOneWidget);
@@ -78,7 +187,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const AdminApp());
-    await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
+    await tester.tap(find.widgetWithText(AdminMenuItem, '회원 관리'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
     await tester.pumpAndSettle();
@@ -124,6 +233,16 @@ void main() {
     expect(find.text('체결 내역'), findsOneWidget);
     expect(find.text('주문 5건 · 체결 5건 · 거부 0건'), findsOneWidget);
     expect(find.text('+40'), findsOneWidget); // 체결 내역은 회차마다 한 줄이다
+    expect(find.textContaining('· 청산 10/'), findsWidgets); // 진입·청산 시각이 초까지 나온다
+
+    // 회차마다 상세를 누르면 그 회차의 로그가 펼쳐진다.
+    await tester.ensureVisible(find.widgetWithText(TextButton, '상세').first);
+    await tester.tap(find.widgetWithText(TextButton, '상세').first);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('회차 상세 로그'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, '접기'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('회차 상세 로그'), findsNothing);
     expect(find.text('1회차'), findsOneWidget);
     expect(find.text('실현손익 +\$100.00'), findsOneWidget); // 회차 손익 합이 잡 실현손익이다
     expect(find.text('실현손익 +\$40.00'), findsOneWidget);
@@ -211,7 +330,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const AdminApp());
-    await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
+    await tester.tap(find.widgetWithText(AdminMenuItem, '회원 관리'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
     await tester.pumpAndSettle();
@@ -265,7 +384,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const AdminApp());
-    await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
+    await tester.tap(find.widgetWithText(AdminMenuItem, '회원 관리'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
     await tester.pumpAndSettle();
@@ -302,7 +421,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const AdminApp());
-    await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
+    await tester.tap(find.widgetWithText(AdminMenuItem, '회원 관리'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
     await tester.pumpAndSettle();
@@ -357,7 +476,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const AdminApp());
-    await tester.tap(find.widgetWithText(ListTile, '푸시 알림'));
+    await tester.tap(find.widgetWithText(AdminMenuItem, '푸시 알림'));
     await tester.pumpAndSettle();
 
     // 전체: 받을 수 없는 회원은 이유와 함께 제외한다.
@@ -409,7 +528,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const AdminApp());
-    await tester.tap(find.widgetWithText(ListTile, '공지사항'));
+    await tester.tap(find.widgetWithText(AdminMenuItem, '공지사항'));
     await tester.pumpAndSettle();
     expect(find.text('게시 3'), findsOneWidget);
     expect(find.text('예약 1'), findsOneWidget);
@@ -513,11 +632,11 @@ void main() {
     await tester.pumpWidget(const AdminApp());
     await tester.pumpAndSettle();
     if (menu == '회원 모니터링') {
-      await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
+      await tester.tap(find.widgetWithText(AdminMenuItem, '회원 관리'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
     } else {
-      await tester.tap(find.widgetWithText(ListTile, menu));
+      await tester.tap(find.widgetWithText(AdminMenuItem, menu));
     }
     await tester.pumpAndSettle();
   }
@@ -579,10 +698,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, '정지'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('닫기'));
-    await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(ListTile, '관리자'));
+    await tester.tap(find.widgetWithText(AdminMenuItem, '관리자'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilterChip, '회원 처리'));
     await tester.pumpAndSettle();
@@ -617,7 +734,7 @@ void main() {
     // 상태를 완료로 바꾸면 처리자와 전후 상태가 남는다.
     await tester.tap(find.widgetWithText(ChoiceChip, '상담 이력'));
     await tester.pumpAndSettle();
-    expect(find.widgetWithText(ListTile, '상담 이력'), findsNothing); // 회원 관리 안에 있다
+    expect(find.widgetWithText(AdminMenuItem, '상담 이력'), findsNothing); // 회원 관리 안에 있다
     expect(find.text('접수 2'), findsOneWidget);
     await tester.enterText(find.widgetWithText(TextField, '회원·내용·담당자 검색'), '입금 후 재시도');
     await tester.pumpAndSettle();
@@ -677,8 +794,8 @@ void main() {
 
   testWidgets('시스템 상태: 대시보드 경보에서 이동해 장애를 확인·해결한다', (tester) async {
     await openMenu(tester, '대시보드');
-    expect(find.widgetWithText(ListTile, '시스템 상태'), findsNothing); // 대시보드 안의 탭으로 옮겼다
-    expect(find.widgetWithText(ListTile, '신호 관리'), findsNothing);
+    expect(find.widgetWithText(AdminMenuItem, '시스템 상태'), findsNothing); // 대시보드 안의 탭으로 옮겼다
+    expect(find.widgetWithText(AdminMenuItem, '신호 관리'), findsNothing);
     expect(find.text('시스템 모니터링'), findsOneWidget);
     expect(find.text('국내 수신'), findsOneWidget);
     expect(find.text('해외 수신'), findsOneWidget);
@@ -917,7 +1034,7 @@ void main() {
     expect(mcl.monthLabel(mcl.months.last), '5번째 월물');
 
     // 회원 상세에서 상담 경로와 유형을 고른다.
-    await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
+    await tester.tap(find.widgetWithText(AdminMenuItem, '회원 관리'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('uptrend99'));
     await tester.pump(kDoubleTapTimeout);
@@ -930,8 +1047,6 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '추가'));
     await tester.pumpAndSettle();
     expect(mockConsultations.first.channel, ConsultChannel.email);
-    await tester.tap(find.byTooltip('닫기'));
-    await tester.pumpAndSettle();
 
     // 상담은 경로로 거르고 내용을 눌러 전체를 본다.
     await tester.tap(find.widgetWithText(ChoiceChip, '상담 이력'));
@@ -946,7 +1061,7 @@ void main() {
     expect(find.text('상담 #5 · risingkang'), findsOneWidget);
 
     // 비밀번호를 초기화하면 임시 비밀번호가 한 번 보이고 기록에는 남지 않는다.
-    await tester.tap(find.widgetWithText(ListTile, '관리자'));
+    await tester.tap(find.widgetWithText(AdminMenuItem, '관리자'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ChoiceChip, '계정 관리'));
     await tester.pumpAndSettle();
@@ -966,7 +1081,7 @@ void main() {
     expect(find.textContaining('총 2건'), findsOneWidget);
 
     // 장애는 내용을 눌러 상세를 본다.
-    await tester.tap(find.widgetWithText(ListTile, '대시보드'));
+    await tester.tap(find.widgetWithText(AdminMenuItem, '대시보드'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ChoiceChip, '시스템 상태'));
     await tester.pumpAndSettle();
@@ -1063,7 +1178,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '보내기'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
+    await tester.tap(find.widgetWithText(AdminMenuItem, '회원 관리'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
     await tester.pumpAndSettle();
@@ -1132,15 +1247,15 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, '로그인'));
     await tester.pumpAndSettle();
-    expect(find.text('박상담'), findsOneWidget);
-    expect(find.widgetWithText(ListTile, '관리자'), findsNothing);
-    await tester.tap(find.widgetWithText(ListTile, '푸시 알림'));
+    expect(find.textContaining('박상담'), findsOneWidget);
+    expect(find.widgetWithText(AdminMenuItem, '관리자'), findsNothing);
+    await tester.tap(find.widgetWithText(AdminMenuItem, '푸시 알림'));
     await tester.pumpAndSettle();
     expect(find.text('새 알림 보내기'), findsNothing);
-    await tester.tap(find.widgetWithText(ListTile, '공지사항'));
+    await tester.tap(find.widgetWithText(AdminMenuItem, '공지사항'));
     await tester.pumpAndSettle();
     expect(find.text('공지 작성'), findsNothing);
-    await tester.tap(find.widgetWithText(ListTile, '종목 마스터'));
+    await tester.tap(find.widgetWithText(AdminMenuItem, '종목 마스터'));
     await tester.pumpAndSettle();
     expect(find.text('상품 추가'), findsNothing);
     expect(find.byTooltip('수정'), findsNothing);
@@ -1151,7 +1266,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('101Z6'), findsOneWidget); // 월물 조회는 된다
     expect(find.text('월물 추가'), findsNothing);
-    await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
+    await tester.tap(find.widgetWithText(AdminMenuItem, '회원 관리'));
     await tester.pumpAndSettle();
     expect(find.widgetWithText(TextButton, '차단'), findsNothing); // 목록의 차단 버튼도 숨긴다
     await tester.tap(find.text('uptrend99'));
@@ -1159,8 +1274,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('이용 정지'), findsNothing);
     expect(find.text('이 권한은 조회와 상담 기록만 할 수 있습니다.'), findsOneWidget);
-    await tester.tap(find.byTooltip('닫기'));
-    await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('로그아웃'));
     await tester.pumpAndSettle();
@@ -1171,7 +1284,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, '로그인'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, '관리자'));
+    await tester.tap(find.widgetWithText(AdminMenuItem, '관리자'));
     await tester.pumpAndSettle();
     expect(find.text('로그아웃'), findsWidgets);
     await tester.tap(find.widgetWithText(ChoiceChip, '계정 관리'));
@@ -1186,12 +1299,13 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  Future<void> openMembers(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1400, 900);
+  // 기본은 오른쪽 패널이 없는 너비다. 상세는 팝업으로 열린다.
+  Future<void> openMembers(WidgetTester tester, {Size size = const Size(1190, 900)}) async {
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const AdminApp());
-    await tester.tap(find.widgetWithText(ListTile, '회원 관리'));
+    await tester.tap(find.widgetWithText(AdminMenuItem, '회원 관리'));
     await tester.pumpAndSettle();
   }
 
@@ -1208,7 +1322,7 @@ void main() {
 
   testWidgets('회원 관리: 메뉴 하나에서 목록과 모니터링을 오가고 모니터링에서 회원을 처리한다', (tester) async {
     await openMembers(tester);
-    expect(find.widgetWithText(ListTile, '회원 모니터링'), findsNothing); // 메뉴가 합쳐졌다
+    expect(find.widgetWithText(AdminMenuItem, '회원 모니터링'), findsNothing); // 메뉴가 합쳐졌다
     expect(find.text('가입 승인을 기다리는 회원이 3명 있습니다.'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(ChoiceChip, '회원 모니터링'));
@@ -1310,6 +1424,73 @@ void main() {
 
     expect(find.text('bottomhunter 워커'), findsOneWidget);
     expect(find.text('000660'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('회원: 맨 왼쪽 칸에서 상세와 모니터링을 연다', (tester) async {
+    await openMembers(tester);
+    await tester.enterText(find.byType(TextField), 'bottomhunter');
+    await tester.pumpAndSettle();
+    final details = tester.getTopLeft(find.widgetWithText(TextButton, '상세'));
+    final monitor = tester.getTopLeft(find.widgetWithText(TextButton, '모니터링'));
+    expect(monitor.dx, lessThan(tester.getTopLeft(find.text('bottomhunter').last).dx));
+    expect(details.dx, lessThan(monitor.dx));
+
+    await tester.tap(find.widgetWithText(TextButton, '상세'));
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsOneWidget);
+    await tester.tap(find.byTooltip('닫기'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(TextButton, '모니터링'));
+    await tester.pumpAndSettle();
+    expect(find.text('bottomhunter 워커'), findsOneWidget);
+  });
+
+  testWidgets('회원 상세: 수정 칸이 있고 저장 API 전이라 값을 저장하지 않는다', (tester) async {
+    await openMembers(tester, size: const Size(1400, 1400));
+    await tester.tap(find.text('bottomhunter'));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Dialog), findsNothing); // 넓은 화면은 줄을 누르면 오른쪽 패널에 나온다
+    expect(find.text('bottomhunter'), findsNWidgets(2));
+    expect(find.widgetWithText(FilledButton, '저장'), findsOneWidget);
+    for (final label in ['회원등급', '시작일자', '만료일자', '차단 사유', '이름', '휴대폰', '메모']) {
+      expect(find.text(label), findsOneWidget, reason: label);
+    }
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(find.text('허용'), findsNothing);
+
+    await tester.tap(find.widgetWithText(FilledButton, '저장'));
+    await tester.pump();
+    expect(find.text('아직 API 가 연결되지 않았습니다.'), findsOneWidget);
+    await tester.tap(find.widgetWithText(OutlinedButton, '되돌리기'));
+    await tester.pump();
+    expect(find.text('허용'), findsOneWidget);
+    expect(mockMembers.firstWhere((m) => m.username == 'bottomhunter').accessBlocked, isFalse);
+
+    // 회원등급 변경은 처리 칸 안에서 고른다. 저장 API 전이라 안내만 한다.
+    await tester.ensureVisible(find.text('회원등급 변경'));
+    await tester.tap(find.text('회원등급 변경'));
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsNothing);
+    expect(find.widgetWithText(FilledButton, '변경'), findsOneWidget);
+    await tester.ensureVisible(find.text('변경할 회원등급'));
+    await tester.tap(find.text('변경할 회원등급'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('골드').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '변경'));
+    await tester.pump();
+    expect(find.text('아직 API 가 연결되지 않았습니다.'), findsOneWidget);
+
+    // 고객 상세 로그 보기는 그 회원의 로그 탭을 연다.
+    await tester.tap(find.text('고객 상세 로그 보기'));
+    await tester.pumpAndSettle();
+    expect(find.text('bottomhunter 워커'), findsNothing);
+    expect(find.textContaining('고객 로그 ·'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

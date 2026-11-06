@@ -142,7 +142,7 @@ final _routes = <String, Object?>{
 void main() {
   late List<String> methods;
 
-  void serve({int status = 200}) {
+  void serve({int status = 200, Map<String, Object?>? routes}) {
     methods = [];
     setLiveClient(
       MockClient((request) async {
@@ -152,7 +152,7 @@ void main() {
         if (status != 200) {
           return http.Response.bytes(utf8.encode(jsonEncode({'message': '테스트 DB 를 조회하지 못했습니다.'})), status);
         }
-        final body = _routes[request.url.path];
+        final body = (routes ?? _routes)[request.url.path];
         if (body == null) return http.Response('', 404);
         return http.Response.bytes(utf8.encode(jsonEncode(body)), 200);
       }),
@@ -232,6 +232,64 @@ void main() {
 
     // 로그인 외에는 조회만 한다.
     expect(methods.where((r) => !r.startsWith('GET')), ['POST /api/admin/auth/login']);
+  });
+
+  test('고객 로그: 영어 코드를 앱과 같은 말로 바꾼다', () {
+    expect(liveLogText('order_submitted'), '주문 전송');
+    expect(liveLogText('fill'), '체결');
+    expect(liveLogText('balance_updated'), '잔고 반영');
+    expect(liveLogText('cycle_closed'), '사이클 종료');
+    expect(liveLogText('alert_fired'), '신호 발생');
+    expect(liveLogText('익절'), '신호 발생 · 익절');
+    expect(liveLogText('MOCK****0038'), '주문 접수 · 주문번호 MOCK****0038');
+    expect(liveLogText('new_event_type'), '기타 이력');
+    expect(liveLogText('캔5분30틱100회'), '캔5분30틱100회'); // 서버 문장은 그대로 둔다
+  });
+
+  test('거래: 청산 주문에만 회차의 매수가·매도가·손익을 붙인다', () async {
+    Map<String, Object?> order(String at, String side, double price) => {
+      'orderedAt': at,
+      'jobId': _jobId,
+      'workerId': _workerId,
+      'symbolName': 'WTI',
+      'side': side,
+      'qty': 1,
+      'filledQty': 1,
+      'avgFillPrice': price,
+      'status': 'filled',
+    };
+    serve(
+      routes: {
+        ..._routes,
+        '$_base/orders': _page([
+          order('2026-11-04T13:10:00Z', 'buy', 95), // 다음 회차 진입
+          order('2026-11-04T13:00:00Z', 'buy', 94), // 숏 청산
+          order('2026-11-04T12:00:00Z', 'sell', 96), // 숏 진입
+        ]),
+        '$_base/jobs/$_jobId/cycles': _page([
+          {'cycleNo': 2, 'status': 'open', 'side': 'long', 'openedAt': '2026-11-04T13:10:01Z'},
+          {
+            'cycleNo': 1,
+            'status': 'closed',
+            'side': 'short',
+            'openedAt': '2026-11-04T12:00:01Z',
+            'closedAt': '2026-11-04T13:00:02Z',
+            'avgBuyPrice': 94,
+            'avgSellPrice': 96,
+            'realizedPnl': 200,
+          },
+        ]),
+      },
+    );
+    await refreshLiveMembers();
+    final m = liveMembers.single;
+    await loadLiveMember(m);
+
+    final orders = ordersOf(m.id);
+    expect(orders.map((o) => o.realizedPnl), [null, 200, null]);
+    expect(orders[1].buyPrice, 94);
+    expect(orders[1].sellPrice, 96);
+    expect(orders[0].buyPrice, isNull);
   });
 
   test('재조회하면 새 값으로 바뀌고, 실패하면 받아 둔 값이 남는다', () async {

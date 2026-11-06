@@ -34,7 +34,7 @@ class _AppPill extends StatelessWidget {
 /// 카드가 워커인지 잡인지 한눈에 보이게 하는 둥근 표시.
 class _KindBadge extends StatelessWidget {
   const _KindBadge.worker() : label = '워커', color = AppColors.brand, ink = Colors.white;
-  const _KindBadge.job() : label = '잡', color = AppColors.accent, ink = AppColors.surfaceSoft;
+  const _KindBadge.job() : label = '잡', color = AppColors.accent, ink = Colors.white;
 
   final String label;
   final Color color;

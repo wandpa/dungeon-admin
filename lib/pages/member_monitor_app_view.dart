@@ -724,13 +724,13 @@ class _JobHistory extends StatelessWidget {
     return switch (e.type) {
       'alert_fired' => '$side 신호 발생${qty.isEmpty ? '' : ' · $qty'}${e.message == null ? '' : ' · ${e.message}'}',
       'order_submitted' => '$side주문${qty.isEmpty ? '' : ' $qty'}$at',
-      'order_accepted' => '접수됨',
+      'order_accepted' => e.message == null ? '접수됨' : '접수됨 · 주문번호 ${e.message}',
       'fill' => '체결${qty.isEmpty ? '' : ' $qty'}$at',
       'order_rejected' => '${side.isEmpty ? '주문' : side} 거부${e.message == null ? '' : ' · ${e.message}'}',
       'order_cancelled' => '주문 취소',
       'cycle_closed' => '사이클 종료',
       'sold_elsewhere' => '타 매체 매도됨',
-      _ => e.type,
+      _ => liveLogText(e.type),
     };
   }
 
@@ -814,7 +814,7 @@ class _JobHistory extends StatelessWidget {
         const SizedBox(height: 12),
         // 회차 밖 이벤트(잡 감시 시작 등)는 카드 없이 타임라인에만 나온다.
         for (final c in job.cycles)
-          if (c.cycleNo != 0) _CycleCard(c, worker),
+          if (c.cycleNo != 0) _CycleCard(c, worker, label: _label),
         if (events.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 32),
@@ -861,11 +861,83 @@ class _JobHistory extends StatelessWidget {
 }
 
 /// 앱 회차 카드: N회차 · 상태 · 실현손익, 그 아래 전략 스냅샷.
-class _CycleCard extends StatelessWidget {
-  const _CycleCard(this.cycle, this.worker);
+class _CycleCard extends StatefulWidget {
+  const _CycleCard(this.cycle, this.worker, {required this.label});
 
   final JobCycle cycle;
   final MemberWorker worker;
+  final String Function(JobEvent) label;
+
+  @override
+  State<_CycleCard> createState() => _CycleCardState();
+}
+
+class _CycleCardState extends State<_CycleCard> {
+  bool _open = false; // 이 회차의 상세 로그를 펼쳤는지
+
+  JobCycle get cycle => widget.cycle;
+  MemberWorker get worker => widget.worker;
+
+  /// 시각이 같으면 신호, 주문, 접수, 체결, 잔고, 회차 종료 순서로 놓는다.
+  static int _order(String type) => switch (type) {
+    'alert_fired' => 0,
+    'order_submitted' => 1,
+    'order_accepted' => 2,
+    'fill' => 3,
+    'balance_updated' => 4,
+    'cycle_closed' || 'cycle_canceled' => 5,
+    _ => 3,
+  };
+
+  /// 신호 문구에는 사유가 이미 들어 있어 겹치지 않게 한다.
+  String _logLine(JobEvent e) {
+    final label = widget.label(e);
+    final reason = _exitLabel(e.exitReason);
+    return reason == null || label.contains(reason) ? label : '$label · $reason';
+  }
+
+  /// 앱 이력에 나오지 않는 신호·접수·잔고·회차 종료까지 이 회차의 모든 기록을 보여 준다.
+  Widget _log() {
+    final events = [...cycle.events]
+      ..sort((a, b) {
+        final byTime = a.at.compareTo(b.at);
+        return byTime != 0 ? byTime : _order(a.type).compareTo(_order(b.type));
+      });
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.only(top: 8),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: AppColors.grid)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${cycle.cycleNo}회차 상세 로그 ${events.length}건',
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          if (events.isEmpty)
+            const Text('기록이 없습니다.', style: TextStyle(color: AppColors.textTertiary, fontSize: 12))
+          else
+            for (final e in events)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 104,
+                      child: Text(_appTime(e.at), style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                    ),
+                    Expanded(child: Text(_logLine(e), style: const TextStyle(fontSize: 12))),
+                  ],
+                ),
+              ),
+        ],
+      ),
+    );
+  }
 
   /// 앱 회차 카드: 주문 수량(방향 색)과 보유시간.
   List<Widget> _liveRows(JobCycle c) {
@@ -961,6 +1033,16 @@ class _CycleCard extends StatelessWidget {
                   '실현손익 ${pnl > 0 ? '+' : ''}${_money(pnl, worker.currency)}',
                   style: TextStyle(color: _pnlColor(pnl), fontSize: 13, fontWeight: FontWeight.w700),
                 ),
+              const SizedBox(width: 4),
+              TextButton(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  minimumSize: const Size(0, 26),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: () => setState(() => _open = !_open),
+                child: Text(_open ? '접기' : '상세'),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -974,6 +1056,7 @@ class _CycleCard extends StatelessWidget {
             if (s.stopLossPct != null) _kv('손절', '${_num(s.stopLossPct!)}${s.stopLossUnit}'),
             if (s.takeProfitPct != null) _kv('청산(익절)', '${_num(s.takeProfitPct!)}${s.takeProfitUnit}'),
           ],
+          if (_open) _log(),
         ],
       ),
     );
@@ -983,7 +1066,11 @@ class _CycleCard extends StatelessWidget {
 String? _exitLabel(String? reason) => switch (reason) {
   'take_profit' => '익절',
   'stop_loss' => '손절',
+  'trailing' => '트레일링',
+  'signal' => '신호 청산',
+  'pnl_limit' => '누적 손익 종료',
   null => null,
+  final other when RegExp(r'^[a-z_]+$').hasMatch(other) => '청산', // 영어 코드를 그대로 보이지 않는다
   final other => other,
 };
 
@@ -1038,6 +1125,16 @@ class _FillRow extends StatelessWidget {
   final WorkerJob job;
   final MemberWorker worker;
 
+  /// 첫 체결이 진입, 마지막 체결이 청산이다. 초까지 보여 준다.
+  String _times(bool open) {
+    final fills = cycle.events.where((e) => e.type == 'fill').toList();
+    final entry = '진입 ${_appTime(fills.first.at)}';
+    return open || fills.length < 2 ? entry : '$entry · 청산 ${_appTime(fills.last.at)}';
+  }
+
+  /// 아직 체결되지 않은 쪽은 평균가가 비어 있거나 0 으로 온다.
+  String _price(double? v) => v == null || v == 0 ? '-' : _appPrice(v, worker.currency);
+
   bool get _short {
     final side = cycle.side;
     if (side != null) return side == 'short';
@@ -1079,6 +1176,18 @@ class _FillRow extends StatelessWidget {
                 ),
                 Text(
                   job.accountLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                ),
+                Text(
+                  '매수가 ${_price(cycle.avgBuyPrice)} · 매도가 ${_price(cycle.avgSellPrice)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                ),
+                Text(
+                  _times(open),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),

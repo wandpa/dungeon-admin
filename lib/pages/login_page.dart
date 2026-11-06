@@ -46,6 +46,11 @@ class _LoginPageState extends State<LoginPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Image.asset('assets/admin_icon.png', width: 48, height: 48),
+                  ),
+                  const SizedBox(height: 8),
                   const Text('던전우상향', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
                   const Text('관리자', style: TextStyle(color: AppColors.accent, fontSize: 13)),
                   const SizedBox(height: 20),

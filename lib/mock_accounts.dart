@@ -103,6 +103,9 @@ class AccountOrder {
     this.isPaper = false,
     this.avgFillPrice,
     this.message,
+    this.buyPrice,
+    this.sellPrice,
+    this.realizedPnl,
   });
 
   final DateTime at;
@@ -120,6 +123,10 @@ class AccountOrder {
   final String jobName;
   final double? avgFillPrice;
   final String? message;
+  // 청산 주문만 있다. 그 회차의 평균 매수가·매도가와 실현손익이다.
+  final double? buyPrice;
+  final double? sellPrice;
+  final double? realizedPnl;
 
   String get sideLabel => switch (side) {
     'buy' => '매수',
