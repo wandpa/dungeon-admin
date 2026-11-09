@@ -2,7 +2,19 @@
 
 던전우상향 관리자 웹 화면입니다 (Flutter Web). 회원 관리, 회원 모니터링, 종목 마스터, 푸시 알림, 공지사항, 관리자 활동 기록을 다룹니다.
 
-API는 [dungeon-admin-api](https://github.com/wandpa/dungeon-admin-api)에 있습니다. 개발 요청 체크리스트는 [노션 「던전 관리자 요구사항 분석」](https://app.notion.com/p/410c997e54ef80e9a866f5a468e3a3f2)에 있습니다.
+## 저장소
+
+| 구분 | 주소 | 브랜치 |
+| --- | --- | --- |
+| 관리자 웹 (이 저장소) | https://github.com/wandpa/dungeon-admin | `main` (작업 브랜치 `feature/member-monitoring`) |
+| 관리자 API (.NET) | https://github.com/wandpa/dungeon-admin-api | `main` |
+
+```sh
+git clone https://github.com/wandpa/dungeon-admin.git
+git clone https://github.com/wandpa/dungeon-admin-api.git
+```
+
+API 실행 방법은 API 저장소의 `README.md`, 요청·응답 형식은 `docs/API_DESIGN.md`에 있습니다. 개발 요청 체크리스트는 [노션 「던전 관리자 요구사항 분석」](https://app.notion.com/p/410c997e54ef80e9a866f5a468e3a3f2)에 있습니다.
 
 ## 실행
 
