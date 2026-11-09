@@ -51,9 +51,13 @@ class _AdminShellState extends State<AdminShell> {
       if (m.permission == null || can(m.permission!)) m,
   ];
 
-  void _select(_Menu m) => setState(() {
-    if (!_open.contains(m.label)) _open.add(m.label);
-    _current = m.label;
+  void _select(_Menu m) => _show(m.label);
+
+  /// 다른 화면으로 가면 상태줄의 조회 결과는 그 화면 것이 아니므로 지운다.
+  void _show(String label) => setState(() {
+    if (!_open.contains(label)) _open.add(label);
+    if (_current != label) adminStatus.value = '준비되었습니다.';
+    _current = label;
   });
 
   /// 탭을 닫는다. 마지막 탭까지 닫으면 기본 화면인 대시보드로 돌아간다.
@@ -134,7 +138,7 @@ class _AdminShellState extends State<AdminShell> {
             current: _current,
             // 대시보드 하나만 남으면 닫아도 다시 대시보드라 닫는 단추를 두지 않는다.
             closable: _open.length > 1 || _open.single != menus.first.label,
-            onSelect: (t) => setState(() => _current = t),
+            onSelect: _show,
             onClose: _close,
             onMove: _move,
           ),

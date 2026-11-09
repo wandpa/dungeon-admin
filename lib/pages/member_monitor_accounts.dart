@@ -318,15 +318,16 @@ class _ConsultPaneState extends State<_ConsultPane> {
                 const SizedBox(height: 4),
                 TextField(
                   controller: _content,
+                  enabled: !widget.member.isLive,
                   onSubmitted: (_) => _add(),
                   style: const TextStyle(fontSize: 13),
                   decoration: InputDecoration(
-                    hintText: '상담 내용 입력',
+                    hintText: widget.member.isLive ? '상담 저장 API 연결 전입니다.' : '상담 내용 입력',
                     isDense: true,
                     suffixIcon: IconButton(
                       tooltip: '상담 기록 추가',
                       icon: const Icon(Icons.send, size: 18),
-                      onPressed: _add,
+                      onPressed: widget.member.isLive ? null : _add,
                     ),
                   ),
                 ),

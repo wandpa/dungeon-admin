@@ -50,7 +50,7 @@ class _AppToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) => IgnorePointer(
     child: ExcludeFocus(
-      child: Switch(value: value, onChanged: (_) {}),
+      child: Switch(value: value, onChanged: null),
     ),
   );
 }

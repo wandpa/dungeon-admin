@@ -72,24 +72,23 @@ class LiveDashboardPage extends StatelessWidget {
           description: '회원과 매매 현황을 봅니다. 서버 상태는 시스템 탭에서 봅니다.',
           children: [
             const _DashHead('회원', Icons.people_outline),
-            Wrap(
+            _StatGrid(
               spacing: 8,
-              runSpacing: 8,
               children: [
                 _StatTile(label: '전체 회원', value: formatNumber(n('totalMembers')), icon: Icons.people_outline),
                 _StatTile(label: '신규 가입 (어제·오늘)', value: '${n('newMembers')}', icon: Icons.person_add_alt),
-                _StatTile(
-                  label: '최근 푸시 열람률',
-                  value: openRate == null ? '-' : '${openRate.round()}%',
-                  icon: Icons.notifications_active_outlined,
-                ),
+                if (openRate != null)
+                  _StatTile(
+                    label: '최근 푸시 열람률',
+                    value: '${openRate.round()}%',
+                    icon: Icons.notifications_active_outlined,
+                  ),
               ],
             ),
             _DashColumns(left: issues, right: members),
             const _DashHead('매매', Icons.show_chart),
-            Wrap(
+            _StatGrid(
               spacing: 8,
-              runSpacing: 8,
               children: [
                 _StatTile(label: '오늘 발생 신호', value: '${n('todaySignals')}', icon: Icons.show_chart),
                 _StatTile(

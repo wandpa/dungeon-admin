@@ -372,7 +372,7 @@ void main() {
 
     expect(find.text('워커 2개 · 가동중 1개'), findsOneWidget);
     expect(find.text('해외계좌2(****9999)'), findsOneWidget);
-    expect(find.text('71'), findsNWidgets(2));
+    expect(find.text('누적 71회'), findsNWidgets(2));
     expect(find.text('매도 1계약'), findsOneWidget);
     expect(find.text('+700 HKD', findRichText: true), findsOneWidget); // 합계
     expect(asked.where((u) => u.path.contains('/members/')), isEmpty); // 회원마다 부르지 않는다

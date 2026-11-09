@@ -159,7 +159,7 @@ class _MembersPageState extends State<MembersPage> {
           hint: '아이디·이메일 검색',
           filters: [
             for (final s in statuses) '${s?.label ?? '전체'} ${_count(s)}',
-            '접속 차단 ${currentMembers.where((m) => m.accessBlocked).length}',
+            if (canBlock) '접속 차단 ${currentMembers.where((m) => m.accessBlocked).length}',
           ],
           selectedIndex: _blockedOnly ? statuses.length : statuses.indexOf(_status),
           onFilterSelected: (i) => i == statuses.length ? _setFilter(null, blocked: true) : _setFilter(statuses[i]),
@@ -189,7 +189,8 @@ class _MembersPageState extends State<MembersPage> {
           ),
         AdminTable(
           // 버튼이 화면 밖으로 밀리지 않게 맨 왼쪽에 둔다. 테스트 DB 회원은 차단할 수 없어 끝 칸이 없다.
-          columns: ['보기', '번호', '아이디', '이름', '등급', '이메일', '가입일', '최근 접속', '상태', if (canBlock) ''],
+          // 테스트 DB 번호는 긴 GUID 앞자리라 목록에서 빼고 상세에서 보여 준다.
+          columns: ['보기', if (canBlock) '번호', '아이디', '이름', '등급', '이메일', '가입일', '최근 접속', '상태', if (canBlock) ''],
           buttonColumns: {0, if (canBlock) 9},
           // 줄을 누르면 상세, 두 번 누르면 그 회원의 워커 목록이다. 승인 전 회원은 워커가 없다.
           onRowTap: (i) => _openDetail(visible[i]),
@@ -223,7 +224,7 @@ class _MembersPageState extends State<MembersPage> {
                       TextButton(style: _rowButton, onPressed: () => _openMonitor(m), child: const Text('모니터링')),
                   ],
                 ),
-                Text(m.shownId),
+                if (canBlock) Text(m.shownId),
                 InkWell(
                   onTap: () => _openDetail(m),
                   // 아이디를 두 번 눌러도 상세가 먼저 열리지 않게 한다.

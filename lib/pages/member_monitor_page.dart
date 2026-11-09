@@ -416,7 +416,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
     final member = _member;
     if (member != null && member.id != _viewedMemberId) {
       _viewedMemberId = member.id;
-      logActivity(ActivityKind.view, '${member.username} 회원 모니터링 열람');
+      logActivity(ActivityKind.view, '${member.username} 회원 모니터링 열람', target: member.username);
     }
     final allWorkers = member == null ? const <MemberWorker>[] : workersOf(member.id);
     final accountName = _accountName;
@@ -655,6 +655,86 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
             },
           );
 
+          final live = useLiveData.value;
+          final picker = _MemberPicker(
+            members: _members,
+            selected: member,
+            onSelect: _selectMember,
+            onAll: _showAllMembers,
+            onBack: _tab == _MonitorTab.workers && widget.onExit == null ? null : _back,
+            onDetail: () async {
+              if (member == null) return;
+              await showMemberDetail(context, member);
+              if (mounted) setState(() {});
+            },
+            consultCount: member == null ? 0 : consultationsOf(member.id).length,
+            consultOpen: _showConsult,
+            onConsult: () => setState(() => _showConsult = !_showConsult),
+            issues: member == null || issuesOf(member).isEmpty ? null : issueBar,
+            loadedAt: member == null ? null : liveLoadedAt(member),
+            onReload: member == null || _loadingMemberId != null ? null : () => _reload(member),
+          );
+          final tabs = Row(
+            children: [
+              Expanded(
+                child: _MemberBar(
+                  member: member,
+                  tab: _tab,
+                  tabsOnly: true,
+                  onDetail: () {},
+                  onTabChanged: bar.onTabChanged,
+                ),
+              ),
+              ?accountBar,
+            ],
+          );
+          final narrowBody = <Widget>[
+            ...switch (_tab) {
+              _MonitorTab.workers => [SizedBox(height: 520, child: workerPane)],
+              _MonitorTab.jobs => [
+                SizedBox(height: 420, child: jobsPane),
+                gap,
+                SizedBox(height: 420, child: settingsPane),
+              ],
+              _MonitorTab.jobDetail => [SizedBox(height: 720, child: detailPane)],
+              _MonitorTab.trades => [SizedBox(height: 720, child: tradesPane)],
+              _MonitorTab.positions => [SizedBox(height: 520, child: positionsPane)],
+              _MonitorTab.logs => [SizedBox(height: 620, child: logPane)],
+              _MonitorTab.accounts => [
+                SizedBox(height: 320, child: accountsPane),
+                gap,
+                SizedBox(height: 280, child: summaryPane),
+                gap,
+                SizedBox(height: 420, child: ordersPane),
+              ],
+              _MonitorTab.notifications => [
+                SizedBox(height: 420, child: notifySettingsPane),
+                gap,
+                SizedBox(height: 420, child: notifyHistoryPane),
+              ],
+              _MonitorTab.signals => [SizedBox(height: 720, child: liveList(liveSignalList))],
+              _MonitorTab.strategies => [SizedBox(height: 720, child: liveList(liveStrategyList))],
+              _MonitorTab.watchlist => [SizedBox(height: 720, child: liveList(liveWatchlist))],
+              _MonitorTab.symbols => [SizedBox(height: 720, child: liveList(liveMemberSymbols))],
+            },
+          ];
+
+          // 좁으면 넓은 화면과 같은 머리줄을 쓰고, 패널마다 높이를 정해 세로로 쌓는다.
+          if (narrow && live) {
+            return ListView(
+              controller: _scroll,
+              children: _allMembers
+                  ? [SizedBox(height: 720, child: allWorkersTable)]
+                  : [
+                      picker,
+                      const SizedBox(height: 6),
+                      tabs,
+                      const SizedBox(height: 8),
+                      if (_showConsult) ...[SizedBox(height: 360, child: memoPane), gap],
+                      ...narrowBody,
+                    ],
+            );
+          }
           // 좁으면 패널마다 높이를 정해 세로로 쌓는다.
           if (narrow && _allMembers) {
             return ListView(
@@ -685,34 +765,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
                 ?issueBar,
                 gap,
                 if (accountBar != null) ...[accountBar, gap],
-                ...switch (_tab) {
-                  _MonitorTab.workers => [SizedBox(height: 520, child: workerPane)],
-                  _MonitorTab.jobs => [
-                    SizedBox(height: 420, child: jobsPane),
-                    gap,
-                    SizedBox(height: 420, child: settingsPane),
-                  ],
-                  _MonitorTab.jobDetail => [SizedBox(height: 720, child: detailPane)],
-                  _MonitorTab.trades => [SizedBox(height: 720, child: tradesPane)],
-                  _MonitorTab.positions => [SizedBox(height: 520, child: positionsPane)],
-                  _MonitorTab.logs => [SizedBox(height: 620, child: logPane)],
-                  _MonitorTab.accounts => [
-                    SizedBox(height: 320, child: accountsPane),
-                    gap,
-                    SizedBox(height: 280, child: summaryPane),
-                    gap,
-                    SizedBox(height: 420, child: ordersPane),
-                  ],
-                  _MonitorTab.notifications => [
-                    SizedBox(height: 420, child: notifySettingsPane),
-                    gap,
-                    SizedBox(height: 420, child: notifyHistoryPane),
-                  ],
-                  _MonitorTab.signals => [SizedBox(height: 720, child: liveList(liveSignalList))],
-                  _MonitorTab.strategies => [SizedBox(height: 720, child: liveList(liveStrategyList))],
-                  _MonitorTab.watchlist => [SizedBox(height: 720, child: liveList(liveWatchlist))],
-                  _MonitorTab.symbols => [SizedBox(height: 720, child: liveList(liveMemberSymbols))],
-                },
+                ...narrowBody,
               ],
             );
           }
@@ -763,7 +816,6 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
           };
 
           final height = constraints.maxHeight;
-          final live = useLiveData.value;
           final main = Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -812,39 +864,9 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _MemberPicker(
-                          members: _members,
-                          selected: member,
-                          onSelect: _selectMember,
-                          onAll: _showAllMembers,
-                          onBack: _tab == _MonitorTab.workers && widget.onExit == null ? null : _back,
-                          onDetail: () async {
-                            if (member == null) return;
-                            await showMemberDetail(context, member);
-                            if (mounted) setState(() {});
-                          },
-                          consultCount: member == null ? 0 : consultationsOf(member.id).length,
-                          consultOpen: _showConsult,
-                          onConsult: () => setState(() => _showConsult = !_showConsult),
-                          issues: member == null || issuesOf(member).isEmpty ? null : issueBar,
-                          loadedAt: member == null ? null : liveLoadedAt(member),
-                          onReload: member == null || _loadingMemberId != null ? null : () => _reload(member),
-                        ),
+                        picker,
                         const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _MemberBar(
-                                member: member,
-                                tab: _tab,
-                                tabsOnly: true,
-                                onDetail: () {},
-                                onTabChanged: bar.onTabChanged,
-                              ),
-                            ),
-                            ?accountBar,
-                          ],
-                        ),
+                        tabs,
                         const SizedBox(height: 8),
                         Expanded(child: memberView),
                       ],

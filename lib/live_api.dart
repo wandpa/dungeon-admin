@@ -428,7 +428,11 @@ Map<String, double> livePnl(Object? rows) {
 /// 앱의 `0/10000회차` 표기. 전체 회차가 비어 있으면 지어내지 않고 지금 회차만 쓴다.
 String _workerRound(Map<String, dynamic> w) {
   final jobs = (w['currentJobs'] as List? ?? const []).cast<Map<String, dynamic>>();
-  if (jobs.isEmpty) return '${w['cycleCount'] ?? 0}';
+  if (jobs.isEmpty) {
+    // 진행 중 잡이 없으면 지금 회차가 없다. 지난 회차 수만 누적으로 보여 준다.
+    final cycles = w['cycleCount'] as int? ?? 0;
+    return cycles == 0 ? '-' : '누적 $cycles회';
+  }
   final job = jobs.first;
   final current = job['repeatCurrent'] ?? 0;
   final count = job['repeatCount'];
@@ -936,9 +940,21 @@ CustomerLog _log(Map<String, dynamic> l, Map<String, String> jobNames) {
   );
 }
 
+/// 알림 제목의 영문 구분값을 앱과 같은 한글로 바꾼다. 모르는 값은 그대로 둔다.
+String liveNotificationTitle(String? raw) => switch ((raw ?? '').trim().toUpperCase()) {
+  '' => '-',
+  'WORKER' => '워커',
+  'ORDER' => '자동매매',
+  'ALERT' || 'SIGNAL' => '신호 알림',
+  'INDICATOR' => '지표',
+  'ERROR' || 'API_ERROR' => '오류',
+  'SYSTEM' => '시스템',
+  _ => raw!,
+};
+
 NotificationMessage _notification(Map<String, dynamic> n) => NotificationMessage(
   _time(n['sentAt'])!,
-  n['title'] as String? ?? '',
+  liveNotificationTitle(n['title'] as String?),
   n['body'] as String? ?? '',
   n['accountName'] as String? ?? '',
   isRead: n['isRead'] as bool? ?? false,

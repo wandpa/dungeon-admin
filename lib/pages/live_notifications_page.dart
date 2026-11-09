@@ -277,7 +277,7 @@ class _LiveNotificationsPageState extends State<LiveNotificationsPage> {
                       [
                         Text(formatDateTime(liveTime(n['sentAt'])!)),
                         Text(n['username'] as String? ?? '-'),
-                        Text(n['title'] as String? ?? '-'),
+                        Text(liveNotificationTitle(n['title'] as String?)),
                         SizedBox(width: 560, child: Text(n['body'] as String? ?? '-')),
                         Text(n['isRead'] == true ? '읽음' : '안 읽음'),
                       ],

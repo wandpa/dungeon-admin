@@ -90,7 +90,7 @@ class _MemberEditPanelState extends State<MemberEditPanel> {
   DateTime? _expiresOn;
   late bool _blocked = widget.member.accessBlocked;
 
-  bool get _editable => can(AdminPermission.memberActions);
+  bool get _editable => can(AdminPermission.memberActions) && !widget.member.isLive;
 
   @override
   void dispose() {
@@ -198,9 +198,11 @@ class _MemberEditPanelState extends State<MemberEditPanel> {
           const SizedBox(height: 10),
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  '저장 API 연결 전입니다. 입력한 값은 저장되지 않습니다.',
+                  widget.member.isLive
+                      ? '저장 API 연결 전이라 고칠 수 없습니다.'
+                      : '저장 API 연결 전입니다. 입력한 값은 저장되지 않습니다.',
                   style: TextStyle(color: AppColors.warning, fontSize: 12),
                 ),
               ),

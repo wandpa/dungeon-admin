@@ -27,9 +27,8 @@ class DashboardPage extends StatelessWidget {
       description: '오늘의 던전 현황과 회사 전체 전략·잡·주문을 한눈에 봅니다.',
       children: [
         const _SystemMonitor(),
-        Wrap(
+        _StatGrid(
           spacing: 16,
-          runSpacing: 16,
           children: [
             _StatTile(label: '전체 회원', value: formatNumber(mockMembers.length), icon: Icons.people_outline),
             _StatTile(label: '신규 가입 (어제·오늘)', value: '$newMembers', icon: Icons.person_add_alt),
@@ -234,9 +233,8 @@ class _OperationSectionState extends State<_OperationSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Wrap(
+        _StatGrid(
           spacing: 16,
-          runSpacing: 16,
           children: [
             _StatTile(
               label: '전체 전략',
@@ -432,6 +430,28 @@ class _BarPanel extends StatelessWidget {
   }
 }
 
+/// 통계 칸을 화면 너비에 맞춰 같은 너비의 칸으로 나눈다. 한 줄에 최대 5칸이고,
+/// 칸 수가 적은 줄도 같은 격자에 맞춰 위아래 칸이 줄을 맞춘다.
+class _StatGrid extends StatelessWidget {
+  const _StatGrid({required this.spacing, required this.children});
+
+  final double spacing;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, c) {
+      final cols = ((c.maxWidth + spacing) / (200 + spacing)).floor().clamp(1, 5);
+      final width = (c.maxWidth - spacing * (cols - 1)) / cols;
+      return Wrap(
+        spacing: spacing,
+        runSpacing: spacing,
+        children: [for (final w in children) SizedBox(width: width, child: w)],
+      );
+    },
+  );
+}
+
 class _StatTile extends StatelessWidget {
   const _StatTile({required this.label, required this.value, required this.icon, this.sub});
 
@@ -442,26 +462,24 @@ class _StatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 240,
-      child: Panel(
-        child: Row(
-          children: [
-            Icon(icon, color: AppColors.accent),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
-                  const SizedBox(height: 4),
-                  Text(value, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
-                  if (sub != null) Text(sub!, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
-                ],
-              ),
+    return Panel(
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.accent),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+                const SizedBox(height: 4),
+                Text(value, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
+                // 보조 문구가 없어도 줄을 비워 두어 옆 칸과 높이를 맞춘다.
+                Text(sub ?? '', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

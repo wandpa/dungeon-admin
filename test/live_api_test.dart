@@ -427,7 +427,7 @@ void main() {
     expect(row.memberId, liveMembers.single.id);
     expect(row.accounts, '해외계좌2(****9999)');
     expect(row.kind, '모의');
-    expect(row.round, '71');
+    expect(row.round, '누적 71회');
     expect(row.holding, '매도 1계약 외 1');
     expect(row.pnl, {'HKD': 700.0});
   });
@@ -620,7 +620,8 @@ void main() {
     );
     expect(counted.kind, '모의');
     expect(counted.round, '7/100회차 외 1');
-    expect(liveWorkerRow(worker('real', const [], cycles: 3)).round, '3');
+    expect(liveWorkerRow(worker('real', const [], cycles: 3)).round, '누적 3회');
+    expect(liveWorkerRow(worker('real', const [], cycles: 0)).round, '-');
   });
 
   test('요청 횟수 제한: 로그인과 조회 모두 서버 안내를 보여 준다', () async {
@@ -653,5 +654,12 @@ void main() {
     await refreshLiveMembers();
     expect(liveStatus.value.error, '테스트 DB 를 조회하지 못했습니다.');
     expect(liveMembers, isEmpty);
+  });
+
+  test('푸시 제목: 영문 구분값을 앱과 같은 한글로 바꾸고 모르는 값은 그대로 둔다', () {
+    expect(liveNotificationTitle('ORDER'), '자동매매');
+    expect(liveNotificationTitle('signal'), '신호 알림');
+    expect(liveNotificationTitle('NEW_KIND'), 'NEW_KIND');
+    expect(liveNotificationTitle(null), '-');
   });
 }
