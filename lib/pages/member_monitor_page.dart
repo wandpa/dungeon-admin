@@ -51,6 +51,13 @@ enum _LogPeriod {
 }
 
 /// 상담용 화면. 회원을 고르면 그 사용자가 앱에서 보는 워커·잡·이력과 고객 로그를 함께 본다.
+/// 마지막으로 본 테스트 DB 회원. 회원 목록을 다녀와도 그 회원을 다시 연다.
+/// 로그인한 관리자에 묶어 두어 다른 로그인에는 넘어가지 않는다.
+({AdminUser? admin, int memberId})? _lastViewed;
+
+void _rememberViewed(int? memberId) =>
+    _lastViewed = memberId == null ? null : (admin: signedInAdmin.value, memberId: memberId);
+
 /// 체크한 워커 종류는 관리자별로 남긴다. 바꾸기 전까지 화면을 나갔다 와도, 새로고침해도 그대로다.
 String get _workerKindsKey => 'worker-kinds/${signedInAdmin.value?.loginId ?? ''}';
 
@@ -96,9 +103,15 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
     liveStatus.addListener(_onLiveChanged);
     final request = memberMonitorRequest.value;
     memberMonitorRequest.value = null;
+    final last = _lastViewed;
+    if (request == null && useLiveData.value && last != null && identical(last.admin, signedInAdmin.value)) {
+      _memberId = last.memberId;
+      return;
+    }
     _allMembers = useLiveData.value && request == null;
     if (request == null) return;
     _memberId = request.memberId;
+    _rememberViewed(request.memberId);
     if (request.issue != null) _applyIssue(request.issue!);
     if (request.logs) _tab = _MonitorTab.logs;
   }
@@ -362,6 +375,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
 
   /// 회원을 바꾸면 워커부터 다시 본다.
   void _selectMember(Member m) => setState(() {
+    _rememberViewed(m.id);
     _allMembers = false;
     _memberId = m.id;
     _liveError = null;
@@ -377,6 +391,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
   });
 
   void _showAllMembers() => setState(() {
+    _rememberViewed(null);
     _allMembers = true;
     _memberId = null;
     _tab = _MonitorTab.workers;

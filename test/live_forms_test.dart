@@ -481,6 +481,20 @@ void main() {
     await press.up();
     await tester.pumpAndSettle();
     expect(find.text('superman 워커'), findsOneWidget);
+
+    // 회원 목록을 다녀오면 보던 회원이 다시 열린다.
+    await tester.pumpWidget(const MaterialApp(home: Scaffold()));
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: MemberMonitorPage())));
+    await tester.pumpAndSettle();
+    expect(find.text('superman 워커'), findsOneWidget);
+
+    // 전체 회원을 고르면 다음에도 전체 회원으로 연다.
+    await tester.tap(find.widgetWithText(OutlinedButton, '전체 회원'));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const MaterialApp(home: Scaffold()));
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: MemberMonitorPage())));
+    await tester.pumpAndSettle();
+    expect(find.text('전체 회원의 내역을 봅니다. 줄을 누르면 그 회원을 엽니다.'), findsOneWidget);
   });
 
   testWidgets('회원 워커: 실전·모의·알람을 체크박스로 골라 본다', (tester) async {
@@ -498,6 +512,9 @@ void main() {
       'jobCount': 0,
       'finishedJobCount': 0,
       'insertedAt': '2026-11-04T05:15:00Z',
+      'accounts': [
+        {'accountName': '$kind계좌', 'maskedAccountNumber': '****1234'},
+      ],
     };
     Map<String, Object?> page(List<Object?> items) => {'items': items, 'page': 1, 'pageSize': 100, 'total': items.length};
     Object body(String path) {
@@ -538,6 +555,8 @@ void main() {
     expect(find.text('PAPER1'), findsOneWidget);
     expect(find.text('ALERT1'), findsOneWidget);
     expect(find.byType(Checkbox), findsNWidgets(3));
+    expect(find.text('[계좌 real계좌(****1234)]'), findsOneWidget); // 잡이 없는 워커도 계좌가 보인다
+    expect(find.text('[계좌 없음]'), findsNothing);
 
     // 실전만 본다.
     await tester.tap(find.text('모의 1'));

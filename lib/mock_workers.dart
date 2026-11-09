@@ -28,6 +28,7 @@ class MemberWorker {
     this.pnlLimit,
     this.jobs = const [],
     this.kind,
+    this.accountLabels = const [],
   });
 
   final int id;
@@ -43,6 +44,7 @@ class MemberWorker {
   final WorkerPnlLimit? pnlLimit; // null 이면 누적 손익 종료를 쓰지 않는다
   final List<WorkerJob> jobs;
   final String? kind; // real | paper | alert. 샘플 워커는 비어 있다
+  final List<String> accountLabels; // 워커가 구독한 계좌. 잡이 없어도 있다
 
   /// 워커 종류. 서버 값이 없는 샘플은 잡으로 판단한다.
   String get kindKey {

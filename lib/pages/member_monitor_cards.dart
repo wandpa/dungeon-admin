@@ -329,6 +329,7 @@ class _WorkerCard extends StatelessWidget {
       if (live != null) live.accountLabel,
       for (final j in _open.isEmpty ? worker.jobs : _open) j.accountLabel,
     }.toList();
+    if (names.isEmpty) names.addAll(worker.accountLabels); // 잡이 없는 워커
     if (names.isEmpty) return '[계좌 없음]';
     return names.length == 1 ? '[계좌 ${names.first}]' : '[계좌 ${names.first} 외 ${names.length - 1}]';
   }

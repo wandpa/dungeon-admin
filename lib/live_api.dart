@@ -525,6 +525,10 @@ Future<MemberWorker> _worker(String base, Map<String, dynamic> w, Map<String, St
     marketType: w['marketType'] as String? ?? '-',
     status: w['status'] == 'running' ? WorkerStatus.running : WorkerStatus.stopped,
     kind: w['kind'] as String?,
+    accountLabels: [
+      for (final a in (w['accounts'] as List? ?? const []).cast<Map<String, dynamic>>())
+        a['maskedAccountNumber'] == null ? '${a['accountName']}' : '${a['accountName']}(${a['maskedAccountNumber']})',
+    ],
     insertedAt: _time(w['insertedAt'])!,
     currency: w['currency'] as String? ?? '',
     currentPrice: null, // DB 에 시세가 없다
