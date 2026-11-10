@@ -47,10 +47,24 @@ class _AppToggle extends StatelessWidget {
 
   final bool value;
 
+  /// 읽기 전용이라 누를 수 없다. 비활성 스위치는 켜짐·꺼짐이 같은 회색이라 색을 직접 칠한다.
   @override
-  Widget build(BuildContext context) => IgnorePointer(
-    child: ExcludeFocus(
-      child: Switch(value: value, onChanged: null),
+  Widget build(BuildContext context) => Semantics(
+    toggled: value,
+    child: Container(
+      width: 44,
+      height: 24,
+      padding: const EdgeInsets.all(3),
+      alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+      decoration: BoxDecoration(
+        color: value ? AppColors.success : AppColors.grid,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Container(
+        width: 18,
+        height: 18,
+        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+      ),
     ),
   );
 }
@@ -530,6 +544,8 @@ class _JobSettings extends StatelessWidget {
   /// 앱 상세보기 항목 하나. 스위치 카드, 고르는 버튼, 값 칸 중 하나로 그린다.
   Widget _liveItem(LiveSetting item) {
     if (item.isToggle) {
+      // 앱 카드처럼 켜져 있을 때만 카드 안 안내와 세부 항목이 나온다.
+      final open = item.on! && (item.note != null || item.children.isNotEmpty);
       return Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(14),
@@ -538,20 +554,33 @@ class _JobSettings extends StatelessWidget {
           border: Border.all(color: AppColors.border),
           borderRadius: BorderRadius.circular(14),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(item.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 2),
-                  Text(item.value, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
-                ],
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 2),
+                      Text(item.value, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                _AppToggle(item.on!),
+              ],
             ),
-            const SizedBox(width: 12),
-            _AppToggle(item.on!),
+            if (open) ...[
+              const Divider(height: 24),
+              if (item.note != null) ...[
+                Text(item.note!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                const SizedBox(height: 10),
+              ],
+              for (final child in item.children) _liveItem(child),
+            ],
           ],
         ),
       );

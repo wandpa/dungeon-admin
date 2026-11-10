@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:dungeon_admin/live_api.dart';
+import 'package:dungeon_admin/live_strategy.dart';
 import 'package:dungeon_admin/mock_accounts.dart';
 import 'package:dungeon_admin/mock_admin.dart';
 import 'package:dungeon_admin/mock_data.dart';
@@ -214,7 +215,7 @@ void main() {
     expect(filled.strategy.takeProfitPct, isNull);
     expect(
       filled.strategy.liveItems!.map((i) => i.label),
-      containsAllInOrder(['돌파기준', '신호 주기', '주문 유형', '주문 수량', '잡 반복 횟수']),
+      containsAllInOrder(['돌파기준', '신호 주기', '주문 유형', '주문 수량', '반복 횟수']),
     );
     expect(filled.strategy.liveItems!.firstWhere((i) => i.label == '신호 주기').value, '실시간');
     expect(filled.cycles.map((c) => c.cycleNo), [2, 1, 0]); // 최신 회차가 앞, 회차 밖 이벤트는 맨 뒤
@@ -661,5 +662,63 @@ void main() {
     expect(liveNotificationTitle('signal'), '신호 알림');
     expect(liveNotificationTitle('NEW_KIND'), 'NEW_KIND');
     expect(liveNotificationTitle(null), '-');
+  });
+
+  group('전략 설정: 앱 화면과 같은 항목', () {
+    List<LiveSetting> items(String id, Map<String, dynamic> p, {String market = '해외선물'}) =>
+        liveSettings(templateId: id, params: p, marketType: market, qtyUnit: '계약', isAlert: false, tick: (0.01, 10.0));
+
+    test('트레일링 진입 하이브리드: 신호 주기 대신 카드 안 돌파 감지 타임프레임, 진입 간격에 환산 줄', () {
+      final list = items('trailing_entry', {
+        'direction': 'buy_only',
+        'signal_timeframe': '1t',
+        'order_type': 'market',
+        'quantity': 1,
+        'repeat_count': 5,
+        'trailing_entry_step': 20,
+        'trailing_entry_step_unit': 'tick',
+        'switch_to_first_entry_breakout': true,
+      });
+      expect(list.map((i) => i.label), ['거래 방향', '주문 유형', '주문 수량', '진입 간격', '반복 횟수', '첫 진입 후 최초가 돌파로 전환 ✦ 하이브리드']);
+      expect(list[3].note, '20tick / 0.2point / 200.00\$\n진입선 = 현재가 + 20틱 · 트레일링 스탑처럼 끝없이 따라갑니다');
+      final hybrid = list.last;
+      expect(hybrid.on, isTrue);
+      expect(hybrid.value, '1회차는 트레일링 진입, 2회차부터 최초 체결가 돌파로 재진입');
+      expect(hybrid.children.single.label, '돌파 감지 타임프레임');
+      expect(hybrid.children.single.value, '실시간');
+    });
+
+    test('하이브리드 전 트레일링 잡은 신호 주기를 그대로 보여 준다', () {
+      final list = items('trailing_entry', {'direction': 'sell_only', 'signal_timeframe': '1m', 'trailing_entry_step': 3});
+      expect(list.map((i) => i.label), contains('신호 주기'));
+      expect(list.map((i) => i.label), isNot(contains('첫 진입 후 최초가 돌파로 전환 ✦ 하이브리드')));
+    });
+
+    test('갭 하이브리드는 반복 2회 미만이면 꺼진 채 안내를 보여 준다', () {
+      final list = items('gap_trading_breakout', {'repeat_count': 1, 'switch_to_first_entry_breakout': true});
+      expect(list.last.on, isFalse);
+      expect(list.last.value, '반복 횟수가 2회 이상일 때만 켤 수 있습니다');
+    });
+
+    test('돌파: 현재가 대비는 거리와 단위를 붙인다', () {
+      final list = items('breakout', {
+        'breakout_basis': 'current',
+        'breakout_offset_unit': 'tick',
+        'buy_target_set_price': 10,
+        'sell_enabled': true,
+        'sell_target_set_price': -10,
+      });
+      expect(list.firstWhere((i) => i.label == '매수').value, '현재가 대비 +10틱');
+      expect(list.firstWhere((i) => i.label == '매도').value, '현재가 대비 -10틱');
+    });
+
+    test('직전봉 방향: 반복 횟수는 토글 아래 맨 끝, 옛 봉 주기 목록도 읽는다', () {
+      final list = items('candle_direction_breakout', {
+        'signal_timeframe': ['minute', 1, 100],
+        'use_prev2_candle': false,
+      });
+      expect(list.last.label, '반복 횟수');
+      expect(list.firstWhere((i) => i.label == '신호 주기').value, '1분');
+    });
   });
 }

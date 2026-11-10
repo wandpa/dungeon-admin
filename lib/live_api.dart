@@ -741,6 +741,7 @@ JobStrategy _strategy(
       marketType: market,
       qtyUnit: worker?.qtyUnit ?? '',
       isAlert: job.isAlert,
+      tick: tick,
     ),
     liveName: params['job_name'] as String?,
   );

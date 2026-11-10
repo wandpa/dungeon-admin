@@ -10,10 +10,51 @@ String _number(Object? v) {
 }
 
 String _timeframe(Object? v) {
+  // 옛 잡은 ["minute", 1, 100] / ["day", 1, 100] 꼴로 저장돼 있다.
+  if (v is List && v.length >= 2) return v[0] == 'day' ? '일봉' : '${v[1]}분';
   final text = '${v ?? ''}';
   if (text.isEmpty || text == '1t') return '실시간';
   final minutes = RegExp(r'^(\d+)m$').firstMatch(text);
   return minutes == null ? text : '${minutes.group(1)}분';
+}
+
+/// 앱 틱 환산 줄: "20tick / 0.2point / 20.00$". 틱 크기·틱 가치를 모르면 없다.
+String? _tickLine(Object? v, (double, double)? tick) {
+  if (v is! num || v == 0 || tick == null) return null;
+  final point = num.parse((v * tick.$1).toStringAsFixed(6));
+  return '${_number(v)}tick / ${_number(point)}point / ${(v * tick.$2).toStringAsFixed(2)}\$';
+}
+
+String? _lines(List<String?> lines) {
+  final kept = lines.whereType<String>().toList();
+  return kept.isEmpty ? null : kept.join('\n');
+}
+
+const _hybridTitle = '첫 진입 후 최초가 돌파로 전환 ✦ 하이브리드';
+
+/// 앱 하이브리드 카드. 켜져 있으면 카드 안에 안내와 돌파 감지 타임프레임이 나온다.
+LiveSetting _hybrid(
+  Map<String, dynamic> p, {
+  required String first,
+  required String note,
+  bool needsRepeat = false,
+}) {
+  final repeat = p['repeat_count'];
+  final allowed = !needsRepeat || (repeat is num && repeat >= 2);
+  final tf = _timeframe(p['signal_timeframe']);
+  return LiveSetting.toggle(
+    _hybridTitle,
+    allowed ? '1회차는 $first, 2회차부터 최초 체결가 돌파로 재진입' : '반복 횟수가 2회 이상일 때만 켤 수 있습니다',
+    allowed && p['switch_to_first_entry_breakout'] == true,
+    note: note,
+    children: [
+      LiveSetting.value(
+        '돌파 감지 타임프레임',
+        tf,
+        note: tf == '실시간' ? '틱이 올 때마다 바로 판정합니다 (봉 마감을 안 기다립니다)' : '고른 봉이 마감될 때 판정합니다',
+      ),
+    ],
+  );
 }
 
 const _directions = <String, List<(String, String, String)>>{
@@ -47,10 +88,11 @@ List<LiveSetting> liveSettings({
   required String marketType,
   required String qtyUnit,
   required bool isAlert,
+  (double, double)? tick,
 }) {
   final p = params;
   final domestic = marketType == '국내주식';
-  final repeat = LiveSetting.value('잡 반복 횟수', '${_number(p['repeat_count'] ?? 1)} 회');
+  final repeat = LiveSetting.value('반복 횟수', '${_number(p['repeat_count'] ?? 1)} 회');
   final orderType = [
     if (!isAlert) LiveSetting.segment('주문 유형', const ['시장가', '지정가'], p['order_type'] == 'limit' ? '지정가' : '시장가'),
     if (!isAlert && p['order_type'] == 'limit') LiveSetting.value('지정가 (진입)', '${_number(p['limit_price'])} 원'),
@@ -74,13 +116,9 @@ List<LiveSetting> liveSettings({
           _ => '가격',
         },
       ),
-      LiveSetting.toggle('매수', _number(p['buy_target_set_price'] ?? p['buy_target_price']), p['buy_enabled'] != false),
+      LiveSetting.toggle('매수', _breakoutTarget(p, 'buy', domestic), p['buy_enabled'] != false),
       if (!isAlert || p['sell_enabled'] == true)
-        LiveSetting.toggle(
-          '매도',
-          _number(p['sell_target_set_price'] ?? p['sell_target_price']),
-          p['sell_enabled'] == true,
-        ),
+        LiveSetting.toggle('매도', _breakoutTarget(p, 'sell', domestic), p['sell_enabled'] == true),
       timeframe,
       ...orderType,
       ...quantity,
@@ -92,11 +130,17 @@ List<LiveSetting> liveSettings({
       ...orderType,
       ...quantity,
       LiveSetting.value('등락률', '${_number(p['min_change_pct'] ?? 0)} %', note: '양봉은 + 이상, 음봉은 − 이하일 때'),
-      repeat,
       LiveSetting.toggle('양->음, 음->양 전환', '양봉 다음 음봉이면 매도, 음봉 다음 양봉이면 매수한다', p['use_prev2_candle'] == true),
-      LiveSetting.toggle('반대진입', '양봉이면 매도, 음봉이면 매수한다', p['candle_reverse_entry'] == true),
-      LiveSetting.toggle('봉 내 재진입', '청산된 뒤 같은 봉 안에서 가격이 직전 봉 종가를 다시 넘으면 같은 방향으로 다시 들어간다', p['use_bar_reentry'] == true),
-      if (p['use_bar_reentry'] == true) LiveSetting.value('재진입 횟수', '${_number(p['bar_reentry_count'])} 회'),
+      if (p.containsKey('candle_reverse_entry'))
+        LiveSetting.toggle('반대진입', '양봉이면 매도, 음봉이면 매수한다', p['candle_reverse_entry'] == true),
+      if (p.containsKey('use_bar_reentry'))
+        LiveSetting.toggle(
+          '봉 내 재진입',
+          '청산된 뒤 같은 봉 안에서 가격이 직전 봉 종가를 다시 넘으면 같은 방향으로 다시 들어간다',
+          p['use_bar_reentry'] == true,
+          children: [LiveSetting.value('재진입 횟수', '${_number(p['bar_reentry_count'])} 회')],
+        ),
+      repeat,
     ],
     'first_fill_breakout' => [_direction(templateId, p), timeframe, ...orderType, ...quantity, repeat],
     'gap_trading_breakout' => [
@@ -104,34 +148,31 @@ List<LiveSetting> liveSettings({
       LiveSetting.value(
         '갭 크기',
         '${_number(p['gap_min_ticks'] ?? (domestic ? 3 : 5))} ${domestic ? '%' : '틱'}',
-        note: domestic ? '전일 종가 대비 이 % 이상 벌어져야 갭으로 봅니다' : '전일 종가와 당일 시가의 차이가 이 값 이상이어야 갭으로 봅니다',
+        note: _lines([
+          if (!domestic) _tickLine(p['gap_min_ticks'] ?? 5, tick),
+          domestic ? '전일 종가 대비 이 % 이상 벌어져야 갭으로 봅니다' : '전일 종가와 당일 시가의 차이가 이 값 이상이어야 갭으로 봅니다',
+        ]),
       ),
       ...orderType,
       ...quantity,
       repeat,
       if (!isAlert)
-        LiveSetting.toggle(
-          '첫 진입 후 최초가 돌파로 전환 ✦ 하이브리드',
-          '1회차는 갭으로 진입, 2회차부터 최초 체결가 돌파로 재진입',
-          p['switch_to_first_entry_breakout'] == true,
-        ),
-      if (p['switch_to_first_entry_breakout'] == true)
-        LiveSetting.value('돌파 감지 타임프레임', _timeframe(p['signal_timeframe'])),
+        _hybrid(p, first: '갭으로 진입', note: '양방향은 1회차에 먼저 진입한 방향으로만 재진입합니다', needsRepeat: true),
     ],
     'trailing_entry' => [
       _direction(templateId, p),
-      timeframe,
+      // 하이브리드가 생긴 뒤의 앱은 1회차를 늘 실시간으로 따라가고, 봉 주기는 돌파 감지에만 쓴다.
+      if (!p.containsKey('switch_to_first_entry_breakout')) timeframe,
       ...orderType,
       ...quantity,
-      LiveSetting.value(
-        '진입 간격',
-        '${_number(p['trailing_entry_step'])} ${switch (p['trailing_entry_step_unit']) {
-          'percent' || 'pct' || '%' => '%',
-          'point' || 'pt' => 'pt',
-          _ => domestic && p['trailing_entry_step_unit'] == null ? '%' : '틱',
-        }}',
-      ),
+      _trailingStep(p, domestic, tick),
       repeat,
+      if (!isAlert && p.containsKey('switch_to_first_entry_breakout'))
+        _hybrid(
+          p,
+          first: '트레일링 진입',
+          note: '끄면 회차마다 진입선을 새로 놓고(재무장) 다시 트레일링 합니다. 1회차 트레일링 진입은 늘 실시간입니다.',
+        ),
     ],
     'indicator_combination' => [
       qtyUnit == '주' || domestic
@@ -141,10 +182,10 @@ List<LiveSetting> liveSettings({
       ...orderType,
       if (!isAlert) ...[
         LiveSetting.toggle('첫 반복 시 즉시 진입', '1회차: 조건 없이 즉시 진입, 2회차~: 조건 평가 후 진입', p['immediate_first_entry'] == true),
-        LiveSetting.toggle(
-          '첫 진입 후 최초가 돌파로 전환 ✦ 하이브리드',
-          '1회차는 지표 조건으로 진입, 2회차부터 최초 체결가 돌파로 재진입',
-          p['switch_to_first_entry_breakout'] == true && p['immediate_first_entry'] != true,
+        _hybrid(
+          {...p, if (p['immediate_first_entry'] == true) 'switch_to_first_entry_breakout': false},
+          first: '지표 조건으로 진입',
+          note: '매수·매도를 둘 다 설정한 경우 먼저 진입하는 방향으로만 동작합니다',
         ),
       ],
     ],
@@ -153,6 +194,41 @@ List<LiveSetting> liveSettings({
       for (final MapEntry(:key, :value) in p.entries)
         if (value != null && value is! Map && value is! List) LiveSetting.value(key, '$value'),
     ],
+  };
+}
+
+/// 트레일링 진입 간격. 아래에 틱 환산 줄과 진입선 안내가 붙는다.
+LiveSetting _trailingStep(Map<String, dynamic> p, bool domestic, (double, double)? tick) {
+  final unit = switch (p['trailing_entry_step_unit']) {
+    'percent' || 'pct' || '%' => '%',
+    'point' || 'pt' => 'pt',
+    _ => domestic && p['trailing_entry_step_unit'] == null ? '%' : '틱',
+  };
+  final step = p['trailing_entry_step'];
+  final sign = p['direction'] == 'sell_only' ? '−' : '+';
+  return LiveSetting.value(
+    '진입 간격',
+    '${_number(step)} $unit',
+    note: _lines([
+      if (unit == '틱') _tickLine(step, tick),
+      '진입선 = 현재가 $sign ${step is num ? _number(step) : 'N'}$unit · 트레일링 스탑처럼 끝없이 따라갑니다',
+    ]),
+  );
+}
+
+/// 돌파 전략의 매수·매도 값. 기준이 가격이면 돌파가격, 아니면 기준에서의 거리다.
+String _breakoutTarget(Map<String, dynamic> p, String side, bool domestic) {
+  final raw = p['${side}_target_set_price'] ?? p['${side}_target_price'];
+  final unit = switch (p['breakout_offset_unit']) {
+    'percent' => '%',
+    'tick' => '틱',
+    _ => domestic ? '%' : '틱',
+  };
+  final signed = raw is num && raw > 0 ? '+${_number(raw)}' : _number(raw);
+  return switch (p['breakout_basis']) {
+    'current' => '현재가 대비 $signed$unit',
+    'dayopen' => '일봉시가 대비 $signed$unit',
+    _ => '돌파가격 ${_number(raw)}',
   };
 }
 

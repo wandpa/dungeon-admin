@@ -204,15 +204,17 @@ String strategyTemplateLabel(String templateId) => switch (templateId) {
 
 /// 앱 상세보기 화면의 항목 하나.
 class LiveSetting {
-  const LiveSetting.value(this.label, this.value, {this.note}) : options = const [], on = null;
-  const LiveSetting.segment(this.label, this.options, this.value, {this.note}) : on = null;
-  const LiveSetting.toggle(this.label, this.value, bool this.on) : options = const [], note = null;
+  const LiveSetting.value(this.label, this.value, {this.note}) : options = const [], on = null, children = const [];
+  const LiveSetting.segment(this.label, this.options, this.value, {this.note}) : on = null, children = const [];
+  const LiveSetting.toggle(this.label, this.value, bool this.on, {this.note, this.children = const []})
+    : options = const [];
 
   final String label;
   final String value; // 스위치 카드에서는 설명글
   final List<String> options; // 비어 있지 않으면 고르는 버튼
-  final String? note;
+  final String? note; // 스위치 카드에서는 켜졌을 때 카드 안에 나오는 안내
   final bool? on; // 있으면 스위치 카드
+  final List<LiveSetting> children; // 스위치가 켜졌을 때 카드 안에 나오는 항목
 
   bool get isToggle => on != null;
 }
