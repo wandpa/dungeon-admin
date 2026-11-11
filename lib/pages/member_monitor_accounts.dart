@@ -437,7 +437,10 @@ class _AccountsPane extends StatelessWidget {
                 for (final a in accounts)
                   tile(
                     a.name,
-                    '${a.marketType} · ${a.maskedCano} · ${a.brokerCode}',
+                    [
+                      '${a.marketType} · ${a.maskedCano} · ${a.brokerCode}',
+                      if (a.tokenLine != null) a.tokenLine!,
+                    ].join('\n'),
                     a.name,
                     trailing: StatusBadge(
                       a.isAlert

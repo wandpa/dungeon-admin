@@ -288,6 +288,19 @@ Future<void> refreshLiveMembers() async {
   }
 }
 
+/// 조건(전략·시장·계좌 종류·실행 중 잡)에 맞는 회원 GUID. 조건은 서버가 거른다.
+Future<Set<String>> liveMemberIdsWhere(Map<String, String> query) async {
+  final q = [for (final e in query.entries) '${e.key}=${Uri.encodeQueryComponent(e.value)}'].join('&');
+  final ids = <String>{};
+  for (var page = 1; ; page++) {
+    final body = await _get('/members?$q&page=$page&pageSize=$liveListLimit') as Map<String, dynamic>;
+    final items = (body['items'] as List).cast<Map<String, dynamic>>();
+    ids.addAll(items.map((j) => j['id'] as String));
+    if (ids.length >= (body['total'] as int? ?? 0) || items.isEmpty) break;
+  }
+  return ids;
+}
+
 Member _member(Map<String, dynamic> j) {
   final id = j['id'] as String;
   return Member(
@@ -764,6 +777,9 @@ MemberAccount _account(Map<String, dynamic> a, List<Map<String, dynamic>> balanc
     brokerCode: a['brokerCode'] as String? ?? '-',
     isActive: a['isActive'] as bool? ?? true,
     hasBalance: balance != null,
+    tokenStatus: a['tokenStatus'] as String?,
+    tokenExpiresAt: _time(a['tokenExpiresAt']),
+    tokenUpdatedAt: _time(a['tokenUpdatedAt']),
   );
 }
 

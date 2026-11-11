@@ -8,6 +8,7 @@ import '../theme.dart';
 import '../widgets/admin_page.dart';
 import 'member_actions.dart';
 import 'member_detail_dialog.dart';
+import '../mock_workers.dart' show strategyTemplateLabel;
 import 'member_monitor_page.dart' show MonitorRequest, memberMonitorRequest;
 
 class MembersPage extends StatefulWidget {
@@ -30,11 +31,50 @@ class _MembersPageState extends State<MembersPage> {
   late int? _openId = widget.initialMemberId; // 오른쪽 패널에 보여 주는 회원
   bool _wide = false; // 오른쪽 패널을 둘 자리가 있는지
 
+  // 테스트 DB 회원 조건. 서버가 거르고 맞는 회원 GUID 만 받는다.
+  final _templates = <String>{};
+  String? _market; // domestic | overseas
+  String? _kind; // real | paper | alert
+  bool? _running; // 실행 중 잡이 있는지
+  Set<String>? _matched; // 조건이 없으면 null
+  String? _conditionError;
+  int _conditionRequest = 0;
+
+  bool get _hasCondition => _templates.isNotEmpty || _market != null || _kind != null || _running != null;
+
+  Future<void> _applyConditions() async {
+    final request = ++_conditionRequest;
+    if (!_hasCondition) {
+      return setState(() {
+        _matched = null;
+        _conditionError = null;
+        _page = 0;
+      });
+    }
+    try {
+      final ids = await liveMemberIdsWhere({
+        if (_templates.isNotEmpty) 'template': _templates.join(','),
+        'market': ?_market,
+        'kind': ?_kind,
+        if (_running != null) 'hasRunningJob': '$_running',
+      });
+      if (!mounted || request != _conditionRequest) return;
+      setState(() {
+        _matched = ids;
+        _conditionError = null;
+        _page = 0;
+      });
+    } on LiveApiException catch (e) {
+      if (mounted && request == _conditionRequest) setState(() => _conditionError = e.message);
+    }
+  }
+
   List<Member> get _filtered {
     final q = _query.trim().toLowerCase();
     return [
       for (final m in currentMembers)
         if ((_status == null || m.status == _status) &&
+            (_matched == null || _matched!.contains(m.liveId)) &&
             (!_blockedOnly || m.accessBlocked) &&
             (q.isEmpty || m.username.toLowerCase().contains(q) || m.email.toLowerCase().contains(q)))
           m,
@@ -116,6 +156,95 @@ class _MembersPageState extends State<MembersPage> {
     if (mounted) setState(() => _selectedIds.removeWhere((id) => !mockMembers.any((m) => m.id == id)));
   }
 
+  /// 전략·시장·계좌 종류·실행 중 잡으로 회원을 묶는다. 푸시 대상을 미리 볼 때 쓴다.
+  Widget _conditionBar() {
+    Widget menu<T>(String label, T? value, List<(T?, String)> items, ValueChanged<T?> onChanged) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+        const SizedBox(width: 6),
+        DropdownButton<T?>(
+          value: value,
+          isDense: true,
+          underline: const SizedBox.shrink(),
+          items: [for (final (v, t) in items) DropdownMenuItem<T?>(value: v, child: Text(t, style: const TextStyle(fontSize: 13)))],
+          onChanged: (v) {
+            onChanged(v);
+            _applyConditions();
+          },
+        ),
+      ],
+    );
+    const strategies = [
+      'breakout',
+      'candle_direction_breakout',
+      'first_fill_breakout',
+      'gap_trading_breakout',
+      'trailing_entry',
+      'indicator_combination',
+    ];
+    return Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            spacing: 20,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              menu<String>('시장', _market, const [(null, '전체'), ('domestic', '국내'), ('overseas', '해외')], (v) => _market = v),
+              menu<String>('계좌', _kind, const [(null, '전체'), ('real', '실전'), ('paper', '모의'), ('alert', '알람')], (v) => _kind = v),
+              menu<bool>('실행 중 잡', _running, const [(null, '전체'), (true, '있음'), (false, '없음')], (v) => _running = v),
+              if (_hasCondition)
+                TextButton(
+                  onPressed: () {
+                    _templates.clear();
+                    _market = null;
+                    _kind = null;
+                    _running = null;
+                    _applyConditions();
+                  },
+                  child: const Text('조건 지우기'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              const Text('전략', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+              for (final t in strategies)
+                FilterChip(
+                  label: Text(strategyTemplateLabel(t), style: const TextStyle(fontSize: 12)),
+                  visualDensity: VisualDensity.compact,
+                  selected: _templates.contains(t),
+                  onSelected: (v) {
+                    v ? _templates.add(t) : _templates.remove(t);
+                    _applyConditions();
+                  },
+                ),
+            ],
+          ),
+          if (_conditionError != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(_conditionError!, style: const TextStyle(color: AppColors.up, fontSize: 12)),
+            )
+          else if (_matched != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                '조건에 맞는 회원 ${_matched!.length}명 (모든 조건을 함께 만족). 이 묶음으로 푸시 보내기는 DB 저장이 생긴 뒤(G-1) 연결합니다.',
+                style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered;
@@ -168,6 +297,7 @@ class _MembersPageState extends State<MembersPage> {
             _page = 0;
           }),
         ),
+        if (useLiveData.value) _conditionBar(),
         if (selectable)
           Wrap(
             spacing: 8,

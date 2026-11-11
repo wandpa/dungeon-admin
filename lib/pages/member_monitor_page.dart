@@ -207,9 +207,11 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
     _job = null;
     _orderFilter = _OrderFilter.all;
     switch (issue.kind) {
-      case MemberIssueKind.worker:
+      case MemberIssueKind.worker || MemberIssueKind.workerStopped:
         _tab = _MonitorTab.jobs;
         _workerId = issue.workerId;
+      case MemberIssueKind.dailyLoss:
+        _tab = _MonitorTab.trades;
       case MemberIssueKind.waitingOrders:
         _tab = _MonitorTab.accounts;
         _orderFilter = _OrderFilter.waiting;

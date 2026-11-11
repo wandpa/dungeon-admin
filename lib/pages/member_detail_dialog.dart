@@ -7,6 +7,7 @@ import '../mock_data.dart';
 import '../mock_workers.dart';
 import '../theme.dart';
 import '../widgets/admin_page.dart';
+import 'member_access_panels.dart';
 import 'member_actions.dart';
 import 'member_edit_panel.dart';
 import 'member_monitor_page.dart' show MonitorRequest, memberMonitorRequest;
@@ -267,6 +268,7 @@ class _MemberDetailViewState extends State<MemberDetailView> {
             title: '처리 이력',
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: _logs(m.history, '처리 이력이 없습니다.')),
           ),
+          if (m.isLive) ...[const SizedBox(height: 12), LiveMemberAccessPanels(m)],
         ],
       ],
     );

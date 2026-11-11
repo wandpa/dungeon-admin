@@ -38,6 +38,9 @@ class MemberAccount {
     this.brokerCode = 'KIS',
     this.isActive = true,
     this.hasBalance = true,
+    this.tokenStatus,
+    this.tokenExpiresAt,
+    this.tokenUpdatedAt,
   });
 
   final String name;
@@ -53,6 +56,20 @@ class MemberAccount {
   final String brokerCode;
   final bool isActive;
   final bool hasBalance; // 테스트 DB 는 잔고 기록이 없는 계좌가 있다
+  final String? tokenStatus; // none | valid | expired. 샘플 계좌는 비어 있다
+  final DateTime? tokenExpiresAt;
+  final DateTime? tokenUpdatedAt;
+
+  /// 증권사 접속 토큰 상태 한 줄. 알람 계좌는 토큰을 쓰지 않는다.
+  String? get tokenLine {
+    if (isAlert || tokenStatus == null) return null;
+    final until = tokenExpiresAt == null ? '' : ' · 만료 ${formatDateTime(tokenExpiresAt!)}';
+    return switch (tokenStatus) {
+      'valid' => '토큰 유효$until',
+      'expired' => '토큰 만료됨$until',
+      _ => '토큰 기록 없음',
+    };
+  }
 
   /// 목록에서는 계좌번호 뒤 네 자리만 보여 준다.
   String get maskedCano => cano.length <= 4 ? cano : '****${cano.substring(cano.length - 4)}';
@@ -248,7 +265,16 @@ void sendPush(String title, String body, String target, List<Member> receivers) 
   logActivity(ActivityKind.push, '「$title」 $target ${receivers.length}명 발송');
 }
 
-enum MemberIssueKind { worker, waitingOrders, rejectedOrders, manualPositions, notification, memberStatus }
+enum MemberIssueKind {
+  worker,
+  workerStopped,
+  dailyLoss,
+  waitingOrders,
+  rejectedOrders,
+  manualPositions,
+  notification,
+  memberStatus,
+}
 
 /// 상담 전에 먼저 봐야 할 문제 하나. 앱에서 사용자가 겪을 일을 관리자 말로 옮긴 것이다.
 class MemberIssue {

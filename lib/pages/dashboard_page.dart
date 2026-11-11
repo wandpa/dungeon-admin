@@ -126,75 +126,139 @@ class _SystemMonitor extends StatelessWidget {
 }
 
 /// 회사 전체에서 지금 확인이 필요한 회원. 워커 문제를 맨 위로 올린다.
-class _IssuePanel extends StatelessWidget {
-  const _IssuePanel({this.live});
+/// 이상 회원 목록을 문제 종류로 거른다.
+enum _IssueFilter {
+  all('전체', {}),
+  worker('워커', {MemberIssueKind.worker, MemberIssueKind.workerStopped}),
+  loss('오늘 손실', {MemberIssueKind.dailyLoss}),
+  orders('주문', {MemberIssueKind.waitingOrders, MemberIssueKind.rejectedOrders}),
+  positions('수동 포지션', {MemberIssueKind.manualPositions}),
+  notification('알림', {MemberIssueKind.notification}),
+  member('회원 상태', {MemberIssueKind.memberStatus});
 
-  static const _limit = 8;
+  const _IssueFilter(this.label, this.kinds);
+  final String label;
+  final Set<MemberIssueKind> kinds;
+}
+
+class _IssuePanel extends StatefulWidget {
+  const _IssuePanel({this.live});
 
   /// 테스트 DB 가 준 회원별 문제. 비어 있으면 샘플에서 모은다.
   final List<({int id, String username, List<MemberIssue> issues})>? live;
 
   @override
+  State<_IssuePanel> createState() => _IssuePanelState();
+}
+
+class _IssuePanelState extends State<_IssuePanel> {
+  static const _limit = 8;
+  _IssueFilter _filter = _IssueFilter.all;
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
-    final rows = [
+    final live = widget.live;
+    final all = [
       ...?live,
       if (live == null)
         for (final m in pushableMembers())
           if (issuesOf(m).isNotEmpty) (id: m.id, username: m.username, issues: issuesOf(m)),
     ];
-    int rank(List<MemberIssue> issues) => issues.any((i) => i.kind == MemberIssueKind.worker) ? 0 : 1;
-    rows.sort((a, b) {
+    int rank(List<MemberIssue> issues) =>
+        issues.any((i) => i.kind == MemberIssueKind.worker || i.kind == MemberIssueKind.workerStopped) ? 0 : 1;
+    all.sort((a, b) {
       final byKind = rank(a.issues).compareTo(rank(b.issues));
       return byKind != 0 ? byKind : b.issues.length.compareTo(a.issues.length);
     });
-    final total = rows.fold(0, (n, r) => n + r.issues.length);
+    int count(_IssueFilter f) =>
+        f == _IssueFilter.all ? all.length : all.where((r) => r.issues.any((i) => f.kinds.contains(i.kind))).length;
+    final rows = [
+      for (final r in all)
+        if (_filter == _IssueFilter.all)
+          r
+        else if (r.issues.any((i) => _filter.kinds.contains(i.kind)))
+          (
+            id: r.id,
+            username: r.username,
+            issues: [
+              for (final i in r.issues)
+                if (_filter.kinds.contains(i.kind)) i,
+            ],
+          ),
+    ];
+    final shown = _expanded ? rows : rows.take(_limit);
+    final total = all.fold(0, (n, r) => n + r.issues.length);
     return Panel(
-      title: rows.isEmpty ? '확인이 필요한 회원 없음' : '확인이 필요한 회원 ${rows.length}명 · 문제 $total건',
-      child: rows.isEmpty
-          ? const Text('지금 확인할 문제가 없습니다.', style: TextStyle(color: AppColors.textTertiary))
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final r in rows.take(_limit))
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+      title: all.isEmpty ? '확인이 필요한 회원 없음' : '확인이 필요한 회원 ${all.length}명 · 문제 $total건',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (all.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final f in _IssueFilter.values)
+                    if (f == _IssueFilter.all || count(f) > 0)
+                      ChoiceChip(
+                        label: Text('${f.label} ${count(f)}', style: const TextStyle(fontSize: 12)),
+                        visualDensity: VisualDensity.compact,
+                        selected: _filter == f,
+                        onSelected: (_) => setState(() => _filter = f),
+                      ),
+                ],
+              ),
+            ),
+          if (rows.isEmpty) const Text('지금 확인할 문제가 없습니다.', style: TextStyle(color: AppColors.textTertiary)),
+          for (final r in shown)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 140,
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                      ),
+                      onPressed: () => memberMonitorRequest.value = MonitorRequest(r.id),
+                      child: Text(r.username, overflow: TextOverflow.ellipsis),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
                       children: [
-                        SizedBox(
-                          width: 140,
-                          child: TextButton(
-                            style: TextButton.styleFrom(
-                              alignment: Alignment.centerLeft,
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
-                            ),
-                            onPressed: () => memberMonitorRequest.value = MonitorRequest(r.id),
-                            child: Text(r.username, overflow: TextOverflow.ellipsis),
+                        for (final i in r.issues)
+                          ActionChip(
+                            label: Text(i.label, style: const TextStyle(fontSize: 12, color: AppColors.warning)),
+                            visualDensity: VisualDensity.compact,
+                            side: const BorderSide(color: AppColors.warning),
+                            onPressed: () => memberMonitorRequest.value = MonitorRequest(r.id, issue: i),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: [
-                              for (final i in r.issues)
-                                ActionChip(
-                                  label: Text(i.label, style: const TextStyle(fontSize: 12, color: AppColors.warning)),
-                                  visualDensity: VisualDensity.compact,
-                                  side: const BorderSide(color: AppColors.warning),
-                                  onPressed: () => memberMonitorRequest.value = MonitorRequest(r.id, issue: i),
-                                ),
-                            ],
-                          ),
-                        ),
                       ],
                     ),
                   ),
-                if (rows.length > _limit)
-                  Text('외 ${rows.length - _limit}명', style: const TextStyle(color: AppColors.textTertiary)),
-              ],
+                ],
+              ),
             ),
+          if (rows.length > _limit)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () => setState(() => _expanded = !_expanded),
+                child: Text(_expanded ? '접기' : '외 ${rows.length - _limit}명 더 보기'),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
