@@ -29,6 +29,9 @@ class MemberWorker {
     this.jobs = const [],
     this.kind,
     this.accountLabels = const [],
+    this.resumeOnMarketOpen,
+    this.stopAfterCycle,
+    this.stopAfterCycleAt,
   });
 
   final int id;
@@ -45,6 +48,9 @@ class MemberWorker {
   final List<WorkerJob> jobs;
   final String? kind; // real | paper | alert. 샘플 워커는 비어 있다
   final List<String> accountLabels; // 워커가 구독한 계좌. 잡이 없어도 있다
+  final bool? resumeOnMarketOpen; // 장이 열리면 다시 실행. 샘플은 비어 있다
+  final bool? stopAfterCycle; // 진행 중 회차가 끝나면 워커를 멈춘다
+  final DateTime? stopAfterCycleAt; // 회차 후 정지를 켠 시각
 
   /// 워커 종류. 서버 값이 없는 샘플은 잡으로 판단한다.
   String get kindKey {
@@ -69,6 +75,9 @@ class MemberWorker {
     autoCloseOnMarketEnd: autoCloseOnMarketEnd,
     errorMessage: errorMessage,
     pnlLimit: pnlLimit,
+    resumeOnMarketOpen: resumeOnMarketOpen,
+    stopAfterCycle: stopAfterCycle,
+    stopAfterCycleAt: stopAfterCycleAt,
     jobs: [
       for (final j in jobs)
         if (j.accountName == accountName) j,
@@ -87,6 +96,9 @@ class MemberWorker {
     autoCloseOnMarketEnd: autoCloseOnMarketEnd,
     errorMessage: errorMessage,
     pnlLimit: pnlLimit,
+    resumeOnMarketOpen: resumeOnMarketOpen,
+    stopAfterCycle: stopAfterCycle,
+    stopAfterCycleAt: stopAfterCycleAt,
     jobs: next,
   );
 
@@ -238,6 +250,10 @@ class WorkerJob {
     this.detailLoaded = false,
     this.accountNumber,
     this.endReason,
+    this.limitPrice,
+    this.stopOnClose,
+    this.repeatMode,
+    this.runStartedAt,
   });
 
   final String name;
@@ -257,6 +273,10 @@ class WorkerJob {
   final bool detailLoaded; // 테스트 DB 잡의 설정·회차를 받았는지
   final String? accountNumber; // 서버가 가려서 준 계좌번호
   final String? endReason; // completed · user_close · deleted · failed · cancelled · abnormal
+  final double? limitPrice; // 지정가 주문 가격. 시장가면 비어 있다
+  final bool? stopOnClose; // 장 마감에 잡을 멈춘다
+  final String? repeatMode; // 지금 DB 값은 repeat 하나뿐이다
+  final DateTime? runStartedAt; // 잡이 실행을 시작한 시각
 
   /// 설정과 회차를 채운 잡.
   WorkerJob withDetail(JobStrategy strategy, List<JobCycle> cycles) => WorkerJob(
@@ -277,6 +297,10 @@ class WorkerJob {
     detailLoaded: true,
     accountNumber: accountNumber,
     endReason: endReason,
+    limitPrice: limitPrice,
+    stopOnClose: stopOnClose,
+    repeatMode: repeatMode,
+    runStartedAt: runStartedAt,
   );
 
   bool get isAlert => mode == 'alert';

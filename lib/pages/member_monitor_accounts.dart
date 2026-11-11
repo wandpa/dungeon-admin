@@ -440,6 +440,7 @@ class _AccountsPane extends StatelessWidget {
                     [
                       '${a.marketType} · ${a.maskedCano} · ${a.brokerCode}',
                       if (a.tokenLine != null) a.tokenLine!,
+                      if (a.sessionLine != null) a.sessionLine!,
                     ].join('\n'),
                     a.name,
                     trailing: StatusBadge(

@@ -41,6 +41,9 @@ class MemberAccount {
     this.tokenStatus,
     this.tokenExpiresAt,
     this.tokenUpdatedAt,
+    this.nxtEnabled,
+    this.usPremarketEnabled,
+    this.usAftermarketEnabled,
   });
 
   final String name;
@@ -59,6 +62,16 @@ class MemberAccount {
   final String? tokenStatus; // none | valid | expired. 샘플 계좌는 비어 있다
   final DateTime? tokenExpiresAt;
   final DateTime? tokenUpdatedAt;
+  final bool? nxtEnabled; // 국내주식 NXT(대체거래소) 거래
+  final bool? usPremarketEnabled; // 미국주식 장전 거래
+  final bool? usAftermarketEnabled; // 미국주식 장후 거래
+
+  /// 앱 계좌 설정의 거래 시간 옵션 한 줄. 샘플 계좌와 알람 계좌는 없다.
+  String? get sessionLine {
+    if (isAlert || nxtEnabled == null) return null;
+    String on(bool? v) => v == true ? '켜짐' : '꺼짐';
+    return 'NXT ${on(nxtEnabled)} · 미국 장전 ${on(usPremarketEnabled)} · 장후 ${on(usAftermarketEnabled)}';
+  }
 
   /// 증권사 접속 토큰 상태 한 줄. 알람 계좌는 토큰을 쓰지 않는다.
   String? get tokenLine {
@@ -131,8 +144,14 @@ class AccountOrder {
     this.kind,
     this.exitReason,
     this.cycleNo,
+    this.liveId,
+    this.fillCount,
+    this.judgePrice,
   });
 
+  final String? liveId; // 테스트 DB 주문 GUID. 체결 내역을 받을 때 쓴다
+  final int? fillCount; // 증권사 체결 건수. 분할 체결이면 2 이상
+  final double? judgePrice; // 엔진이 주문을 판단한 가격
   final String? kind; // entry | exit
   final String? exitReason;
   final int? cycleNo;

@@ -20,7 +20,10 @@ class _TradesPane extends StatefulWidget {
     required this.onOpen,
     this.more,
     this.onMore,
+    this.memberLiveId,
   });
+
+  final String? memberLiveId; // 테스트 DB 회원이면 체결 내역을 받을 수 있다
 
   final List<AccountPosition> positions;
   final List<AccountOrder> orders;
@@ -209,6 +212,11 @@ class _TradesPaneState extends State<_TradesPane> {
                         ),
                       if (o.message != null)
                         Text(o.message!, style: const TextStyle(color: AppColors.up, fontSize: 12)),
+                      if (o.judgePrice != null)
+                        Text(
+                          '판정가 ${_appPrice(o.judgePrice!, o.currency)}',
+                          style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                        ),
                     ],
                   ),
                 ),
@@ -227,6 +235,17 @@ class _TradesPaneState extends State<_TradesPane> {
                         style: TextStyle(color: _pnlColor(o.realizedPnl!), fontSize: 14, fontWeight: FontWeight.w700),
                       ),
                     Text(state, style: TextStyle(color: stateColor, fontSize: 13)),
+                    if (widget.memberLiveId != null && o.liveId != null && (o.fillCount ?? 0) > 0)
+                      TextButton(
+                        style: TextButton.styleFrom(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero),
+                        onPressed: () => showLiveFills(
+                          context,
+                          memberLiveId: widget.memberLiveId!,
+                          orderLiveId: o.liveId!,
+                          title: '${o.symbolName} ${o.sideLabel}',
+                        ),
+                        child: Text('체결 ${o.fillCount}건', style: const TextStyle(fontSize: 12)),
+                      ),
                   ],
                 ),
               ],

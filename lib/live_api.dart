@@ -107,6 +107,12 @@ Future<String> liveMembersCsv({String q = '', MemberStatus? status, Map<String, 
   return utf8.decode(res.bodyBytes).replaceFirst('\uFEFF', ''); // BOM 은 내려받을 때 붙인다
 }
 
+/// 관리자 API 의 /live 밖 경로(활동 기록, 관리자 이름). 응답 JSON 을 그대로 준다.
+Future<dynamic> adminGet(String path) async {
+  final res = await _send(() => _client.get(Uri.parse('$_baseUrl$path'), headers: _auth));
+  return _json(res);
+}
+
 /// 화면이 표를 CSV 로 내려받았음을 서버 활동 기록에 남긴다. 실패해도 내려받기는 이미 끝났다.
 Future<void> logLiveExport(String name, int count, String? memberLiveId) async {
   try {
@@ -271,10 +277,23 @@ Future<void> loadMoreLiveOrders(Member m) async {
   _paging[key] = (page, body['total'] as int? ?? 0);
 }
 
-/// 회원의 다음 쪽 로그를 받아 붙인다.
+/// 회원의 다음 쪽 로그를 받아 붙인다. 화면을 연 뒤 새로 쌓인 로그도 함께 받는다.
+/// 새 로그가 앞에 끼면 다음 쪽이 그만큼 겹치지만, 겹친 로그는 한 번만 남고 빠지는 로그는 없다.
 Future<void> loadMoreLiveLogs(Member m, {int? workerId, String? jobId}) async {
   final scope = _logScope(workerId, jobId);
-  await _mergeLogs(m, scope, page: (_paging[_logsKey(m, scope)]?.$1 ?? 0) + 1);
+  final page = (_paging[_logsKey(m, scope)]?.$1 ?? 0) + 1;
+  await _mergeLogs(m, scope, page: 1);
+  await _mergeLogs(m, scope, page: page);
+}
+
+/// 받아 둔 로그 앞에 새로 쌓인 로그만 받는다. 받은 쪽 수는 그대로 둔다.
+Future<void> loadNewLiveLogs(Member m, {int? workerId, String? jobId}) async {
+  final scope = _logScope(workerId, jobId);
+  final key = _logsKey(m, scope);
+  final page = _paging[key]?.$1 ?? 1;
+  await _mergeLogs(m, scope, page: 1);
+  final total = _paging[key]?.$2 ?? 0;
+  _paging[key] = (page, total);
 }
 
 /// 회원 목록을 다시 불러온다. 회원별 모니터링 값은 비워서 다음에 볼 때 새로 받는다.
@@ -333,6 +352,7 @@ Member _member(Map<String, dynamic> j) {
     liveRunningCount: j['runningWorkerCount'] as int? ?? 0,
     maskedName: j['maskedName'] as String?,
     tier: j['tier'] as int?,
+    customCandleUnits: j['customCandleUnits'] as String?,
   );
 }
 
@@ -567,6 +587,9 @@ Future<MemberWorker> _worker(String base, Map<String, dynamic> w, Map<String, St
     currentPrice: null, // DB 에 시세가 없다
     autoCloseOnMarketEnd: detail['autoCloseOnMarketEnd'] as bool? ?? false,
     pnlLimit: _pnlLimit(detail['pnlLimit'] as Map<String, dynamic>?),
+    resumeOnMarketOpen: detail['resumeOnMarketOpen'] as bool?,
+    stopAfterCycle: detail['stopAfterCycle'] as bool?,
+    stopAfterCycleAt: _time(detail['stopAfterCycleAt']),
     jobs: [
       for (final j in rows)
         if (j['hidden'] != true) _job(j, nameOf(j)),
@@ -632,6 +655,10 @@ WorkerJob _job(Map<String, dynamic> j, String name) {
     fixedRealizedPnl: _double(j['realizedPnl']) ?? 0,
     accountNumber: j['maskedAccountNumber'] as String?,
     endReason: j['endReason'] as String?,
+    limitPrice: _double(j['limitPrice']),
+    stopOnClose: j['stopOnClose'] as bool?,
+    repeatMode: j['repeatMode'] as String?,
+    runStartedAt: _time(j['runStartedAt']),
   );
 }
 
@@ -796,6 +823,9 @@ MemberAccount _account(Map<String, dynamic> a, List<Map<String, dynamic>> balanc
     tokenStatus: a['tokenStatus'] as String?,
     tokenExpiresAt: _time(a['tokenExpiresAt']),
     tokenUpdatedAt: _time(a['tokenUpdatedAt']),
+    nxtEnabled: a['nxtEnabled'] as bool?,
+    usPremarketEnabled: a['usPremarketEnabled'] as bool?,
+    usAftermarketEnabled: a['usAftermarketEnabled'] as bool?,
   );
 }
 
@@ -839,6 +869,9 @@ AccountOrder _order(Map<String, dynamic> o, Map<String, String> jobNames) {
     kind: o['kind'] as String?,
     exitReason: o['exitReason'] as String?,
     cycleNo: o['cycleNo'] as int?,
+    liveId: o['id'] as String?,
+    fillCount: o['fillCount'] as int?,
+    judgePrice: _double(o['judgePrice']),
   );
 }
 

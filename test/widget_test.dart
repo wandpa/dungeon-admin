@@ -1155,31 +1155,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('회원 포지션: 전체 회원 포지션을 보고 거른 뒤 회원 계좌로 이동한다', (tester) async {
-    await openMenu(tester, '회원 관리');
-    await tester.tap(find.widgetWithText(ChoiceChip, '회원 포지션'));
-    await tester.pumpAndSettle();
-    expect(find.text('전체 9'), findsOneWidget);
-    expect(find.text('수동 1'), findsOneWidget);
-    expect(find.text('LG에너지솔루션'), findsOneWidget);
-
-    await tester.tap(find.widgetWithText(FilterChip, '수동 1'));
-    await tester.pumpAndSettle();
-    expect(find.text('삼성전자'), findsNothing);
-    await tester.tap(find.widgetWithText(FilterChip, '전체 9'));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.widgetWithText(TextField, '회원·종목 검색'), 'tank');
-    await tester.pumpAndSettle();
-    expect(find.text('samsung_tank'), findsOneWidget);
-    expect(find.text('LG에너지솔루션'), findsNothing);
-
-    await tester.tap(find.text('samsung_tank'));
-    await tester.pumpAndSettle();
-    expect(find.text('보유 포지션 1'), findsOneWidget); // 그 회원의 계좌·주문 탭
-    expect(tester.takeException(), isNull);
-  });
-
   testWidgets('거래: 앱 내역처럼 보유와 주문을 함께 보고 거른다', (tester) async {
     await openMenu(tester, '회원 모니터링');
     await tester.tap(find.widgetWithText(ChoiceChip, '거래'));

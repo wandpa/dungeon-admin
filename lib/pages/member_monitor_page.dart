@@ -11,6 +11,7 @@ import '../theme.dart';
 import '../view_store.dart';
 import '../widgets/admin_page.dart';
 import 'consultations_page.dart' show consultStatusColor;
+import 'live_detail_dialogs.dart';
 import 'live_lists.dart';
 import 'live_workers_table.dart';
 import 'member_detail_dialog.dart';
@@ -486,7 +487,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
       onSelect: _selectJob,
       onTabChanged: () => setState(() => _job = null),
     );
-    final detailPane = _JobDetailPane(job: _job, worker: worker);
+    final detailPane = _JobDetailPane(job: _job, worker: worker, memberLiveId: member?.liveId);
     final logPane = _CustomerLogPane(
       title: '고객 로그 · ${_job?.name ?? worker?.symbolName ?? '전체'}',
       logs: logs,
@@ -504,6 +505,12 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
           ? null
           : () async {
               await loadMoreLiveLogs(member, workerId: worker?.id, jobId: _job?.liveId);
+              if (mounted) setState(() {});
+            },
+      onRefresh: member == null || !member.isLive
+          ? null
+          : () async {
+              await loadNewLiveLogs(member, workerId: worker?.id, jobId: _job?.liveId);
               if (mounted) setState(() {});
             },
     );
@@ -611,6 +618,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
             positions: scopedPositions,
             orders: scopedOrders,
             onOpen: _openWorker,
+            memberLiveId: member?.liveId,
             more: member == null || !member.isLive ? null : liveMoreOrders(member),
             onMore: member == null
                 ? null
@@ -1668,8 +1676,9 @@ String _jobAccount(WorkerJob job) {
 
 /// 선택한 잡의 상세. 앱은 설정·체결 내역·이력이 여러 화면으로 나뉘지만 상담용으로 한 패널에 모은다.
 class _JobDetailPane extends StatelessWidget {
-  const _JobDetailPane({required this.job, required this.worker});
+  const _JobDetailPane({required this.job, required this.worker, this.memberLiveId});
 
+  final String? memberLiveId;
   final WorkerJob? job;
   final MemberWorker? worker;
 
@@ -1691,9 +1700,20 @@ class _JobDetailPane extends StatelessWidget {
           '종목': '${w.symbolName} (${w.symbolCode})',
           if (!j.isAlert) '반복': '${j.repeatCurrent}/${j.repeatCount}',
           if (p != null) '보유': '${p.sideLabel} ${_num(p.size)}${w.qtyUnit} @${_num(p.entryPrice)}',
+          if (j.runStartedAt != null) '실행 시작': formatDateTime(j.runStartedAt!),
+          if (j.limitPrice != null) '지정가': _num(j.limitPrice!),
+          if (j.stopOnClose == true) '장 마감': '잡 정지',
+          if (j.repeatMode != null && j.repeatMode != 'repeat') '반복 방식': j.repeatMode!,
         }),
         if (!j.isAlert) _Pnl('실현 손익', j.realizedPnl, w.currency),
         if (unrealized != null) _Pnl('평가 손익', unrealized, w.currency),
+        if (memberLiveId != null && j.liveId != null && !j.isAlert)
+          TextButton.icon(
+            onPressed: () =>
+                showLiveReservations(context, memberLiveId: memberLiveId!, jobLiveId: j.liveId!, jobName: j.name),
+            icon: const Icon(Icons.schedule_send_outlined, size: 16),
+            label: const Text('예약 주문'),
+          ),
       ],
     );
     final settings = _JobSettings(j, w);
@@ -1761,6 +1781,7 @@ class _CustomerLogPane extends StatelessWidget {
     required this.category,
     required this.onCategoryChanged,
     this.more,
+    this.onRefresh,
     this.onMore,
   });
 
@@ -1774,6 +1795,7 @@ class _CustomerLogPane extends StatelessWidget {
   final CustomerLogCategory? category;
   final ValueChanged<CustomerLogCategory?> onCategoryChanged;
   final (int, int)? more; // 더 받을 수 있으면 (받은 건수, 전체 건수)
+  final Future<void> Function()? onRefresh; // 화면을 연 뒤 쌓인 최신 로그를 받는다
   final Future<void> Function()? onMore;
 
   Color _color(CustomerLogCategory c) => switch (c) {
@@ -1826,6 +1848,8 @@ class _CustomerLogPane extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
+                if (onRefresh != null)
+                  _RefreshLogsButton(onRefresh!),
                 PopupMenuButton<_LogPeriod>(
                   tooltip: '기간 선택',
                   onSelected: onPeriodSelected,
@@ -1890,4 +1914,39 @@ class _CustomerLogPane extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 최신 로그 받기. 받는 동안은 다시 누를 수 없다.
+class _RefreshLogsButton extends StatefulWidget {
+  const _RefreshLogsButton(this.onRefresh);
+
+  final Future<void> Function() onRefresh;
+
+  @override
+  State<_RefreshLogsButton> createState() => _RefreshLogsButtonState();
+}
+
+class _RefreshLogsButtonState extends State<_RefreshLogsButton> {
+  bool _busy = false;
+
+  Future<void> _run() async {
+    setState(() => _busy = true);
+    try {
+      await widget.onRefresh();
+    } on LiveApiException catch (e) {
+      if (mounted) showMessage(context, e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    tooltip: '최신 로그 받기',
+    visualDensity: VisualDensity.compact,
+    onPressed: _busy ? null : _run,
+    icon: _busy
+        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+        : const Icon(Icons.refresh, size: 18),
+  );
 }

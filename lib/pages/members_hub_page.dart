@@ -5,20 +5,18 @@ import '../mock_data.dart';
 import '../theme.dart';
 import 'consultations_page.dart';
 import 'member_monitor_page.dart';
-import 'member_positions_page.dart';
 import 'members_page.dart';
 
 enum _Tab {
   list('회원 목록'),
   monitor('회원 모니터링'),
-  positions('회원 포지션'),
   consultations('상담 이력');
 
   const _Tab(this.label);
   final String label;
 }
 
-/// 회원 관리 메뉴. 회원 목록, 모니터링, 전체 회원 포지션, 상담 이력을 한곳에서 본다.
+/// 회원 관리 메뉴. 회원 목록, 모니터링, 상담 이력을 한곳에서 본다.
 class MembersHubPage extends StatefulWidget {
   const MembersHubPage({super.key});
 
@@ -59,7 +57,7 @@ class _MembersHubPageState extends State<MembersHubPage> {
   Widget build(BuildContext context) {
     final live = useLiveData.value;
     final status = liveStatus.value;
-    // 전체 회원 포지션과 상담 이력은 테스트 DB 경로가 없다.
+    // 상담 이력은 저장할 테이블이 없어 테스트 DB 화면에서는 뺀다(C-1). 전체 회원 포지션은 모니터링의 전체 회원 탭에 있다.
     final tabs = live ? const [_Tab.list, _Tab.monitor] : _Tab.values;
     final tab = tabs.contains(_tab) ? _tab : _Tab.list;
     return Column(
@@ -108,7 +106,6 @@ class _MembersHubPageState extends State<MembersHubPage> {
                   _tab = _Tab.list;
                 }),
               ),
-              _Tab.positions => const MemberPositionsPage(),
               _Tab.consultations => const ConsultationsPage(),
             },
           ),

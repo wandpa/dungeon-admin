@@ -298,6 +298,11 @@ class _MemberDetailViewState extends State<MemberDetailView> {
     FormCell('가입일', Text(formatDateTime(m.joinedAt))),
     FormCell('최근 접속', Text(m.lastLoginAt == null ? '-' : formatDateTime(m.lastLoginAt!))),
     FormCell('기기', Text(m.device)),
+    if (m.isLive)
+      FormCell(
+        '사용자 봉 단위',
+        Text(m.customCandleUnits == null ? '-' : m.customCandleUnits!.replaceAll(RegExp(r'[\[\]]'), '')),
+      ),
     // 앱은 가입 때 동의를 받지만 서버에 보내지 않아 기록이 없다.
     const FormCell('이용약관 동의', Text('-')),
     const FormCell('개인정보 동의', Text('-')),

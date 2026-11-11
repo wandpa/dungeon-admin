@@ -144,6 +144,49 @@ class _WorkerSettings extends StatelessWidget {
               _AppToggle(w.autoCloseOnMarketEnd),
             ],
           ),
+          if (w.resumeOnMarketOpen != null) ...[
+            const Divider(height: 24),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('장 시작 시 다시 실행', style: strong),
+                      SizedBox(height: 4),
+                      Text('장 마감으로 멈춘 워커를 다음 장이 열리면 다시 실행합니다.', style: small),
+                    ],
+                  ),
+                ),
+                _AppToggle(w.resumeOnMarketOpen!),
+              ],
+            ),
+          ],
+          if (w.stopAfterCycle != null) ...[
+            const Divider(height: 24),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('이번 회차 후 정지', style: strong),
+                      const SizedBox(height: 4),
+                      Text(
+                        w.stopAfterCycle! && w.stopAfterCycleAt != null
+                            ? '${formatDateTime(w.stopAfterCycleAt!)}에 켰습니다. 진행 중 회차가 끝나면 워커를 멈춥니다.'
+                            : '진행 중 회차가 끝나면 워커를 멈춥니다.',
+                        style: small,
+                      ),
+                    ],
+                  ),
+                ),
+                _AppToggle(w.stopAfterCycle!),
+              ],
+            ),
+          ],
           const Divider(height: 24),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,

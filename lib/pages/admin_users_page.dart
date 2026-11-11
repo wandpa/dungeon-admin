@@ -6,6 +6,7 @@ import '../mock_admin.dart';
 import '../mock_data.dart';
 import '../theme.dart';
 import '../widgets/admin_page.dart';
+import 'live_activity_view.dart';
 
 /// 활동 기록과 관리자 계정. 계정 탭은 최고 관리자에게만 보인다.
 class AdminUsersPage extends StatefulWidget {
@@ -295,7 +296,8 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
       title: '관리자',
       description: '관리자 활동 기록을 확인합니다. 최고 관리자는 계정과 권한도 관리합니다.',
       children: [
-        if (useLiveData.value) const SampleNotice('샘플 계정과 샘플 활동 기록입니다. 관리자 API 연결 전이라 저장되지 않습니다.'),
+        if (useLiveData.value && accounts)
+          const SampleNotice('샘플 계정입니다. 관리자 계정 테이블(C-1)이 생기기 전이라 저장되지 않습니다.'),
         if (canManage)
           Wrap(
             spacing: 6,
@@ -312,7 +314,11 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
               ),
             ],
           ),
-        ...(accounts ? _accountView() : _activityView()),
+        ...(accounts
+            ? _accountView()
+            : useLiveData.value
+            ? const [LiveActivityView()]
+            : _activityView()),
       ],
     );
   }
