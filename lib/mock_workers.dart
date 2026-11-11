@@ -123,8 +123,10 @@ class WorkerPnlLimit {
     this.accumCount = 0,
     this.stoppedAt,
     this.stopReason,
+    this.periodStart,
   });
 
+  final DateTime? periodStart; // 지금 누적 기간이 시작된 시각. 샘플은 비어 있다
   final String period; // day | week | month | none
   final String unit; // amount | tick
   final double? profitTarget; // 이 값 이상이면 종료. null = 사용 안 함

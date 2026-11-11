@@ -11,6 +11,18 @@ import 'member_detail_dialog.dart';
 import '../mock_workers.dart' show strategyTemplateLabel;
 import 'member_monitor_page.dart' show MonitorRequest, memberMonitorRequest;
 
+/// 이상 회원 종류를 목록에 짧게 보여 준다. 자세한 내용은 대시보드와 모니터링에 있다.
+String _issueLabel(String kind) => switch (kind) {
+  'worker' => '한도 종료',
+  'workerStopped' => '멈춘 워커',
+  'waitingOrders' => '미체결',
+  'rejectedOrders' => '거부 주문',
+  'manualPositions' => '수동 포지션',
+  'notification' => '기기 토큰 없음',
+  'memberStatus' => '회원 상태',
+  _ => kind,
+};
+
 class MembersPage extends StatefulWidget {
   const MembersPage({super.key, this.initialMemberId});
 
@@ -36,6 +48,7 @@ class _MembersPageState extends State<MembersPage> {
   String? _market; // domestic | overseas
   String? _kind; // real | paper | alert
   bool? _running; // 실행 중 잡이 있는지
+  bool? _hasIssue; // 확인할 문제가 있는지
   Set<String>? _matched; // 조건이 없으면 null
   String? _conditionError;
   int _conditionRequest = 0;
@@ -45,9 +58,11 @@ class _MembersPageState extends State<MembersPage> {
     'market': ?_market,
     'kind': ?_kind,
     if (_running != null) 'hasRunningJob': '$_running',
+    if (_hasIssue != null) 'hasIssue': '$_hasIssue',
   };
 
-  bool get _hasCondition => _templates.isNotEmpty || _market != null || _kind != null || _running != null;
+  bool get _hasCondition =>
+      _templates.isNotEmpty || _market != null || _kind != null || _running != null || _hasIssue != null;
 
   Future<void> _applyConditions() async {
     final request = ++_conditionRequest;
@@ -197,6 +212,7 @@ class _MembersPageState extends State<MembersPage> {
               menu<String>('시장', _market, const [(null, '전체'), ('domestic', '국내'), ('overseas', '해외')], (v) => _market = v),
               menu<String>('계좌', _kind, const [(null, '전체'), ('real', '실전'), ('paper', '모의'), ('alert', '알람')], (v) => _kind = v),
               menu<bool>('실행 중 잡', _running, const [(null, '전체'), (true, '있음'), (false, '없음')], (v) => _running = v),
+              menu<bool>('확인할 문제', _hasIssue, const [(null, '전체'), (true, '있음'), (false, '없음')], (v) => _hasIssue = v),
               if (_hasCondition)
                 TextButton(
                   onPressed: () {
@@ -204,6 +220,7 @@ class _MembersPageState extends State<MembersPage> {
                     _market = null;
                     _kind = null;
                     _running = null;
+                    _hasIssue = null;
                     _applyConditions();
                   },
                   child: const Text('조건 지우기'),
@@ -322,7 +339,19 @@ class _MembersPageState extends State<MembersPage> {
         AdminTable(
           // 버튼이 화면 밖으로 밀리지 않게 맨 왼쪽에 둔다. 테스트 DB 회원은 차단할 수 없어 끝 칸이 없다.
           // 테스트 DB 번호는 긴 GUID 앞자리라 목록에서 빼고 상세에서 보여 준다.
-          columns: ['보기', if (canBlock) '번호', '아이디', '이름', '등급', '이메일', '가입일', '최근 접속', '상태', if (canBlock) ''],
+          columns: [
+            '보기',
+            if (canBlock) '번호',
+            '아이디',
+            if (!canBlock) '확인할 문제',
+            '이름',
+            '등급',
+            '이메일',
+            '가입일',
+            '최근 접속',
+            '상태',
+            if (canBlock) '',
+          ],
           buttonColumns: {0, if (canBlock) 9},
           // 줄을 누르면 상세, 두 번 누르면 그 회원의 워커 목록이다. 승인 전 회원은 워커가 없다.
           onRowTap: (i) => _openDetail(visible[i]),
@@ -363,6 +392,13 @@ class _MembersPageState extends State<MembersPage> {
                   onDoubleTap: m.status == MemberStatus.pending ? null : () => _openMonitor(m),
                   child: Text(m.username, style: const TextStyle(fontWeight: FontWeight.w600)),
                 ),
+                if (!canBlock)
+                  m.issueKinds.isEmpty
+                      ? const Text('-')
+                      : Text(
+                          m.issueKinds.map(_issueLabel).join(', '),
+                          style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w600),
+                        ),
                 Text(m.maskedName ?? '-'),
                 Text(m.gradeLabel ?? '-'),
                 Text(m.shownEmail),

@@ -130,7 +130,6 @@ class _SystemMonitor extends StatelessWidget {
 enum _IssueFilter {
   all('전체', {}),
   worker('워커', {MemberIssueKind.worker, MemberIssueKind.workerStopped}),
-  loss('오늘 손실', {MemberIssueKind.dailyLoss}),
   orders('주문', {MemberIssueKind.waitingOrders, MemberIssueKind.rejectedOrders}),
   positions('수동 포지션', {MemberIssueKind.manualPositions}),
   notification('알림', {MemberIssueKind.notification}),
@@ -155,7 +154,6 @@ class _IssuePanelState extends State<_IssuePanel> {
   static const _limit = 8;
   _IssueFilter _filter = _IssueFilter.all;
   bool _expanded = false;
-
   @override
   Widget build(BuildContext context) {
     final live = widget.live;

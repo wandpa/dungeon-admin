@@ -237,6 +237,97 @@ void main() {
     expect(methods.where((r) => !r.startsWith('GET')), ['POST /api/admin/auth/login']);
   });
 
+  test('dev DB 대조로 더한 앱 설정·주문·이상 회원 값을 받는다', () async {
+    final routes = Map<String, Object?>.of(_routes);
+    final members = _routes['/api/admin/live/members']! as Map<String, Object?>;
+    routes['/api/admin/live/members'] = {
+      ...members,
+      'items': [
+        {
+          ...((members['items']! as List).single as Map<String, Object?>),
+          'customCandleUnits': [9, 25],
+          'issueKinds': ['workerStopped', 'dailyLoss'],
+        },
+      ],
+    };
+    routes['$_base/overview'] = {
+      'issues': [
+        {'kind': 'workerStopped', 'label': '멈춘 워커 1', 'workerId': _workerId, 'detail': 1},
+        {'kind': 'dailyLoss', 'label': '오늘 손실', 'detail': -120.5, 'currency': 'USD'}, // 빼기로 한 종류는 건너뛴다
+      ],
+    };
+    routes['$_base/accounts'] = _page([
+      {
+        'accountId': 'a',
+        'accountName': '국내',
+        'maskedAccountNumber': '****1111',
+        'marketType': '국내주식',
+        'kind': 'real',
+        'tokenStatus': 'valid',
+        'tokenExpiresAt': '2026-11-12T00:00:00Z',
+        'nxtEnabled': true,
+        'usPremarketEnabled': false,
+        'usAftermarketEnabled': false,
+      },
+    ]);
+    routes['$_base/orders'] = _page([
+      {
+        'id': 'o1',
+        'orderedAt': '2026-11-04T12:37:16Z',
+        'jobId': _jobId,
+        'workerId': _workerId,
+        'symbolName': 'WTI',
+        'side': 'buy',
+        'qty': 2,
+        'filledQty': 2,
+        'avgFillPrice': 94.68,
+        'status': 'filled',
+        'fillCount': 2,
+        'judgePrice': 94.6,
+      },
+    ]);
+    routes['$_base/workers/$_workerId'] = {
+      'worker': {'resumeOnMarketOpen': true, 'stopAfterCycle': false},
+      'autoCloseOnMarketEnd': true,
+      'pnlLimit': {'enabled': true, 'period': 'day', 'periodStart': '2026-11-04T00:00:00Z'},
+    };
+    routes['$_base/workers/$_workerId/jobs'] = _page([
+      {..._job, 'limitPrice': 95.1, 'stopOnClose': true, 'repeatMode': 'repeat', 'runStartedAt': '2026-11-04T01:00:00Z'},
+    ]);
+    serve(routes: routes);
+    await refreshLiveMembers();
+    final m = liveMembers.single;
+    await loadLiveMember(m);
+
+    expect(m.customCandleUnits, '9, 25'); // 서버가 배열로 준다
+    expect(m.issueKinds, ['workerStopped']);
+
+    final a = accountsOf(m.id).single;
+    expect(a.tokenLine, startsWith('토큰 유효 · 만료 '));
+    expect(a.sessionLine, 'NXT 켜짐 · 미국 장전 꺼짐 · 장후 꺼짐');
+
+    final o = ordersOf(m.id).single;
+    expect(o.liveId, 'o1');
+    expect(o.fillCount, 2);
+    expect(o.judgePrice, 94.6);
+
+    final w = workersOf(m.id).single;
+    expect(w.resumeOnMarketOpen, isTrue);
+    expect(w.stopAfterCycle, isFalse);
+    expect(w.pnlLimit!.periodStart, DateTime.utc(2026, 11, 4).toLocal());
+
+    final j = w.jobs.single;
+    expect(j.limitPrice, 95.1);
+    expect(j.stopOnClose, isTrue);
+    expect(j.repeatMode, 'repeat');
+    expect(j.runStartedAt, DateTime.utc(2026, 11, 4, 1).toLocal());
+
+    final issues = issuesOf(m);
+    expect(issues.map((i) => i.kind), [MemberIssueKind.workerStopped]);
+    expect(issues.single.workerId, w.id);
+    expect(issues.single.detail, 1);
+  });
+
   test('고객 로그: 영어 코드를 앱과 같은 말로 바꾼다', () {
     expect(liveLogText('order_submitted'), '주문 전송');
     expect(liveLogText('fill'), '체결');
@@ -530,7 +621,7 @@ void main() {
 
   test('회원 내역: 100건 뒤의 주문·로그를 이어 받고 회차·청산 사유를 쓴다', () async {
     Map<String, Object?> order(int n) => {
-      'orderedAt': DateTime.utc(2026, 11, 4, 12, 0, n).toIso8601String(),
+      'orderedAt': DateTime.utc(2026, 11, 4, 12, 0, 10 - n).toIso8601String(), // API 는 최신순이라 뒤쪽일수록 오래됐다
       'symbolName': 'WTI',
       'side': 'sell',
       'qty': 1,

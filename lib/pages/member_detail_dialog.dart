@@ -92,6 +92,13 @@ class _MemberDetailViewState extends State<MemberDetailView> {
   Member get m => widget.member;
 
   @override
+  void initState() {
+    super.initState();
+    // 테스트 DB 회원 상세를 열면 서버가 열람 기록을 남긴다. 화면 값은 목록에서 받은 것을 쓴다.
+    if (m.isLive) logLiveMemberView(m);
+  }
+
+  @override
   void dispose() {
     _memo.dispose();
     _actionReason.dispose();
@@ -300,8 +307,8 @@ class _MemberDetailViewState extends State<MemberDetailView> {
     FormCell('기기', Text(m.device)),
     if (m.isLive)
       FormCell(
-        '사용자 봉 단위',
-        Text(m.customCandleUnits == null ? '-' : m.customCandleUnits!.replaceAll(RegExp(r'[\[\]]'), '')),
+        '봉 단위',
+        Text(m.customCandleUnits == null ? '-' : m.customCandleUnits!),
       ),
     // 앱은 가입 때 동의를 받지만 서버에 보내지 않아 기록이 없다.
     const FormCell('이용약관 동의', Text('-')),

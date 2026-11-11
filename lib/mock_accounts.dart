@@ -287,7 +287,6 @@ void sendPush(String title, String body, String target, List<Member> receivers) 
 enum MemberIssueKind {
   worker,
   workerStopped,
-  dailyLoss,
   waitingOrders,
   rejectedOrders,
   manualPositions,
@@ -297,10 +296,11 @@ enum MemberIssueKind {
 
 /// 상담 전에 먼저 봐야 할 문제 하나. 앱에서 사용자가 겪을 일을 관리자 말로 옮긴 것이다.
 class MemberIssue {
-  const MemberIssue(this.kind, this.label, {this.workerId});
+  const MemberIssue(this.kind, this.label, {this.workerId, this.detail});
   final MemberIssueKind kind;
   final String label;
   final int? workerId; // 누르면 이 워커로 이동한다
+  final double? detail; // 건수
 }
 
 /// 전체 계좌 기준으로 문제를 모은다. 계좌를 골라도 문제는 숨기지 않는다.
@@ -407,8 +407,12 @@ List<AccountPosition> positionsOf(int memberId, {String? accountName}) => [
 void addLiveOrders(int memberId, List<AccountOrder> orders) {
   final list = _liveOrders[memberId];
   if (list == null) return;
-  final known = {for (final o in list) (o.at, o.symbolName, o.side, o.accountName)};
-  list.addAll(orders.where((o) => known.add((o.at, o.symbolName, o.side, o.accountName))));
+  // 테스트 DB 주문은 ID 로, 샘플은 시각·종목·방향·계좌로 같은 주문을 가린다.
+  Object key(AccountOrder o) => o.liveId ?? (o.at, o.symbolName, o.side, o.accountName);
+  final known = {for (final o in list) key(o)};
+  list
+    ..addAll(orders.where((o) => known.add(key(o))))
+    ..sort((a, b) => b.at.compareTo(a.at)); // 새로 받은 최신 주문도 맨 위에 온다
 }
 
 List<AccountOrder> ordersOf(int memberId, {String? accountName}) {

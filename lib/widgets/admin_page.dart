@@ -12,6 +12,29 @@ final adminStatus = ValueNotifier('준비되었습니다.');
 /// 표를 내보낸 뒤 부른다. 테스트 DB 화면이면 서버 활동 기록에 남긴다. (이름, 건수, 회원 GUID)
 void Function(String name, int count, String? memberLiveId)? onAdminTableExported;
 
+/// 실제로 파일을 내려받는 함수. 테스트에서 바꿔 끼운다.
+@visibleForTesting
+void Function(String fileName, String text) csvDownloader = downloadCsv;
+
+/// 표가 아닌 목록도 같은 방식으로 CSV 를 내려받는다. 엑셀이 값을 수식으로 실행하지 않게 막고, 내보낸 기록을 남긴다.
+void exportCsv(String name, List<String> columns, List<List<String>> rows, {String? memberLiveId}) {
+  String cell(String v) {
+    final safe = RegExp(r'^[=+\-@]').hasMatch(v) && double.tryParse(v.replaceAll(',', '')) == null ? "'$v" : v;
+    return '"${safe.replaceAll('"', '""')}"';
+  }
+
+  final lines = [
+    columns.map(cell).join(','),
+    for (final r in rows) r.map(cell).join(','),
+  ];
+  final now = DateTime.now();
+  String two(int n) => n.toString().padLeft(2, '0');
+  final stamp = '${now.year}${two(now.month)}${two(now.day)}_${two(now.hour)}${two(now.minute)}';
+  csvDownloader('${name}_$stamp.csv', lines.join('\r\n'));
+  adminStatus.value = '$name ${rows.length}건을 내보냈습니다.';
+  onAdminTableExported?.call(name, rows.length, memberLiveId);
+}
+
 /// 관리 화면 공통 틀: 제목줄(제목·설명·우측 버튼), 본문.
 class AdminPage extends StatelessWidget {
   const AdminPage({
@@ -168,26 +191,18 @@ class AdminTable extends StatelessWidget {
 
     (context as Element).visitChildElements((c) => collect(c, null));
     final skip = {...buttonColumns};
-    String cell(String v) {
-      // 엑셀이 값을 수식으로 실행하지 않게 막는다.
-      final safe = RegExp(r'^[=+\-@]').hasMatch(v) && double.tryParse(v.replaceAll(',', '')) == null ? "'$v" : v;
-      return '"${safe.replaceAll('"', '""')}"';
-    }
-
-    final lines = [
-      [for (final (c, name) in columns.indexed) if (!skip.contains(c)) cell(name)].join(','),
-      for (var r = 0; r < rows.length; r++)
-        [
-          for (var c = 0; c < columns.length; c++)
-            if (!skip.contains(c)) cell((texts[(r, c)] ?? const []).where((t) => t.isNotEmpty).join(' ')),
-        ].join(','),
-    ];
-    final now = DateTime.now();
-    String two(int n) => n.toString().padLeft(2, '0');
-    final stamp = '${now.year}${two(now.month)}${two(now.day)}_${two(now.hour)}${two(now.minute)}';
-    downloadCsv('${exportName}_$stamp.csv', lines.join('\r\n'));
-    adminStatus.value = '$exportName ${rows.length}건을 내보냈습니다.';
-    onAdminTableExported?.call(exportName!, rows.length, exportMemberLiveId);
+    exportCsv(
+      exportName!,
+      [for (final (c, name) in columns.indexed) if (!skip.contains(c)) name],
+      [
+        for (var r = 0; r < rows.length; r++)
+          [
+            for (var c = 0; c < columns.length; c++)
+              if (!skip.contains(c)) (texts[(r, c)] ?? const []).where((t) => t.isNotEmpty).join(' '),
+          ],
+      ],
+      memberLiveId: exportMemberLiveId,
+    );
   }
 
   @override

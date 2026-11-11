@@ -235,7 +235,10 @@ class _PnlLimitBody extends StatelessWidget {
     final main = l.isTick ? _ticks(l.accumTicks) : _appSigned(l.accumAmount, ccy);
     final sub = l.isTick ? _appSigned(l.accumAmount, ccy) : _ticks(l.accumTicks);
     final current = l.isTick ? l.accumTicks : l.accumAmount;
-    final meta = [if (l.accumCount > 0) '청산 ${l.accumCount}회'].join(' · ');
+    final meta = [
+      if (l.periodStart != null) '${formatDateTime(l.periodStart!)}부터',
+      if (l.accumCount > 0) '청산 ${l.accumCount}회',
+    ].join(' · ');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

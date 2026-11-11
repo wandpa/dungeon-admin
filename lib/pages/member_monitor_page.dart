@@ -211,8 +211,6 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
       case MemberIssueKind.worker || MemberIssueKind.workerStopped:
         _tab = _MonitorTab.jobs;
         _workerId = issue.workerId;
-      case MemberIssueKind.dailyLoss:
-        _tab = _MonitorTab.trades;
       case MemberIssueKind.waitingOrders:
         _tab = _MonitorTab.accounts;
         _orderFilter = _OrderFilter.waiting;
@@ -507,6 +505,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
               await loadMoreLiveLogs(member, workerId: worker?.id, jobId: _job?.liveId);
               if (mounted) setState(() {});
             },
+      memberLiveId: member?.liveId,
       onRefresh: member == null || !member.isLive
           ? null
           : () async {
@@ -1782,6 +1781,7 @@ class _CustomerLogPane extends StatelessWidget {
     required this.onCategoryChanged,
     this.more,
     this.onRefresh,
+    this.memberLiveId,
     this.onMore,
   });
 
@@ -1796,6 +1796,7 @@ class _CustomerLogPane extends StatelessWidget {
   final ValueChanged<CustomerLogCategory?> onCategoryChanged;
   final (int, int)? more; // 더 받을 수 있으면 (받은 건수, 전체 건수)
   final Future<void> Function()? onRefresh; // 화면을 연 뒤 쌓인 최신 로그를 받는다
+  final String? memberLiveId; // 내보낸 기록을 그 회원 열람 기록에 남긴다
   final Future<void> Function()? onMore;
 
   Color _color(CustomerLogCategory c) => switch (c) {
@@ -1850,6 +1851,20 @@ class _CustomerLogPane extends StatelessWidget {
                 const SizedBox(width: 8),
                 if (onRefresh != null)
                   _RefreshLogsButton(onRefresh!),
+                if (visible.isNotEmpty && can(AdminPermission.exportMembers))
+                  IconButton(
+                    tooltip: '엑셀 내보내기 (${visible.length}건)',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => exportCsv(
+                      '고객_로그',
+                      const ['시각', '구분', '내용'],
+                      [
+                        for (final l in visible) [formatDateTime(l.at, seconds: true), l.category.label, l.text],
+                      ],
+                      memberLiveId: memberLiveId,
+                    ),
+                    icon: const Icon(Icons.download, size: 18),
+                  ),
                 PopupMenuButton<_LogPeriod>(
                   tooltip: '기간 선택',
                   onSelected: onPeriodSelected,

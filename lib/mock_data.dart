@@ -32,6 +32,7 @@ class Member {
     this.maskedName,
     this.tier,
     this.customCandleUnits,
+    this.issueKinds = const [],
     List<MemberLog>? history,
   }) : history = history ?? [];
 
@@ -56,7 +57,8 @@ class Member {
   final int liveRunningCount;
   final String? maskedName; // 서버가 가려서 준다. 값이 없는 회원도 있다
   final int? tier; // 1~5
-  final String? customCandleUnits; // 앱에서 만든 봉 단위. DB JSON 원문 (예: [9, 25])
+  final String? customCandleUnits; // 앱에서 만든 봉 단위 (예: 9, 25). 단위는 엔진 확인 대기
+  final List<String> issueKinds; // 테스트 DB 회원의 확인할 문제 종류 (workerStopped 등)
 
   /// 회원등급 이름. 범위 밖이면 비워 둔다.
   String? get gradeLabel {

@@ -46,11 +46,12 @@ class LiveDashboardPage extends StatelessWidget {
         Widget issues = _IssuePanel(
           live: [
             for (final r in d.issues)
-              (
-                id: liveIntId(r['memberId'] as String),
-                username: r['username'] as String? ?? '-',
-                issues: [for (final i in (r['issues'] as List).cast<Map<String, dynamic>>()) liveIssue(i)],
-              ),
+              if ((r['issues'] as List).any((i) => liveIssue(i as Map<String, dynamic>) != null))
+                (
+                  id: liveIntId(r['memberId'] as String),
+                  username: r['username'] as String? ?? '-',
+                  issues: [for (final i in (r['issues'] as List).cast<Map<String, dynamic>>()) ?liveIssue(i)],
+                ),
           ],
         );
         Widget members = AdminTable(

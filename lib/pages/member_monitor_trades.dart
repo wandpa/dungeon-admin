@@ -270,6 +270,41 @@ class _TradesPaneState extends State<_TradesPane> {
     ];
     return _Pane(
       title: '거래',
+      trailing: orders.isEmpty || !can(AdminPermission.exportMembers)
+          ? null
+          : TextButton.icon(
+              onPressed: () => exportCsv(
+                '거래',
+                const ['주문 시각', '종목', '구분', '주문 수량', '체결 수량', '평균 체결가', '통화', '상태', '계좌', '잡', '회차', '진입/청산', '실현손익', '판정가', '메시지'],
+                [
+                  for (final o in orders)
+                    [
+                      formatDateTime(o.at, seconds: true),
+                      o.symbolName,
+                      o.sideLabel,
+                      _num(o.qty),
+                      _num(o.filledQty),
+                      o.avgFillPrice == null ? '' : _num(o.avgFillPrice!),
+                      o.currency,
+                      o.isRejected ? '거부' : o.isFilled ? '체결' : o.status,
+                      o.accountName,
+                      o.jobName,
+                      o.cycleNo?.toString() ?? '',
+                      switch (o.kind) {
+                        'entry' => '진입',
+                        'exit' => '청산',
+                        _ => '',
+                      },
+                      o.realizedPnl == null ? '' : _num(o.realizedPnl!),
+                      o.judgePrice == null ? '' : _num(o.judgePrice!),
+                      o.message ?? '',
+                    ],
+                ],
+                memberLiveId: widget.memberLiveId,
+              ),
+              icon: const Icon(Icons.download, size: 16),
+              label: Text('엑셀 내보내기 (${orders.length}건)', style: const TextStyle(fontSize: 12)),
+            ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         child: Column(
@@ -305,7 +340,9 @@ class _TradesPaneState extends State<_TradesPane> {
                       children: [
                         for (final p in positions) _positionCard(p),
                         for (final o in orders) _orderTile(o),
-                        if (widget.more != null && widget.onMore != null) _MoreButton('주문', widget.more!, widget.onMore!),
+                        // 보유만 볼 때는 주문을 보여 주지 않으므로 주문을 더 받는 버튼도 숨긴다.
+                        if (_filter != _TradeFilter.held && widget.more != null && widget.onMore != null)
+                          _MoreButton('주문', widget.more!, widget.onMore!),
                       ],
                     ),
             ),

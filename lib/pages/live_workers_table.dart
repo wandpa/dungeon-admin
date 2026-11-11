@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../file_download.dart';
 import '../live_api.dart';
+import '../mock_admin.dart' show AdminPermission, can;
 import '../mock_data.dart';
 import '../mock_workers.dart' show CustomerLogCategory;
 import '../theme.dart';
@@ -126,6 +128,8 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
   String? _accountId;
   CustomerLogCategory? _category;
   Future<Map<String, dynamic>>? _accountList; // 계좌 조건에 쓴다
+  final _kinds = <String>{}; // 워커 탭의 실전·모의·알람 조건. 비면 전체
+  bool _exporting = false;
 
   @override
   void dispose() {
@@ -161,7 +165,33 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
     if (_tab == _Tab.trades && _accountId != null) 'accountId': _accountId!,
     if (_tab == _Tab.logs && _category != null) 'category': _category!.name,
     if (_tab == _Tab.alerts) 'kind': 'alert',
+    if (_tab == _Tab.workers && _kinds.isNotEmpty) 'kind': _kinds.join(','),
   };
+
+  /// 지금 조건의 전체 목록을 서버가 만든 CSV 로 내려받는다. 페이지와 상관없이 모두 나간다.
+  Future<void> _exportAll() async {
+    setState(() => _exporting = true);
+    try {
+      final signals = _tab == _Tab.signals;
+      final csv = await liveAllCsv(
+        _tab.path,
+        member: _member,
+        symbol: _tab.hasSymbolSearch ? _symbol : '',
+        memberKey: signals ? 'member' : 'q',
+        symbolKey: signals ? 'q' : 'symbol',
+        status: _tab == _Tab.workers || _tab == _Tab.alerts ? _status.query : null,
+        filters: _filters,
+      );
+      final now = DateTime.now();
+      String two(int n) => n.toString().padLeft(2, '0');
+      downloadCsv('전체_${_tab.label}_${now.year}${two(now.month)}${two(now.day)}_${two(now.hour)}${two(now.minute)}.csv', csv);
+      adminStatus.value = '전체 ${_tab.label}을(를) 내보냈습니다.';
+    } on LiveApiException catch (e) {
+      if (mounted) showMessage(context, e.message);
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
 
   Future<Map<String, dynamic>> _load() {
     final symbol = _tab.hasSymbolSearch ? _symbol : '';
@@ -481,6 +511,14 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
                   selected: s == _status,
                   onSelected: (_) => _update(() => _status = s),
                 ),
+            if (_tab == _Tab.workers)
+              for (final (k, label) in const [('real', '실전'), ('paper', '모의'), ('alert', '알람')])
+                FilterChip(
+                  label: Text(label),
+                  visualDensity: VisualDensity.compact,
+                  selected: _kinds.contains(k),
+                  onSelected: (v) => _update(() => v ? _kinds.add(k) : _kinds.remove(k)),
+                ),
             if (_tab == _Tab.trades || _tab == _Tab.logs)
               DateRangeFilter(range: _range, onChanged: (r) => _update(() => _range = r)),
             if (_tab == _Tab.trades) ...[
@@ -499,6 +537,17 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
               ),
           ],
         ),
+        if (can(AdminPermission.exportMembers))
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton.icon(
+              onPressed: _exporting ? null : _exportAll,
+              icon: _exporting
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.download, size: 18),
+              label: Text('전체 ${_tab.label} 엑셀 (모든 쪽)'),
+            ),
+          ),
         LiveLoader<Map<String, dynamic>>(
           key: key,
           load: _load,
