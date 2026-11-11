@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'admin_shell.dart';
+import 'live_api.dart' show logLiveExport;
 import 'mock_admin.dart';
 import 'mock_data.dart';
 import 'pages/login_page.dart';
 import 'theme.dart';
+import 'widgets/admin_page.dart' show onAdminTableExported;
 
 /// 로그인 직후 시작 화면을 보여 줄지. 앱 실행 때만 켠다.
 bool showStartScreen = false;
@@ -14,6 +16,10 @@ bool showStartScreen = false;
 void main() {
   useLiveData.value = true; // 회원 목록·모니터링은 테스트 DB 를 본다
   showStartScreen = true;
+  // 표를 내보내면 서버 활동 기록에 남긴다. 샘플 화면은 서버가 없어 남기지 않는다.
+  onAdminTableExported = (name, count, memberId) {
+    if (useLiveData.value) logLiveExport(name, count, memberId);
+  };
   runApp(const AdminApp());
 }
 

@@ -213,6 +213,7 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
         ),
         const SizedBox(height: 8),
         AdminTable(
+          exportName: '전체_${_tab.label}',
           columns: ['회원', ...columns],
           columnSpacing: 12,
           emptyText: '조건에 맞는 내역이 없습니다.',
@@ -406,6 +407,7 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
         ),
         const SizedBox(height: 8),
         AdminTable(
+          exportName: '전체_${_tab.label}',
           columns: const ['회원', '계좌', '구분', '종목코드', '종목명', '시장', '상태', '회차', '보유', '잡', '종료', '실현손익', '등록일'],
           columnSpacing: 12,
           emptyText: '조건에 맞는 워커가 없습니다.',

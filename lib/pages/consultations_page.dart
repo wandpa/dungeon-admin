@@ -123,6 +123,7 @@ class _ConsultationsPageState extends State<ConsultationsPage> {
             ),
           ),
         AdminTable(
+          exportName: '상담_이력',
           columns: const ['접수 시각', '회원', '경로', '유형', '내용', '담당', '상태'],
           emptyText: '조건에 맞는 상담이 없습니다.',
           rows: [

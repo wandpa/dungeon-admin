@@ -223,6 +223,8 @@ class _LiveMemberListState extends State<LiveMemberList> {
         ),
         const SizedBox(height: 8),
         AdminTable(
+          exportName: '${widget.member.username}_${widget.def.title}',
+          exportMemberLiveId: widget.member.liveId,
           columns: widget.def.columns,
           columnSpacing: 12,
           emptyText: widget.def.emptyText,

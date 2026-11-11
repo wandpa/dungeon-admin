@@ -270,6 +270,7 @@ class _LiveNotificationsPageState extends State<LiveNotificationsPage> {
                 ),
                 const SizedBox(height: 8),
                 AdminTable(
+                  exportName: '알림_발송_내역',
                   columns: const ['보낸 시각', '회원', '제목', '내용', '읽음'],
                   emptyText: '알림이 없습니다.',
                   rows: [

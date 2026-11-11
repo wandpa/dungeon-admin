@@ -113,6 +113,7 @@ class _MemberPositionsPageState extends State<MemberPositionsPage> {
           }),
         ),
         AdminTable(
+          exportName: '회원_포지션',
           columns: const ['회원', '종목', '방향', '수량', '평균가', '현재가', '평가손익', '잡', '계좌'],
           emptyText: '조건에 맞는 포지션이 없습니다.',
           rows: [

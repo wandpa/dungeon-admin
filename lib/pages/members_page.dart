@@ -40,6 +40,13 @@ class _MembersPageState extends State<MembersPage> {
   String? _conditionError;
   int _conditionRequest = 0;
 
+  Map<String, String> get _conditionQuery => {
+    if (_templates.isNotEmpty) 'template': _templates.join(','),
+    'market': ?_market,
+    'kind': ?_kind,
+    if (_running != null) 'hasRunningJob': '$_running',
+  };
+
   bool get _hasCondition => _templates.isNotEmpty || _market != null || _kind != null || _running != null;
 
   Future<void> _applyConditions() async {
@@ -52,12 +59,7 @@ class _MembersPageState extends State<MembersPage> {
       });
     }
     try {
-      final ids = await liveMemberIdsWhere({
-        if (_templates.isNotEmpty) 'template': _templates.join(','),
-        'market': ?_market,
-        'kind': ?_kind,
-        if (_running != null) 'hasRunningJob': '$_running',
-      });
+      final ids = await liveMemberIdsWhere(_conditionQuery);
       if (!mounted || request != _conditionRequest) return;
       setState(() {
         _matched = ids;
@@ -112,7 +114,7 @@ class _MembersPageState extends State<MembersPage> {
   /// 지금 필터의 회원을 CSV 로 내려받는다. 이메일은 화면과 같이 가린다.
   Future<void> _exportLive() async {
     try {
-      final csv = await liveMembersCsv(q: _query.trim(), status: _status);
+      final csv = await liveMembersCsv(q: _query.trim(), status: _status, conditions: _conditionQuery);
       downloadCsv('members_live.csv', csv);
       if (mounted) showMessage(context, '회원을 내보냈습니다.');
     } on LiveApiException catch (e) {

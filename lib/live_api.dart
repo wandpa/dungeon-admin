@@ -97,13 +97,29 @@ Future<void> ensureLiveMembers() async {
 }
 
 /// 서버가 만든 회원 CSV. 이메일은 가려져 있다.
-Future<String> liveMembersCsv({String q = '', MemberStatus? status}) async {
+Future<String> liveMembersCsv({String q = '', MemberStatus? status, Map<String, String> conditions = const {}}) async {
   final query = [
     if (q.isNotEmpty) 'q=${Uri.encodeQueryComponent(q)}',
     if (status != null) 'status=${status.name}',
+    for (final e in conditions.entries) '${e.key}=${Uri.encodeQueryComponent(e.value)}',
   ].join('&');
   final res = await _send(() => _client.get(Uri.parse('$_baseUrl/live/members/export?$query'), headers: _auth));
   return utf8.decode(res.bodyBytes).replaceFirst('\uFEFF', ''); // BOM 은 내려받을 때 붙인다
+}
+
+/// 화면이 표를 CSV 로 내려받았음을 서버 활동 기록에 남긴다. 실패해도 내려받기는 이미 끝났다.
+Future<void> logLiveExport(String name, int count, String? memberLiveId) async {
+  try {
+    await _send(
+      () => _client.post(
+        Uri.parse('$_baseUrl/live/exports'),
+        headers: {..._auth, 'Content-Type': 'application/json'},
+        body: jsonEncode({'name': name, 'count': count, 'memberId': ?memberLiveId}),
+      ),
+    );
+  } on LiveApiException catch (e) {
+    debugPrint('내보내기 기록을 남기지 못했습니다: ${e.message}');
+  }
 }
 
 /// 이메일 전체 값. 서버가 열람을 활동 기록에 남긴다.
@@ -165,7 +181,7 @@ Future<http.Response> _send(Future<http.Response> Function() request) async {
     _expireSession(used);
     throw const LiveApiException(_sessionExpired);
   }
-  if (res.statusCode == 200) return res;
+  if (res.statusCode == 200 || res.statusCode == 204) return res;
   if (res.statusCode == 403) throw const LiveApiException('권한이 없습니다.');
   if (res.statusCode == 404) throw const LiveApiException('대상을 찾지 못했습니다.');
   throw LiveApiException(_messageOf(res) ?? '조회에 실패했습니다.');

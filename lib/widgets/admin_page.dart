@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../file_download.dart';
+import '../mock_admin.dart' show AdminPermission, can;
 import '../theme.dart';
 
 const adminSideWidth = 470.0;
 
 /// 아래 상태줄에 보여 줄 문구. 화면이 조회를 마치면 건수를 알린다.
 final adminStatus = ValueNotifier('준비되었습니다.');
+
+/// 표를 내보낸 뒤 부른다. 테스트 DB 화면이면 서버 활동 기록에 남긴다. (이름, 건수, 회원 GUID)
+void Function(String name, int count, String? memberLiveId)? onAdminTableExported;
 
 /// 관리 화면 공통 틀: 제목줄(제목·설명·우측 버튼), 본문.
 class AdminPage extends StatelessWidget {
@@ -129,9 +134,14 @@ class AdminTable extends StatelessWidget {
     this.onSelectChanged,
     this.onSelectAll,
     this.emptyText = '표시할 항목이 없습니다.',
+    this.exportName,
+    this.exportMemberLiveId,
   });
 
   final List<String> columns;
+  /// 주면 표 위에 "엑셀 내보내기" 가 생긴다. 파일 이름 앞부분이다. 회원 내보내기 권한이 있어야 보인다.
+  final String? exportName;
+  final String? exportMemberLiveId; // 회원 한 명의 표면 그 회원 GUID. 열람 기록에 남는다
   final double columnSpacing;
   final List<List<Widget>> rows;
   final Set<int>? selected;
@@ -143,15 +153,62 @@ class AdminTable extends StatelessWidget {
   final int? highlightedRow; // 오른쪽 패널에 보여 주는 줄
   final Set<int> buttonColumns; // 버튼이 있는 칸
 
+  /// 화면에 그려진 칸의 글자를 그대로 모아 CSV 로 내려받는다. 가린 값은 가린 채로 나간다.
+  void _export(BuildContext context) {
+    final texts = <(int, int), List<String>>{};
+    void collect(Element e, (int, int)? at) {
+      final w = e.widget;
+      final here = w is _TableCellMark ? (w.row, w.column) : at;
+      if (here != null && w is RichText) {
+        (texts[here] ??= []).add(w.text.toPlainText().replaceAll('\n', ' ').trim());
+        return;
+      }
+      e.visitChildElements((c) => collect(c, here));
+    }
+
+    (context as Element).visitChildElements((c) => collect(c, null));
+    final skip = {...buttonColumns};
+    String cell(String v) {
+      // 엑셀이 값을 수식으로 실행하지 않게 막는다.
+      final safe = RegExp(r'^[=+\-@]').hasMatch(v) && double.tryParse(v.replaceAll(',', '')) == null ? "'$v" : v;
+      return '"${safe.replaceAll('"', '""')}"';
+    }
+
+    final lines = [
+      [for (final (c, name) in columns.indexed) if (!skip.contains(c)) cell(name)].join(','),
+      for (var r = 0; r < rows.length; r++)
+        [
+          for (var c = 0; c < columns.length; c++)
+            if (!skip.contains(c)) cell((texts[(r, c)] ?? const []).where((t) => t.isNotEmpty).join(' ')),
+        ].join(','),
+    ];
+    final now = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    final stamp = '${now.year}${two(now.month)}${two(now.day)}_${two(now.hour)}${two(now.minute)}';
+    downloadCsv('${exportName}_$stamp.csv', lines.join('\r\n'));
+    adminStatus.value = '$exportName ${rows.length}건을 내보냈습니다.';
+    onAdminTableExported?.call(exportName!, rows.length, exportMemberLiveId);
+  }
+
   @override
   Widget build(BuildContext context) {
     final selectable = selected != null;
+    final exportable = exportName != null && can(AdminPermission.exportMembers);
     return Panel(
       padding: EdgeInsets.zero,
       child: LayoutBuilder(
         builder: (context, constraints) => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (exportable)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: rows.isEmpty ? null : () => _export(context),
+                  icon: const Icon(Icons.download, size: 16),
+                  label: Text('엑셀 내보내기 (${rows.length}건)', style: const TextStyle(fontSize: 12)),
+                ),
+              ),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: ConstrainedBox(
@@ -182,7 +239,7 @@ class AdminTable extends StatelessWidget {
                           // 버튼 칸에 두 번 누르기를 걸면 버튼 반응이 늦어진다.
                           for (final (c, cell) in r.indexed)
                             DataCell(
-                              cell,
+                              _TableCellMark(row: i, column: c, child: cell),
                               onTap: onRowTap == null || buttonColumns.contains(c) ? null : () => onRowTap!(i),
                               onDoubleTap: onRowDoubleTap == null || buttonColumns.contains(c)
                                   ? null
@@ -397,4 +454,16 @@ void showMessage(BuildContext context, String message) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(message)));
+}
+
+/// 내보낼 때 칸 위치를 찾으려고 칸마다 감싼다. 화면에는 아무 영향이 없다.
+class _TableCellMark extends StatelessWidget {
+  const _TableCellMark({required this.row, required this.column, required this.child});
+
+  final int row;
+  final int column;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => child;
 }

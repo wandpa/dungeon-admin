@@ -34,6 +34,7 @@ class LiveMemberAccessPanels extends StatelessWidget {
             ),
           ],
           emptyText: '로그인 기록이 없습니다.',
+          memberLiveId: member.liveId,
         ),
         const SizedBox(height: 8),
         _LivePagedPanel(
@@ -44,6 +45,7 @@ class LiveMemberAccessPanels extends StatelessWidget {
           columns: const ['기기', '등록', '최근 갱신'],
           row: (r) => [Text(r['device'] as String? ?? '-'), Text(time(r['registeredAt'])), Text(time(r['updatedAt']))],
           emptyText: '등록된 기기가 없습니다. 푸시를 받을 수 없습니다.',
+          memberLiveId: member.liveId,
         ),
         if (can(AdminPermission.viewActivity)) ...[
           const SizedBox(height: 8),
@@ -59,6 +61,7 @@ class LiveMemberAccessPanels extends StatelessWidget {
               Text(r['text'] as String? ?? '-'),
             ],
             emptyText: '열람 기록이 없습니다.',
+            memberLiveId: member.liveId,
           ),
         ],
       ],
@@ -76,6 +79,7 @@ class _LivePagedPanel extends StatefulWidget {
     required this.columns,
     required this.row,
     required this.emptyText,
+    required this.memberLiveId,
   });
 
   final String title;
@@ -84,6 +88,7 @@ class _LivePagedPanel extends StatefulWidget {
   final List<String> columns;
   final List<Widget> Function(Map<String, dynamic>) row;
   final String emptyText;
+  final String? memberLiveId;
 
   @override
   State<_LivePagedPanel> createState() => _LivePagedPanelState();
@@ -146,6 +151,8 @@ class _LivePagedPanelState extends State<_LivePagedPanel> {
                   Text(_error!, style: const TextStyle(color: AppColors.up))
                 else if (_page > 0)
                   AdminTable(
+                    exportName: widget.title.replaceAll(' ', '_'),
+                    exportMemberLiveId: widget.memberLiveId,
                     columns: widget.columns,
                     emptyText: widget.emptyText,
                     rows: [for (final r in _rows) widget.row(r)],

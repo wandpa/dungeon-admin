@@ -169,6 +169,7 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
 
   Widget _productTable(List<Map<String, dynamic>> rows) {
     return AdminTable(
+      exportName: '해외_상품',
       columns: const ['상품코드', '이름', '거래소', '분류', '통화', '틱', '틱 가치', '승수', '월물', '최근월물', '워커', '상태'],
       emptyText: '조건에 맞는 상품이 없습니다.',
       onRowTap: (i) => setState(() => _opened = rows[i]),
@@ -198,6 +199,7 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
 
   Widget _stockTable(List<Map<String, dynamic>> rows) {
     return AdminTable(
+      exportName: '종목',
       columns: const ['종목코드', '이름', '거래소', '통화', '기준가', '기준일', 'NXT', '상태', '갱신'],
       emptyText: '조건에 맞는 종목이 없습니다.',
       rows: [
