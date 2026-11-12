@@ -194,7 +194,7 @@ class _MemberDetailViewState extends State<MemberDetailView> {
                 runSpacing: 6,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Text(m.username, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                  Text(m.username, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
                   StatusBadge(m.status.label, color: memberStatusColor(m.status)),
                   if (m.accessBlocked) const StatusBadge('접속 차단', color: AppColors.up),
                   Text('#${m.shownId}', style: const TextStyle(color: AppColors.textTertiary)),
@@ -340,7 +340,7 @@ class _MemberDetailViewState extends State<MemberDetailView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(a.title, style: const TextStyle(fontWeight: FontWeight.w700)),
+          Text(a.title, style: const TextStyle(fontWeight: FontWeight.w500)),
           const SizedBox(height: 4),
           Text(a.message, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
           if (needsReason) ...[

@@ -133,7 +133,7 @@ class SpecialDaysEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const head = TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w700);
+    const head = TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -249,7 +249,7 @@ class _HoursFormState extends State<_HoursForm> {
   @override
   Widget build(BuildContext context) {
     final problem = _problem;
-    const head = TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w700);
+    const head = TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500);
     final holidays = _list('holidays');
     return Panel(
       title: '국내주식 장 시간',

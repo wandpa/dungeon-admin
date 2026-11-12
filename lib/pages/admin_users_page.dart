@@ -186,7 +186,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
           title: '${temp.name} 임시 비밀번호',
           child: Row(
             children: [
-              SelectableText(temp.password, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              SelectableText(temp.password, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
               const SizedBox(width: 16),
               const Expanded(
                 child: Text('이 화면에서 한 번만 보입니다. 본인에게 전달하세요.', style: TextStyle(color: AppColors.warning, fontSize: 13)),
@@ -235,7 +235,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
         rows: [
           for (final a in mockAdmins)
             [
-              Text(a.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text(a.name, style: const TextStyle(fontWeight: FontWeight.w500)),
               Text(a.loginId),
               // 자기 권한을 스스로 낮춰 최고 관리자가 없어지는 일을 막는다.
               identical(a, me)
@@ -276,7 +276,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                     children: [
                       TextSpan(
                         text: '${r.label}  ',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                        style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
                       TextSpan(
                         text: r.permissions.isEmpty ? '조회와 상담 기록만' : r.permissions.map((p) => p.label).join(', '),
@@ -362,8 +362,8 @@ class _RoleScreensPanel extends StatelessWidget {
                   TableRow(
                     decoration: const BoxDecoration(color: AppColors.surfaceSoft),
                     children: [
-                      cell(const Text('화면', style: TextStyle(fontWeight: FontWeight.w700)), indent: 0),
-                      for (final r in roles) cell(Text(r.label, style: const TextStyle(fontWeight: FontWeight.w700))),
+                      cell(const Text('화면', style: TextStyle(fontWeight: FontWeight.w500)), indent: 0),
+                      for (final r in roles) cell(Text(r.label, style: const TextStyle(fontWeight: FontWeight.w500))),
                     ],
                   ),
                   for (final row in adminScreenRows)
@@ -374,7 +374,7 @@ class _RoleScreensPanel extends StatelessWidget {
                           Text(
                             row.depth == 0 ? row.label : '└ ${row.label}',
                             style: TextStyle(
-                              fontWeight: row.depth == 0 ? FontWeight.w700 : FontWeight.w400,
+                              fontWeight: row.depth == 0 ? FontWeight.w500 : FontWeight.w400,
                               fontSize: row.depth == 0 ? 14 : 13,
                             ),
                           ),

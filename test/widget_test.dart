@@ -252,7 +252,7 @@ void main() {
     expect(find.textContaining('실행 5 / 7'), findsOneWidget);
     expect(find.text('TSLA'), findsOneWidget);
     expect(find.textContaining('+7,000', findRichText: true), findsOneWidget); // 앱 카드처럼 줄 안에 손익이 있다
-    expect(find.text('[계좌 해외선물 메인 외 1]'), findsOneWidget); // 잡마다 계좌가 달라도 어느 계좌인지 보인다
+    expect(find.text('계좌 해외선물 메인 외 1'), findsOneWidget); // 잡마다 계좌가 달라도 어느 계좌인지 보인다
     expect(find.textContaining('+35T +\$70', findRichText: true), findsOneWidget);
 
     // 워커를 누르면 잡으로 넘어가고 위치가 표시된다. 워커 설정도 같이 나온다.

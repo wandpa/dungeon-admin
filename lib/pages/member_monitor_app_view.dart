@@ -52,17 +52,17 @@ class _AppToggle extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     toggled: value,
     child: Container(
-      width: 44,
-      height: 24,
+      width: 36,
+      height: 20,
       padding: const EdgeInsets.all(3),
       alignment: value ? Alignment.centerRight : Alignment.centerLeft,
       decoration: BoxDecoration(
-        color: value ? AppColors.success : AppColors.grid,
-        borderRadius: BorderRadius.circular(12),
+        color: value ? AppColors.textPrimary : AppColors.control,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Container(
-        width: 18,
-        height: 18,
+        width: 14,
+        height: 14,
         decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
       ),
     ),
@@ -91,7 +91,7 @@ class _SummaryOnOff extends StatelessWidget {
             color: on ? AppColors.brand : AppColors.border,
             borderRadius: BorderRadius.circular(11),
           ),
-          child: Text(on ? 'ON' : 'OFF', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+          child: Text(on ? 'ON' : 'OFF', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
         ),
       ],
     );
@@ -111,7 +111,7 @@ class _WorkerSettings extends StatelessWidget {
     final limit = w.pnlLimit;
     final alertOnly = w.jobs.isNotEmpty && w.jobs.every((j) => j.isAlert);
     const small = TextStyle(color: AppColors.textTertiary, fontSize: 12);
-    const strong = TextStyle(fontSize: 14, fontWeight: FontWeight.w700);
+    const strong = TextStyle(fontSize: 14, fontWeight: FontWeight.w500);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -262,7 +262,7 @@ class _PnlLimitBody extends StatelessWidget {
                         children: [
                           TextSpan(
                             text: main,
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _pnlColor(current)),
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: _pnlColor(current)),
                           ),
                           TextSpan(
                             text: '  ($sub)',
@@ -276,7 +276,7 @@ class _PnlLimitBody extends StatelessWidget {
                         '평가 포함 ${_appSigned(l.accumAmount + unreal, ccy)}  (평가 ${_appSigned(unreal, ccy)})',
                         style: TextStyle(
                           fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w500,
                           color: current + unreal >= 0 ? AppColors.up : AppColors.down,
                         ),
                       ),
@@ -292,7 +292,7 @@ class _PnlLimitBody extends StatelessWidget {
           height: 44,
           child: OutlinedButton(
             onPressed: null,
-            child: Text('누적 손익 설정 변경', style: TextStyle(fontWeight: FontWeight.w800)),
+            child: Text('누적 손익 설정 변경', style: TextStyle(fontWeight: FontWeight.w600)),
           ),
         ),
         const SizedBox(height: 12),
@@ -338,7 +338,7 @@ class _PnlLimitBody extends StatelessWidget {
             textAlign: TextAlign.right,
             style: value == null
                 ? const TextStyle(color: AppColors.textTertiary, fontSize: 13)
-                : TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700),
+                : TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w500),
           ),
         ),
       ],
@@ -416,7 +416,7 @@ class _AppSegment extends StatelessWidget {
                   o,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: o == selected ? FontWeight.w700 : FontWeight.w500,
+                    fontWeight: o == selected ? FontWeight.w500 : FontWeight.w500,
                     color: o == selected ? AppColors.textPrimary : AppColors.textTertiary,
                   ),
                 ),
@@ -458,7 +458,7 @@ class _DetailTitle extends StatelessWidget {
       children: [
         Icon(icon, size: 20, color: AppColors.brand),
         const SizedBox(width: 6),
-        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         if (note != null) ...[
           const SizedBox(width: 8),
           Flexible(
@@ -484,7 +484,7 @@ class _JobSettings extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = job.strategy;
     final items = s.liveItems;
-    const section = TextStyle(fontSize: 16, fontWeight: FontWeight.w700);
+    const section = TextStyle(fontSize: 16, fontWeight: FontWeight.w500);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -510,7 +510,7 @@ class _JobSettings extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(group, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                  Text(group, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
                   for (final (i, c) in all.indexed) Text(i == 0 ? c : 'AND $c', style: const TextStyle(fontSize: 13)),
                 ],
               ),
@@ -553,7 +553,7 @@ class _JobSettings extends StatelessWidget {
                         children: [
                           _AppToggle(items == null ? s.trailingStop != null : s.liveTrailingOn),
                           const SizedBox(width: 8),
-                          const Text('트레일링 스탑', style: TextStyle(fontWeight: FontWeight.w700)),
+                          const Text('트레일링 스탑', style: TextStyle(fontWeight: FontWeight.w500)),
                         ],
                       ),
                       if (items != null && s.stopLossPct != null)
@@ -568,7 +568,7 @@ class _JobSettings extends StatelessWidget {
                             children: [
                               Text(key, style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
                               const Spacer(),
-                              Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+                              Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
                             ],
                           ),
                         ),
@@ -609,7 +609,7 @@ class _JobSettings extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(item.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                      Text(item.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                       const SizedBox(height: 2),
                       Text(item.value, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
                     ],
@@ -671,10 +671,10 @@ class _JobSettings extends StatelessWidget {
             children: [
               _AppToggle(value != null),
               const SizedBox(width: 8),
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
               const Spacer(),
               if (value != null) ...[
-                Text('${signed ? '-' : ''}${_num(value)}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text('${signed ? '-' : ''}${_num(value)}', style: const TextStyle(fontWeight: FontWeight.w500)),
                 const SizedBox(width: 6),
                 Text(unitLabel, style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
               ],
@@ -846,7 +846,7 @@ class _JobHistory extends StatelessWidget {
                     spacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Text(_label(e), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                      Text(_label(e), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                       if (reason != null)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -859,7 +859,7 @@ class _JobHistory extends StatelessWidget {
                             style: TextStyle(
                               color: reason == '손절' ? AppColors.down : AppColors.up,
                               fontSize: 12,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
@@ -896,7 +896,7 @@ class _JobHistory extends StatelessWidget {
             child: Center(
               child: Column(
                 children: [
-                  Text('아직 이력이 없어요', style: TextStyle(fontWeight: FontWeight.w700)),
+                  Text('아직 이력이 없어요', style: TextStyle(fontWeight: FontWeight.w500)),
                   SizedBox(height: 4),
                   Text('주문·체결이 생기면 여기에 시간순으로 쌓입니다', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
                 ],
@@ -921,7 +921,7 @@ class _JobHistory extends StatelessWidget {
                       const SizedBox(width: 6),
                       Text(
                         g.label,
-                        style: TextStyle(color: g.color, fontSize: 12, fontWeight: FontWeight.w700),
+                        style: TextStyle(color: g.color, fontSize: 12, fontWeight: FontWeight.w500),
                       ),
                     ],
                   ),
@@ -989,7 +989,7 @@ class _CycleCardState extends State<_CycleCard> {
         children: [
           Text(
             '${cycle.cycleNo}회차 상세 로그 ${events.length}건',
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 4),
           if (events.isEmpty)
@@ -1035,7 +1035,7 @@ class _CycleCardState extends State<_CycleCard> {
             const Text('주문 수량', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
             Text.rich(
               TextSpan(
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                 children: [
                   TextSpan(
                     text: short ? '매도 ' : '매수 ',
@@ -1064,7 +1064,7 @@ class _CycleCardState extends State<_CycleCard> {
           child: Text(
             value,
             textAlign: TextAlign.right,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
           ),
         ),
       ],
@@ -1102,19 +1102,19 @@ class _CycleCardState extends State<_CycleCard> {
                 ),
                 child: Text(
                   '${c.cycleNo}회차',
-                  style: const TextStyle(color: _indigo, fontSize: 12, fontWeight: FontWeight.w700),
+                  style: const TextStyle(color: _indigo, fontSize: 12, fontWeight: FontWeight.w500),
                 ),
               ),
               const SizedBox(width: 8),
               Text(
                 c.statusLabel,
-                style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.w700),
+                style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.w500),
               ),
               const Spacer(),
               if (c.status != 'open' && c.cycleNo != 0)
                 Text(
                   '실현손익 ${pnl > 0 ? '+' : ''}${_money(pnl, worker.currency)}',
-                  style: TextStyle(color: _pnlColor(pnl), fontSize: 13, fontWeight: FontWeight.w700),
+                  style: TextStyle(color: _pnlColor(pnl), fontSize: 13, fontWeight: FontWeight.w500),
                 ),
               const SizedBox(width: 4),
               TextButton(
@@ -1164,7 +1164,7 @@ class _JobFills extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('체결 내역', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+        const Text('체결 내역', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
         const SizedBox(height: 6),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1172,14 +1172,14 @@ class _JobFills extends StatelessWidget {
             const Text('실현 손익', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
             Text(
               _appSigned(job.realizedPnl, worker.currency),
-              style: TextStyle(color: _pnlColor(job.realizedPnl), fontSize: 13, fontWeight: FontWeight.w700),
+              style: TextStyle(color: _pnlColor(job.realizedPnl), fontSize: 13, fontWeight: FontWeight.w500),
             ),
           ],
         ),
         const SizedBox(height: 4),
         Text(
           '주문 ${count('order_submitted')}건 · 체결 ${count('fill')}건 · 거부 ${count('order_rejected')}건',
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 8),
         if (rows.isEmpty)
@@ -1241,7 +1241,7 @@ class _FillRow extends StatelessWidget {
                 style: TextStyle(
                   color: _short ? AppColors.down : AppColors.up,
                   fontSize: 14,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(width: 10),
@@ -1253,7 +1253,7 @@ class _FillRow extends StatelessWidget {
                       '${worker.symbolCode} ${worker.symbolName}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                     ),
                     Text(
                       job.accountLabel,
@@ -1270,7 +1270,7 @@ class _FillRow extends StatelessWidget {
                 children: [
                   Text(
                     open ? '-' : '${pnl > 0 ? '+' : ''}${_num(pnl)}',
-                    style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w700),
+                    style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w500),
                   ),
                   Text(note, style: TextStyle(color: noteColor, fontSize: 12)),
                 ],

@@ -39,7 +39,7 @@ Future<void> _show(BuildContext context, String title, String note, Widget body)
           children: [
             Row(
               children: [
-                Expanded(child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
+                Expanded(child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500))),
                 IconButton(tooltip: '닫기', onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
               ],
             ),

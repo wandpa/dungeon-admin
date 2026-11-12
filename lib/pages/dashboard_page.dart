@@ -86,7 +86,7 @@ class _SystemMonitor extends StatelessWidget {
             spacing: 12,
             runSpacing: 4,
             children: [
-              const Text('시스템 모니터링', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              const Text('시스템 모니터링', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
               TextButton(onPressed: () => systemPageRequest.value++, child: const Text('시스템 상태 보기')),
             ],
           ),
@@ -103,7 +103,7 @@ class _SystemMonitor extends StatelessWidget {
                     const SizedBox(width: 6),
                     Text(s.label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 14)),
                     const SizedBox(width: 6),
-                    Text(s.level.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                    Text(s.level.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                   ],
                 ),
             ],
@@ -234,12 +234,15 @@ class _IssuePanelState extends State<_IssuePanel> {
                       spacing: 6,
                       runSpacing: 6,
                       children: [
+                        // 문제는 상태 점 + 글자로 보이고, 누르면 그 문제를 모니터링에서 연다.
                         for (final i in r.issues)
-                          ActionChip(
-                            label: Text(i.label, style: const TextStyle(fontSize: 12, color: AppColors.warning)),
-                            visualDensity: VisualDensity.compact,
-                            side: const BorderSide(color: AppColors.warning),
-                            onPressed: () => memberMonitorRequest.value = MonitorRequest(r.id, issue: i),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(AppRadius.tag),
+                            onTap: () => memberMonitorRequest.value = MonitorRequest(r.id, issue: i),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                              child: StatusBadge(i.label, color: AppColors.warning),
+                            ),
                           ),
                       ],
                     ),
@@ -338,7 +341,7 @@ class _OperationSectionState extends State<_OperationSection> {
                   const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('회원 전체 주문 금액', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                      Text('회원 전체 주문 금액', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
                       SizedBox(height: 2),
                       Text(
                         '실전 계좌 체결 기준 · 체결가 × 수량 × 계약승수 · 모의 계좌 제외',
@@ -408,7 +411,7 @@ class _CurrencyTotal extends StatelessWidget {
       children: [
         Text('${t.currency} 체결 금액', style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
         const SizedBox(height: 2),
-        Text(_amount(t.filledAmount), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+        Text(_amount(t.filledAmount), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
         const SizedBox(height: 2),
         Text(
           '주문 ${t.orders}건 · 체결 ${t.filled}건 · 미체결 ${t.waiting}건 · 거부 ${t.rejected}건',
@@ -479,7 +482,7 @@ class _BarPanel extends StatelessWidget {
                             child: Text(
                               '${r.value}',
                               textAlign: TextAlign.right,
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                             ),
                           ),
                         ],
@@ -524,23 +527,17 @@ class _StatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 숫자 칸은 이름, 큰 숫자, 비교 문구만 둔다. 아이콘은 꾸밈이라 그리지 않는다.
     return Panel(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: AppColors.accent),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
-                const SizedBox(height: 4),
-                Text(value, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
-                // 보조 문구가 없어도 줄을 비워 두어 옆 칸과 높이를 맞춘다.
-                Text(sub ?? '', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
-              ],
-            ),
-          ),
+          Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+          const SizedBox(height: 8),
+          Text(value, style: const TextStyle(fontSize: 28, height: 1, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 8),
+          // 보조 문구가 없어도 줄을 비워 두어 옆 칸과 높이를 맞춘다.
+          Text(sub ?? '', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
         ],
       ),
     );

@@ -903,7 +903,7 @@ class _Header extends StatelessWidget {
     return const Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('회원 모니터링', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+        Text('회원 모니터링', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
         SizedBox(height: 4),
         Text('워커 → 잡 → 잡 내역 → 거래 → 포지션 → 로그 순서로 봅니다.', style: TextStyle(color: AppColors.textTertiary)),
       ],
@@ -925,7 +925,7 @@ class _Pane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleText = Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700));
+    final titleText = Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500));
     return Material(
       color: AppColors.surface,
       clipBehavior: Clip.antiAlias,
@@ -948,7 +948,7 @@ class _Pane extends StatelessWidget {
                   titleText
                 else
                   Material(
-                    color: titleActive ? AppColors.brand.withValues(alpha: 0.28) : Colors.transparent,
+                    color: titleActive ? AppColors.strip : Colors.transparent,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                       side: const BorderSide(color: AppColors.border),
@@ -1072,7 +1072,7 @@ class _MemberPicker extends StatelessWidget {
           OutlinedButton.icon(onPressed: onBack, icon: const Icon(Icons.arrow_back, size: 16), label: const Text('뒤로')),
           const SizedBox(width: 12),
         ],
-        const Text('회원 선택', style: TextStyle(fontWeight: FontWeight.w700)),
+        const Text('회원 선택', style: TextStyle(fontWeight: FontWeight.w500)),
         const SizedBox(width: 8),
         SizedBox(
           width: 240,
@@ -1165,7 +1165,7 @@ class _MemberPane extends StatelessWidget {
               selected: allSelected,
               selectedTileColor: AppColors.brand.withValues(alpha: 0.18),
               selectedColor: AppColors.textPrimary,
-              title: const Text('전체 회원', style: TextStyle(fontWeight: FontWeight.w700)),
+              title: const Text('전체 회원', style: TextStyle(fontWeight: FontWeight.w500)),
               subtitle: const Text('전체 워커 보기', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
               onTap: onAll,
             ),
@@ -1191,7 +1191,7 @@ class _MemberPane extends StatelessWidget {
                           m.username,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          style: const TextStyle(fontWeight: FontWeight.w500),
                         ),
                         subtitle: Text.rich(
                           TextSpan(
@@ -1201,7 +1201,7 @@ class _MemberPane extends StatelessWidget {
                               if (issues > 0)
                                 TextSpan(
                                   text: ' · 문제 $issues',
-                                  style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w700),
+                                  style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w500),
                                 ),
                             ],
                           ),
@@ -1250,7 +1250,7 @@ class _PnlValue extends StatelessWidget {
         : AppColors.textSecondary;
     return Text(
       _signedMoney(value, currency),
-      style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700),
+      style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w500),
     );
   }
 }
@@ -1355,7 +1355,7 @@ class _WorkersPane extends StatelessWidget {
                 ),
                 Text(
                   '$label ${workers.where((w) => w.kindKey == key).length}',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
@@ -1554,7 +1554,7 @@ class _SectionTitle extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 4),
       child: Text(
         text,
-        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accent),
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.accent),
       ),
     );
   }
@@ -1573,7 +1573,7 @@ class _OnOffRow extends StatelessWidget {
       child: Row(
         children: [
           Flexible(
-            child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
           ),
           const SizedBox(width: 8),
           StatusBadge(on ? 'ON' : 'OFF', color: on ? AppColors.success : AppColors.textTertiary),
@@ -1643,7 +1643,7 @@ class _SlotHeader extends StatelessWidget {
         children: [
           Text(
             title,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accent),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.accent),
           ),
           if (note != null) ...[
             const SizedBox(width: 8),
@@ -1860,7 +1860,7 @@ class _CustomerLogPane extends StatelessWidget {
                   _RefreshLogsButton(onRefresh!),
                 if (visible.isNotEmpty && can(AdminPermission.exportMembers))
                   IconButton(
-                    tooltip: '엑셀 내보내기 (${visible.length}건)',
+                    tooltip: '엑셀 내보내기 ${visible.length}건',
                     visualDensity: VisualDensity.compact,
                     onPressed: () => exportCsv(
                       '고객_로그',

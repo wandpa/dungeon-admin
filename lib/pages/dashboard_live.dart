@@ -60,7 +60,7 @@ class LiveDashboardPage extends StatelessWidget {
           rows: [
             for (final m in recent)
               [
-                Text(m['username'] as String? ?? '-', style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(m['username'] as String? ?? '-', style: const TextStyle(fontWeight: FontWeight.w500)),
                 Text(m['maskedName'] as String? ?? '-'),
                 Text(_grade(m['tier'])),
                 Text(m['maskedEmail'] as String? ?? '-'),
@@ -147,7 +147,7 @@ class _DashHead extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             title,
-            style: const TextStyle(color: AppColors.brand, fontSize: 15, fontWeight: FontWeight.w800),
+            style: const TextStyle(color: AppColors.brand, fontSize: 15, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -224,7 +224,7 @@ class _LiveOrderTotalsState extends State<_LiveOrderTotals> {
               const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('회원 전체 주문 금액', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                  Text('회원 전체 주문 금액', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
                   SizedBox(height: 2),
                   Text(
                     '실전 계좌 체결 기준 · 체결가 × 수량 × 계약승수 · 모의 계좌 제외',

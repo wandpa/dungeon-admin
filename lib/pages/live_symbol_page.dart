@@ -177,7 +177,7 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
       rows: [
         for (final p in rows)
           [
-            Text(_text(p['productCode']), style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(_text(p['productCode']), style: const TextStyle(fontWeight: FontWeight.w500)),
             Text(_text(p['name'])),
             Text(_text(p['exchange'])),
             Text(_text(p['className'])),
@@ -205,7 +205,7 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
       rows: [
         for (final s in rows)
           [
-            Text(_text(s['code']), style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(_text(s['code']), style: const TextStyle(fontWeight: FontWeight.w500)),
             Text(_text(s['name'])),
             Text(_text(s['exchange'])),
             Text(_text(s['currency'])),
@@ -228,7 +228,7 @@ class _LiveSymbolPageState extends State<LiveSymbolPage> {
     final total = productTotal > data.stockTotal ? productTotal : data.stockTotal;
     final wide = MediaQuery.sizeOf(context).width >= 1200;
     final opened = _opened;
-    const summary = TextStyle(color: AppColors.textTertiary, fontWeight: FontWeight.w600);
+    const summary = TextStyle(color: AppColors.textTertiary, fontWeight: FontWeight.w500);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -416,7 +416,7 @@ class _SessionFormState extends State<_SessionForm> {
   @override
   Widget build(BuildContext context) {
     final problem = _problem;
-    const head = TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w700);
+    const head = TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500);
     return Panel(
       title: widget.title,
       child: Column(
@@ -508,7 +508,7 @@ class _MonthPanel extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_title(m), style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(_title(m), style: const TextStyle(fontWeight: FontWeight.w500)),
                 const SizedBox(height: 2),
                 Wrap(
                   spacing: 6,
@@ -525,7 +525,7 @@ class _MonthPanel extends StatelessWidget {
             ),
           ),
           if (m['workerCount'] is int && m['workerCount'] != 0)
-            Text('워커 ${m['workerCount']}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            Text('워커 ${m['workerCount']}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
           if (m['active'] != true) ...[
             const SizedBox(width: 6),
             const StatusBadge('미사용', color: AppColors.textTertiary),
@@ -546,7 +546,7 @@ class _MonthPanel extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: Text(_text(p['name']), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              child: Text(_text(p['name']), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
             ),
             IconButton(tooltip: '월물 닫기', onPressed: onClose, icon: const Icon(Icons.close, size: 18)),
           ],
@@ -563,7 +563,7 @@ class _MonthPanel extends StatelessWidget {
                   children: [
                     TextSpan(
                       text: '${months.length}개 월물  ',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+                      style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
                     TextSpan(text: '${_text(p['productCode'])} · ${_text(p['exchange'])} · ${_tick(p)}'),
                   ],

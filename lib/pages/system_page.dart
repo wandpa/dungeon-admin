@@ -57,7 +57,7 @@ class _SystemPageState extends State<SystemPage> {
                 Icon(systemLevelIcon(c.level), size: 18, color: color),
                 const SizedBox(width: 6),
                 Expanded(
-                  child: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  child: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w500)),
                 ),
                 StatusBadge(c.level.label, color: color),
               ],
@@ -122,7 +122,7 @@ class _SystemPageState extends State<SystemPage> {
                   children: [
                     Text(
                       overall == SystemLevel.ok ? '모든 시스템 정상' : '전체 상태: ${overall.label}',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                     ),
                     Text(
                       '처리 중인 장애 ${active.length}건 · 가장 오래된 보고 ${formatDateTime(checkedAt, seconds: true)}',
@@ -138,7 +138,7 @@ class _SystemPageState extends State<SystemPage> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(group, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+              Text(group, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
               const SizedBox(height: 8),
               Wrap(spacing: 12, runSpacing: 12, children: [for (final c in list) _component(c)]),
             ],
@@ -149,7 +149,7 @@ class _SystemPageState extends State<SystemPage> {
           spacing: 12,
           runSpacing: 8,
           children: [
-            const Text('장애 기록', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            const Text('장애 기록', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
             FilterChip(
               label: const Text('해결된 장애 포함'),
               selected: _showResolved,
@@ -193,7 +193,7 @@ class _SystemPageState extends State<SystemPage> {
                   onTap: () => setState(() => _opened = i),
                   child: SizedBox(
                     width: 240,
-                    child: Text(i.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    child: Text(i.title, style: const TextStyle(fontWeight: FontWeight.w500)),
                   ),
                 ),
                 Text('${formatNumber(i.affectedMembers)}명'),

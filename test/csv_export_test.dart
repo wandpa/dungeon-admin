@@ -43,7 +43,7 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.text('엑셀 내보내기 (1건)'));
+    await tester.tap(find.text('엑셀 내보내기 1건'));
     expect(files.single.$2.split('\r\n'), ['"아이디","상태"', '"tester","정상"']);
     expect(logged.single, ('목록', 1, null));
     signedInAdmin.value = null;

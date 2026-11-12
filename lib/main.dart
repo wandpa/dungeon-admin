@@ -83,7 +83,7 @@ class _SignedInState extends State<_SignedIn> {
                   const SizedBox(height: 16),
                   const Text(
                     '던전 관리자',
-                    style: TextStyle(color: AppColors.brand, fontSize: 32, fontWeight: FontWeight.w800),
+                    style: TextStyle(color: AppColors.brand, fontSize: 32, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),

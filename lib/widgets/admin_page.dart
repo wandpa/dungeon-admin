@@ -58,22 +58,25 @@ class AdminPage extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          color: AppColors.strip,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            border: Border(bottom: BorderSide(color: AppColors.border)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.page, vertical: 12),
           child: Row(
             children: [
-              Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+              Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   description,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
                 ),
               ),
               const SizedBox(width: 12),
-              Wrap(spacing: 6, runSpacing: 6, children: actions),
+              Wrap(spacing: 8, runSpacing: 8, children: actions),
             ],
           ),
         ),
@@ -83,9 +86,9 @@ class AdminPage extends StatelessWidget {
             children: [
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(AppSpace.page),
                   children: [
-                    for (final c in children) ...[c, const SizedBox(height: 8)],
+                    for (final (i, c) in children.indexed) ...[if (i > 0) const SizedBox(height: AppSpace.gap), c],
                   ],
                 ),
               ),
@@ -93,10 +96,10 @@ class AdminPage extends StatelessWidget {
                 Container(
                   width: adminSideWidth,
                   decoration: const BoxDecoration(
-                    color: AppColors.surfaceSoft,
+                    color: AppColors.surface,
                     border: Border(left: BorderSide(color: AppColors.border)),
                   ),
-                  child: SingleChildScrollView(padding: const EdgeInsets.all(8), child: side),
+                  child: SingleChildScrollView(padding: const EdgeInsets.all(AppSpace.gap), child: side),
                 ),
             ],
           ),
@@ -108,7 +111,7 @@ class AdminPage extends StatelessWidget {
 
 /// 테두리 있는 카드.
 class Panel extends StatelessWidget {
-  const Panel({super.key, required this.child, this.title, this.padding = const EdgeInsets.all(12)});
+  const Panel({super.key, required this.child, this.title, this.padding = const EdgeInsets.all(AppSpace.card)});
 
   final String? title;
   final Widget child;
@@ -119,8 +122,9 @@ class Panel extends StatelessWidget {
     // Container 대신 Material 이어야 안쪽 ListTile 의 선택 배경·물결 효과가 보인다.
     return Material(
       color: AppColors.surface,
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         side: const BorderSide(color: AppColors.border),
       ),
       child: Padding(
@@ -129,8 +133,8 @@ class Panel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (title != null) ...[
-              Text(title!, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
+              Text(title!, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
             ],
             child,
           ],
@@ -218,10 +222,13 @@ class AdminTable extends StatelessWidget {
             if (exportable)
               Align(
                 alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: rows.isEmpty ? null : () => _export(context),
-                  icon: const Icon(Icons.download, size: 16),
-                  label: Text('엑셀 내보내기 (${rows.length}건)', style: const TextStyle(fontSize: 12)),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                  child: TextButton.icon(
+                    onPressed: rows.isEmpty ? null : () => _export(context),
+                    icon: const Icon(Icons.download_outlined, size: 16),
+                    label: Text('엑셀 내보내기 ${rows.length}건', style: const TextStyle(fontSize: 12)),
+                  ),
                 ),
               ),
             SingleChildScrollView(
@@ -230,12 +237,9 @@ class AdminTable extends StatelessWidget {
                 constraints: BoxConstraints(minWidth: constraints.maxWidth),
                 child: DataTable(
                   showCheckboxColumn: selectable,
-                  dividerThickness: 0.5,
+                  dividerThickness: 1,
                   columnSpacing: columnSpacing,
-                  border: const TableBorder(
-                    horizontalInside: BorderSide(color: AppColors.grid),
-                    verticalInside: BorderSide(color: AppColors.grid),
-                  ),
+                  border: const TableBorder(horizontalInside: BorderSide(color: AppColors.border)),
                   onSelectAll: selectable ? (v) => onSelectAll?.call(v ?? false) : null,
                   columns: [for (final c in columns) DataColumn(label: Text(c))],
                   rows: [
@@ -244,8 +248,8 @@ class AdminTable extends StatelessWidget {
                         selected: selected?.contains(i) ?? false,
                         color: WidgetStateProperty.resolveWith(
                           (states) => states.contains(WidgetState.selected) || i == highlightedRow
-                              ? AppColors.brand.withValues(alpha: 0.12)
-                              : i.isOdd
+                              ? AppColors.brandSoft
+                              : states.contains(WidgetState.hovered)
                               ? AppColors.surfaceSoft
                               : null,
                         ),
@@ -310,7 +314,7 @@ class FilterBar extends StatelessWidget {
           width: 280,
           child: TextField(
             onChanged: onSearchChanged,
-            decoration: InputDecoration(prefixIcon: const Icon(Icons.search, size: 20), hintText: hint),
+            decoration: InputDecoration(prefixIcon: const Icon(Icons.search, size: 18), hintText: hint),
           ),
         ),
         for (final (i, f) in filters.indexed)
@@ -334,7 +338,7 @@ class Pager extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        Text('$summary · ${page + 1} / $pageCount', style: const TextStyle(color: AppColors.textTertiary)),
+        Text('$summary · ${page + 1} / $pageCount', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
         IconButton(
           tooltip: '이전 페이지',
           onPressed: page > 0 ? () => onChanged(page - 1) : null,
@@ -402,15 +406,30 @@ class StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(3)),
-      child: Text(
-        label,
-        style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700),
-      ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        StatusDot(color),
+        const SizedBox(width: 6),
+        Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w500)),
+      ],
     );
   }
+}
+
+/// 상태 점. 가동·정지·문제 같은 상태를 화면 어디서나 같은 모양으로 보인다.
+class StatusDot extends StatelessWidget {
+  const StatusDot(this.color, {super.key, this.size = 7});
+
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  );
 }
 
 /// 아직 API 가 없는 버튼을 눌렀을 때 안내.
@@ -424,11 +443,17 @@ class SampleNotice extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     decoration: BoxDecoration(
-      color: AppColors.warning.withValues(alpha: 0.1),
-      border: Border.all(color: AppColors.warning),
-      borderRadius: BorderRadius.circular(6),
+      color: AppColors.warning.withValues(alpha: 0.06),
+      border: Border.all(color: AppColors.warning.withValues(alpha: 0.25)),
+      borderRadius: BorderRadius.circular(AppRadius.control),
     ),
-    child: Text(text, style: const TextStyle(color: AppColors.warning, fontSize: 13, fontWeight: FontWeight.w600)),
+    child: Row(
+      children: [
+        const Icon(Icons.info_outline, size: 16, color: AppColors.warning),
+        const SizedBox(width: 8),
+        Expanded(child: Text(text, style: const TextStyle(color: AppColors.warning, fontSize: 13))),
+      ],
+    ),
   );
 }
 

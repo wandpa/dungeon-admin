@@ -132,7 +132,7 @@ class _PushPageState extends State<PushPage> {
         for (final m in _searchResults)
           ListTile(
             dense: true,
-            title: Text(m.username, style: const TextStyle(fontWeight: FontWeight.w600)),
+            title: Text(m.username, style: const TextStyle(fontWeight: FontWeight.w500)),
             subtitle: Text(maskEmail(m.email), style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
             trailing: pushBlockReason(m) == null
                 ? const Icon(Icons.add, size: 18, color: AppColors.accent)
@@ -165,7 +165,7 @@ class _PushPageState extends State<PushPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text('받는 사람', style: TextStyle(fontWeight: FontWeight.w700)),
+        const Text('받는 사람', style: TextStyle(fontWeight: FontWeight.w500)),
         const SizedBox(height: 8),
         _chips(_TargetMode.values, (m) => m.label, (m) => m == _mode, (m) => setState(() => _mode = m)),
         const SizedBox(height: 12),
@@ -186,7 +186,7 @@ class _PushPageState extends State<PushPage> {
             children: [
               TextSpan(
                 text: '발송 ${receivers.length}명',
-                style: const TextStyle(fontWeight: FontWeight.w700),
+                style: const TextStyle(fontWeight: FontWeight.w500),
               ),
               if (blocked.isNotEmpty)
                 TextSpan(
@@ -279,7 +279,7 @@ class _PushPageState extends State<PushPage> {
             for (final p in mockPushes)
               [
                 Text('${p.id}'),
-                Text(p.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(p.title, style: const TextStyle(fontWeight: FontWeight.w500)),
                 SizedBox(width: 260, child: Text(p.body, overflow: TextOverflow.ellipsis)),
                 Text(p.target),
                 Text(formatDateTime(p.sentAt)),

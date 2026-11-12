@@ -54,7 +54,7 @@ class LiveSystemPage extends StatelessWidget {
                 Icon(systemLevelIcon(level), size: 18, color: color),
                 const SizedBox(width: 6),
                 Expanded(
-                  child: Text(_text(c['name']), style: const TextStyle(fontWeight: FontWeight.w700)),
+                  child: Text(_text(c['name']), style: const TextStyle(fontWeight: FontWeight.w500)),
                 ),
                 StatusBadge(level.label, color: color),
               ],
@@ -94,7 +94,7 @@ class LiveSystemPage extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('$title ${rows.length}건', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+              Text('$title ${rows.length}건', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
               const SizedBox(height: 8),
               AdminTable(
                 columns: const ['종목', '시장', '사유', '발견 시각'],
@@ -128,7 +128,7 @@ class LiveSystemPage extends StatelessWidget {
                       children: [
                         Text(
                           overall == SystemLevel.ok ? '모든 시스템 정상 (임시 기준)' : '전체 상태: ${overall.label} (임시 기준)',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                         ),
                         Text(
                           '확인 시각 ${_time(d.status['checkedAt'])}',
@@ -144,12 +144,12 @@ class LiveSystemPage extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(group, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  Text(group, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
                   const SizedBox(height: 8),
                   Wrap(spacing: 12, runSpacing: 12, children: [for (final c in list) _component(c)]),
                 ],
               ),
-            const Text('시장별 오늘 세션', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            const Text('시장별 오늘 세션', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
             AdminTable(
               columns: const ['시장', '현지 날짜', '시간대', '거래일', '개장', '폐장'],
               emptyText: '시장 정보가 없습니다.',
@@ -165,7 +165,7 @@ class LiveSystemPage extends StatelessWidget {
                   ],
               ],
             ),
-            const Text('휴장일', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            const Text('휴장일', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
             AdminTable(
               columns: const ['날짜', '이름', '시장'],
               emptyText: '등록된 휴장일이 없습니다.',

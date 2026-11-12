@@ -67,7 +67,7 @@ class _TradesPaneState extends State<_TradesPane> {
     final tick = tickSizeOf(p.symbolCode);
     final price = p.currentPrice;
     final ticks = tick == null || price == null ? null : (price - position.entryPrice) * (short ? -1 : 1) / tick;
-    const value = TextStyle(fontSize: 15, fontWeight: FontWeight.w700);
+    const value = TextStyle(fontSize: 15, fontWeight: FontWeight.w500);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(color: AppColors.surfaceSoft, borderRadius: BorderRadius.circular(12)),
@@ -89,7 +89,7 @@ class _TradesPaneState extends State<_TradesPane> {
                         children: [
                           Text(
                             '${p.symbolName} (${p.symbolCode})',
-                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                           ),
                           const SizedBox(height: 2),
                           Text(
@@ -105,12 +105,12 @@ class _TradesPaneState extends State<_TradesPane> {
                         children: [
                           Text(
                             _appSigned(pnl, p.currency),
-                            style: TextStyle(color: _pnlColor(pnl), fontSize: 15, fontWeight: FontWeight.w700),
+                            style: TextStyle(color: _pnlColor(pnl), fontSize: 15, fontWeight: FontWeight.w500),
                           ),
                           if (ticks != null)
                             Text(
                               '${ticks > 0 ? '+' : ''}${_num(ticks)}T',
-                              style: TextStyle(color: _pnlColor(pnl), fontSize: 13, fontWeight: FontWeight.w700),
+                              style: TextStyle(color: _pnlColor(pnl), fontSize: 13, fontWeight: FontWeight.w500),
                             ),
                         ],
                       ),
@@ -183,14 +183,14 @@ class _TradesPaneState extends State<_TradesPane> {
                   width: 60,
                   child: Text(
                     o.isRejected ? '${o.sideLabel}거부' : o.sideLabel,
-                    style: TextStyle(color: sideColor, fontSize: 14, fontWeight: FontWeight.w700),
+                    style: TextStyle(color: sideColor, fontSize: 14, fontWeight: FontWeight.w500),
                   ),
                 ),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(o.symbolName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                      Text(o.symbolName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                       Text(
                         '계좌 ${o.accountName} · ${o.jobName}',
                         style: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
@@ -227,12 +227,12 @@ class _TradesPaneState extends State<_TradesPane> {
                       o.avgFillPrice == null
                           ? '-'
                           : '${_num(o.filledQty)}${o.qtyUnit} ${_appPrice(o.avgFillPrice!, o.currency)}',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                     ),
                     if (o.realizedPnl != null)
                       Text(
                         '손익 ${_appSigned(o.realizedPnl!, o.currency)}',
-                        style: TextStyle(color: _pnlColor(o.realizedPnl!), fontSize: 14, fontWeight: FontWeight.w700),
+                        style: TextStyle(color: _pnlColor(o.realizedPnl!), fontSize: 14, fontWeight: FontWeight.w500),
                       ),
                     Text(state, style: TextStyle(color: stateColor, fontSize: 13)),
                     if (widget.memberLiveId != null && o.liveId != null && (o.fillCount ?? 0) > 0)
@@ -303,7 +303,7 @@ class _TradesPaneState extends State<_TradesPane> {
                 memberLiveId: widget.memberLiveId,
               ),
               icon: const Icon(Icons.download, size: 16),
-              label: Text('엑셀 내보내기 (${orders.length}건)', style: const TextStyle(fontSize: 12)),
+              label: Text('엑셀 내보내기 ${orders.length}건', style: const TextStyle(fontSize: 12)),
             ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),

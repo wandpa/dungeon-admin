@@ -104,7 +104,7 @@ class _LiveNotificationsPageState extends State<LiveNotificationsPage> {
             children: [
               const SizedBox(
                 width: 64,
-                child: Text('받는 사람', style: TextStyle(fontWeight: FontWeight.w700)),
+                child: Text('받는 사람', style: TextStyle(fontWeight: FontWeight.w500)),
               ),
               Wrap(
                 spacing: 6,
@@ -188,7 +188,7 @@ class _LiveNotificationsPageState extends State<LiveNotificationsPage> {
                               ListTile(
                                 dense: true,
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                                title: Text(m.username, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                title: Text(m.username, style: const TextStyle(fontWeight: FontWeight.w500)),
                                 subtitle: Text(m.shownEmail, style: const TextStyle(fontSize: 12)),
                                 trailing: const Icon(Icons.add, size: 18, color: AppColors.accent),
                                 onTap: () => setState(() {

@@ -35,7 +35,7 @@ Widget _side(Object? side) => Text(
       : side == 'sell'
       ? '매도'
       : '-',
-  style: TextStyle(color: side == 'buy' ? AppColors.up : AppColors.down, fontWeight: FontWeight.w700),
+  style: TextStyle(color: side == 'buy' ? AppColors.up : AppColors.down, fontWeight: FontWeight.w500),
 );
 
 /// 회원 하나 또는 전체 회원에서 같은 모양으로 보여 주는 목록.
@@ -57,7 +57,7 @@ final liveSignalList = LiveListDef(
   (s) => '${s['symbolCode']} ${s['symbolName']} ${s['alertName']}',
   (s) => [
     Text(_at(s['triggeredAt'])),
-    Text(_text(s['symbolCode']), style: const TextStyle(fontWeight: FontWeight.w600)),
+    Text(_text(s['symbolCode']), style: const TextStyle(fontWeight: FontWeight.w500)),
     Text(_text(s['symbolName'])),
     Text(_text(s['marketType'])),
     _side(s['side']),
@@ -74,7 +74,7 @@ final liveStrategyList = LiveListDef(
   const ['전략 이름', '종류', '시장', '고정', '등록일', '수정일'],
   (t) => '${t['name']} ${strategyTemplateLabel(_text(t['baseTemplateId']))}',
   (t) => [
-    Text(_text(t['name']), style: const TextStyle(fontWeight: FontWeight.w600)),
+    Text(_text(t['name']), style: const TextStyle(fontWeight: FontWeight.w500)),
     Text(strategyTemplateLabel(_text(t['baseTemplateId']))),
     Text(_text(t['marketType'])),
     Text(t['isFixed'] == true ? '고정' : '-'),
@@ -90,7 +90,7 @@ final liveWatchlist = LiveListDef(
   const ['종목코드', '종목명', '거래소', '시장', '구분', '등록일'],
   (w) => '${w['symbolCode']} ${w['symbolName']}',
   (w) => [
-    Text(_text(w['symbolCode']), style: const TextStyle(fontWeight: FontWeight.w600)),
+    Text(_text(w['symbolCode']), style: const TextStyle(fontWeight: FontWeight.w500)),
     Text(_text(w['symbolName'])),
     Text(_text(w['exchange'])),
     Text(_text(w['marketType'])),
@@ -108,7 +108,7 @@ final liveMemberSymbols = LiveListDef(
   (s) => [
     Text(_text(s['accountName'])),
     Text(_mode(s['kind'])),
-    Text(_text(s['symbolCode']), style: const TextStyle(fontWeight: FontWeight.w600)),
+    Text(_text(s['symbolCode']), style: const TextStyle(fontWeight: FontWeight.w500)),
     Text(_text(s['symbolName'])),
     Text(_text(s['exchange'])),
     Text(_text(s['marketType'])),
@@ -153,7 +153,7 @@ class LiveStrategySettings extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: Text(_text(t['name']), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              child: Text(_text(t['name']), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
             ),
             IconButton(tooltip: '설정 닫기', onPressed: onClose, icon: const Icon(Icons.close, size: 18)),
           ],
@@ -180,7 +180,7 @@ class LiveStrategySettings extends StatelessWidget {
                     child: Text(
                       _value(s),
                       textAlign: TextAlign.right,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                     ),
                   ),
                 ],
@@ -219,7 +219,7 @@ class _LiveMemberListState extends State<LiveMemberList> {
       children: [
         Text(
           '${formatNumber(shown.length)}건',
-          style: const TextStyle(color: AppColors.textTertiary, fontWeight: FontWeight.w600),
+          style: const TextStyle(color: AppColors.textTertiary, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 8),
         AdminTable(

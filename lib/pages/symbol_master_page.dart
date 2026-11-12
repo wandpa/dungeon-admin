@@ -426,7 +426,7 @@ class _SymbolMasterPageState extends State<SymbolMasterPage> {
               children: [
                 Text(
                   '$rule 서머타임 ${dstActive[rule]! ? '적용 중' : '미적용'}',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -626,7 +626,7 @@ class _SymbolMasterPageState extends State<SymbolMasterPage> {
       children: [
         Text(
           title,
-          style: const TextStyle(color: AppColors.accent, fontSize: 13, fontWeight: FontWeight.w700),
+          style: const TextStyle(color: AppColors.accent, fontSize: 13, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 6),
         Wrap(spacing: 12, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.end, children: children),
@@ -656,7 +656,7 @@ class _SymbolMasterPageState extends State<SymbolMasterPage> {
                 children: [
                   const Text('계약승수', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
                   const SizedBox(height: 10),
-                  Text(multiplier, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  Text(multiplier, style: const TextStyle(fontWeight: FontWeight.w500)),
                 ],
               ),
             ),
@@ -702,7 +702,7 @@ class _SymbolMasterPageState extends State<SymbolMasterPage> {
   /// 월물만 따로 정한 시간은 색으로 구분한다.
   Widget _monthTime(String time, bool own) => Text(
     time,
-    style: TextStyle(color: own ? AppColors.accent : null, fontWeight: own ? FontWeight.w700 : null),
+    style: TextStyle(color: own ? AppColors.accent : null, fontWeight: own ? FontWeight.w500 : null),
   );
 
   /// 선택한 상품의 월물 테이블. 월물 하나가 워커가 쓰는 종목이다.
@@ -713,7 +713,7 @@ class _SymbolMasterPageState extends State<SymbolMasterPage> {
       children: [
         Text(
           '${s.name} (${s.productCode}) 월물 ${s.months.length}개',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 8),
         AdminTable(
@@ -726,7 +726,7 @@ class _SymbolMasterPageState extends State<SymbolMasterPage> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(m.month, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    Text(m.month, style: const TextStyle(fontWeight: FontWeight.w500)),
                     Text(m.code, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
                   ],
                 ),
@@ -861,7 +861,7 @@ class _SymbolMasterPageState extends State<SymbolMasterPage> {
                       Text(
                         s.name,
                         style: TextStyle(
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                           color: identical(s, selected) ? AppColors.accent : null,
                         ),
                       ),

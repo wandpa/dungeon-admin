@@ -395,7 +395,7 @@ class _NoticesPageState extends State<NoticesPage> {
         children: [
           SizedBox(
             width: 64,
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+            child: Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
           ),
           Expanded(child: child),
         ],
@@ -540,12 +540,12 @@ class _NoticesPageState extends State<NoticesPage> {
         children: [
           Text(
             '미리보기 · $_category${_popup ? ' · 앱 팝업' : ''}',
-            style: const TextStyle(color: AppColors.accent, fontSize: 12, fontWeight: FontWeight.w700),
+            style: const TextStyle(color: AppColors.accent, fontSize: 12, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 8),
           Text(
             _title.text.trim().isEmpty ? '제목' : _title.text.trim(),
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 4),
           Text(
@@ -641,7 +641,7 @@ class _NoticesPageState extends State<NoticesPage> {
                         const Icon(Icons.push_pin, size: 16, color: AppColors.accent),
                         const SizedBox(width: 6),
                       ],
-                      Text(n.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      Text(n.title, style: const TextStyle(fontWeight: FontWeight.w500)),
                       if (n.popup) ...[const SizedBox(width: 6), const StatusBadge('팝업', color: AppColors.brand)],
                       if (n.images.isNotEmpty) ...[
                         const SizedBox(width: 6),

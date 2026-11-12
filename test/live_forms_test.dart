@@ -555,8 +555,8 @@ void main() {
     expect(find.text('PAPER1'), findsOneWidget);
     expect(find.text('ALERT1'), findsOneWidget);
     expect(find.byType(Checkbox), findsNWidgets(3));
-    expect(find.text('[계좌 real계좌(****1234)]'), findsOneWidget); // 잡이 없는 워커도 계좌가 보인다
-    expect(find.text('[계좌 없음]'), findsNothing);
+    expect(find.text('계좌 real계좌(****1234)'), findsOneWidget); // 잡이 없는 워커도 계좌가 보인다
+    expect(find.text('계좌 없음'), findsNothing);
 
     // 실전만 본다.
     await tester.tap(find.text('모의 1'));

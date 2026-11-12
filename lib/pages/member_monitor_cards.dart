@@ -11,7 +11,7 @@ class _AppPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(6)),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(AppRadius.tag)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -23,7 +23,7 @@ class _AppPill extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             label,
-            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700),
+            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w500),
           ),
         ],
       ),
@@ -33,8 +33,8 @@ class _AppPill extends StatelessWidget {
 
 /// 카드가 워커인지 잡인지 한눈에 보이게 하는 둥근 표시.
 class _KindBadge extends StatelessWidget {
-  const _KindBadge.worker() : label = '워커', color = AppColors.brand, ink = Colors.white;
-  const _KindBadge.job() : label = '잡', color = AppColors.accent, ink = Colors.white;
+  const _KindBadge.worker() : label = '워커', color = AppColors.strip, ink = AppColors.textSecondary;
+  const _KindBadge.job() : label = '잡', color = AppColors.strip, ink = AppColors.textSecondary;
 
   final String label;
   final Color color;
@@ -43,11 +43,15 @@ class _KindBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(999)),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppRadius.tag),
+      ),
       child: Text(
         label,
-        style: TextStyle(color: ink, fontSize: 14, fontWeight: FontWeight.w800),
+        style: TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w500),
       ),
     );
   }
@@ -66,9 +70,9 @@ class _RunSlot extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(6, 6, 6, 0),
       decoration: BoxDecoration(
-        color: live ? AppColors.success.withValues(alpha: 0.06) : Colors.transparent,
-        border: Border.all(color: live ? AppColors.success.withValues(alpha: 0.45) : AppColors.border),
-        borderRadius: BorderRadius.circular(12),
+        color: live ? AppColors.surface : Colors.transparent,
+        border: Border.all(color: live ? AppColors.control : AppColors.border),
+        borderRadius: BorderRadius.circular(AppRadius.card),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -82,7 +86,7 @@ class _RunSlot extends StatelessWidget {
                       Text(
                         workerRunning ? '실행 슬롯이 비어 있습니다' : '워커가 꺼져 있습니다',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -120,9 +124,9 @@ class _WorkerSlotCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSoft,
-        border: Border.all(color: running ? AppColors.success.withValues(alpha: 0.45) : AppColors.border),
-        borderRadius: BorderRadius.circular(14),
+        color: AppColors.surface,
+        border: Border.all(color: running ? AppColors.control : AppColors.border),
+        borderRadius: BorderRadius.circular(AppRadius.card),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -153,7 +157,7 @@ class _WorkerSlotCard extends StatelessWidget {
                             w.symbolName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                           ),
                         ),
                       ],
@@ -173,7 +177,7 @@ class _WorkerSlotCard extends StatelessWidget {
                     const SizedBox(width: 4),
                     Text(
                       w.status.label,
-                      style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700),
+                      style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
@@ -229,7 +233,7 @@ class _PnlLimitLine extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 _fmt(value),
-                style: TextStyle(color: _pnlColor(value), fontSize: 12, fontWeight: FontWeight.w800),
+                style: TextStyle(color: _pnlColor(value), fontSize: 12, fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -275,7 +279,7 @@ class _LimitEndBanner extends StatelessWidget {
       ),
       child: Text(
         '${profit ? '익절' : '손절'} 종료 · 매매 ${l.accumCount}회 · 총 청산손익 $total',
-        style: const TextStyle(color: AppColors.warning, fontSize: 13, fontWeight: FontWeight.w600),
+        style: const TextStyle(color: AppColors.warning, fontSize: 13, fontWeight: FontWeight.w500),
       ),
     );
   }
@@ -294,7 +298,7 @@ class _QueueHeader extends StatelessWidget {
         children: [
           Text(
             '대기열',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w700),
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
           ),
           Text('완료 시 다음 잡 자동 시작', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
         ],
@@ -330,8 +334,8 @@ class _WorkerCard extends StatelessWidget {
       for (final j in _open.isEmpty ? worker.jobs : _open) j.accountLabel,
     }.toList();
     if (names.isEmpty) names.addAll(worker.accountLabels); // 잡이 없는 워커
-    if (names.isEmpty) return '[계좌 없음]';
-    return names.length == 1 ? '[계좌 ${names.first}]' : '[계좌 ${names.first} 외 ${names.length - 1}]';
+    if (names.isEmpty) return '계좌 없음';
+    return names.length == 1 ? '계좌 ${names.first}' : '계좌 ${names.first} 외 ${names.length - 1}';
   }
 
   String? get _accumulated {
@@ -348,7 +352,7 @@ class _WorkerCard extends StatelessWidget {
     final p = job?.position;
     final parts = <List<InlineSpan>>[];
     if (job != null && job.repeatCount > 1) {
-      parts.add([TextSpan(text: '${job.repeatCurrent}/${job.repeatCount}회차')]);
+      parts.add([TextSpan(text: '${_num(job.repeatCurrent.toDouble())}/${_num(job.repeatCount.toDouble())}회차')]);
     }
     if (p == null) {
       parts.add([const TextSpan(text: '보유 없음')]);
@@ -357,7 +361,7 @@ class _WorkerCard extends StatelessWidget {
       parts.add([
         TextSpan(
           text: p.sideLabel,
-          style: TextStyle(color: short ? AppColors.down : AppColors.up, fontWeight: FontWeight.w700),
+          style: TextStyle(color: short ? AppColors.down : AppColors.up, fontWeight: FontWeight.w500),
         ),
         TextSpan(text: ' ${_num(p.size)}${w.qtyUnit}'),
       ]);
@@ -369,7 +373,7 @@ class _WorkerCard extends StatelessWidget {
         parts.add([
           TextSpan(
             text: '$tickText${_appSigned(pnl, w.currency)}',
-            style: TextStyle(color: _pnlColor(pnl), fontWeight: FontWeight.w700),
+            style: TextStyle(color: _pnlColor(pnl), fontWeight: FontWeight.w500),
           ),
         ]);
       }
@@ -381,14 +385,14 @@ class _WorkerCard extends StatelessWidget {
         const TextSpan(text: '실현 '),
         TextSpan(
           text: _appSigned(w.realizedPnl, w.currency),
-          style: TextStyle(color: _pnlColor(w.realizedPnl), fontWeight: FontWeight.w700),
+          style: TextStyle(color: _pnlColor(w.realizedPnl), fontWeight: FontWeight.w500),
         ),
       ]);
     }
     parts.add([
       TextSpan(
         text: '잡 ${_open.length}개',
-        style: const TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700),
+        style: const TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w500),
       ),
     ]);
     return [
@@ -399,24 +403,21 @@ class _WorkerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final w = worker;
-    final running = w.status == WorkerStatus.running;
     final kind = w.jobs.isEmpty && w.kind == null ? null : w.kindKey;
     final accumulated = _accumulated;
     final borderColor = selected
         ? AppColors.brand
-        : running
-        ? AppColors.success.withValues(alpha: 0.5)
         : w.status == WorkerStatus.error
-        ? AppColors.up.withValues(alpha: 0.6)
+        ? AppColors.up.withValues(alpha: 0.5)
         : AppColors.border;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
-        color: AppColors.surfaceSoft,
+        color: AppColors.surface,
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: borderColor),
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          side: BorderSide(color: borderColor, width: selected ? 1.5 : 1),
         ),
         child: InkWell(
           onTap: onTap,
@@ -424,8 +425,11 @@ class _WorkerCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Container(
-                color: AppColors.brand.withValues(alpha: 0.18),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                decoration: const BoxDecoration(
+                  color: AppColors.surfaceSoft,
+                  border: Border(bottom: BorderSide(color: AppColors.border)),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
                     Expanded(
@@ -433,7 +437,7 @@ class _WorkerCard extends StatelessWidget {
                         _account,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                       ),
                     ),
                     if (accumulated != null)
@@ -442,14 +446,14 @@ class _WorkerCard extends StatelessWidget {
                         style: const TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 13,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                   ],
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 child: Row(
                   children: [
                     Expanded(
@@ -461,13 +465,13 @@ class _WorkerCard extends StatelessWidget {
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               const _KindBadge.worker(),
-                              Text(w.symbolCode, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+                              Text(w.symbolCode, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                               Text(
                                 w.symbolName,
                                 style: const TextStyle(
                                   color: AppColors.textPrimary,
                                   fontSize: 17,
-                                  fontWeight: FontWeight.w700,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                               if (kind == 'alert') const StatusBadge('알람', color: AppColors.warning),
@@ -490,16 +494,18 @@ class _WorkerCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                    // 가동 상태 점. 앱의 스위치 자리지만 관리자는 조회만 하므로 상태만 보인다.
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        _AppToggle(running),
+                        StatusDot(_workerStatusColor(w.status), size: 8),
+                        const SizedBox(width: 6),
                         Text(
                           w.status.label,
                           style: TextStyle(
                             color: _workerStatusColor(w.status),
                             fontSize: 13,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
@@ -547,7 +553,7 @@ class _JobCard extends StatelessWidget {
           textAlign: TextAlign.center,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w700),
+          style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w500),
         ),
       ],
     ),
@@ -569,7 +575,7 @@ class _JobCard extends StatelessWidget {
     final pct = pnl == null || cost <= 0 ? null : pnl / cost * 100;
     final realized = job.isAlert ? 0.0 : job.realizedPnl;
     final iconColor = job.isActive ? AppColors.down : AppColors.textTertiary;
-    final repeat = job.repeatCount > 1 ? '${job.repeatCurrent}/${job.repeatCount} 회차' : null;
+    final repeat = job.repeatCount > 1 ? '${_num(job.repeatCurrent.toDouble())}/${_num(job.repeatCount.toDouble())}회차' : null;
     const muted = AppColors.textTertiary;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -617,7 +623,7 @@ class _JobCard extends StatelessWidget {
                                     job.name,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                                   ),
                                 ),
                               ],
@@ -656,7 +662,7 @@ class _JobCard extends StatelessWidget {
                                 padding: EdgeInsets.zero,
                               ),
                               onPressed: null,
-                              child: const Text('삭제', style: TextStyle(fontWeight: FontWeight.w700)),
+                              child: const Text('삭제', style: TextStyle(fontWeight: FontWeight.w500)),
                             ),
                           )
                         else
@@ -745,7 +751,7 @@ class _FinishedJobCard extends StatelessWidget {
       job.isShort ? '숏' : '롱',
       if (job.strategy.templateId.isNotEmpty) job.strategy.label,
     ].join(' · ');
-    const action = TextStyle(fontSize: 13, fontWeight: FontWeight.w700);
+    const action = TextStyle(fontSize: 13, fontWeight: FontWeight.w500);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
@@ -784,7 +790,7 @@ class _FinishedJobCard extends StatelessWidget {
                                   job.name,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                                 ),
                               ),
                             ],
@@ -852,7 +858,7 @@ class _JobTabs extends StatelessWidget {
               style: TextStyle(
                 color: selected ? AppColors.brand : AppColors.textSecondary,
                 fontSize: 13,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -877,7 +883,7 @@ class _FinishedActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const style = TextStyle(color: AppColors.textTertiary, fontSize: 13, fontWeight: FontWeight.w700);
+    const style = TextStyle(color: AppColors.textTertiary, fontSize: 13, fontWeight: FontWeight.w500);
     return const Padding(
       padding: EdgeInsets.fromLTRB(2, 2, 2, 10),
       child: Row(

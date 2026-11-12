@@ -239,7 +239,7 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
       children: [
         Text(
           '${formatNumber(body['total'] as int? ?? 0)}건',
-          style: const TextStyle(color: AppColors.textTertiary, fontWeight: FontWeight.w600),
+          style: const TextStyle(color: AppColors.textTertiary, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 8),
         AdminTable(
@@ -250,7 +250,7 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
           onRowTap: (i) => _openMember(rows[i]),
           rows: [
             for (final r in rows)
-              [Text(_text(r['username']), style: const TextStyle(fontWeight: FontWeight.w600)), ...cells(r)],
+              [Text(_text(r['username']), style: const TextStyle(fontWeight: FontWeight.w500)), ...cells(r)],
           ],
         ),
         if (summary != null) ...[const SizedBox(height: 8), summary],
@@ -269,7 +269,7 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
         if (totals.isNotEmpty)
           const Text(
             '합계(삭제된 워커 포함)',
-            style: TextStyle(color: AppColors.textTertiary, fontSize: 12, fontWeight: FontWeight.w700),
+            style: TextStyle(color: AppColors.textTertiary, fontSize: 12, fontWeight: FontWeight.w500),
           ),
         for (final t in totals)
           Text(
@@ -297,7 +297,7 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
               : o['side'] == 'sell'
               ? '매도'
               : '-',
-          style: TextStyle(color: o['side'] == 'buy' ? AppColors.up : AppColors.down, fontWeight: FontWeight.w700),
+          style: TextStyle(color: o['side'] == 'buy' ? AppColors.up : AppColors.down, fontWeight: FontWeight.w500),
         ),
         _right(Text(_text(o['cycleNo']))),
         Text(_orderKind(o)),
@@ -311,7 +311,7 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
               ? const Text('-')
               : Text(
                   _money(pnl),
-                  style: TextStyle(color: _pnlColor(pnl), fontWeight: FontWeight.w700),
+                  style: TextStyle(color: _pnlColor(pnl), fontWeight: FontWeight.w500),
                 ),
         ),
       ];
@@ -325,11 +325,11 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
     (p) => [
       Text(_text(p['accountName'])),
       Text(p['isPaper'] == true ? '모의' : '실전'),
-      Text(_text(p['symbolCode']), style: const TextStyle(fontWeight: FontWeight.w600)),
+      Text(_text(p['symbolCode']), style: const TextStyle(fontWeight: FontWeight.w500)),
       Text(_text(p['symbolName'])),
       Text(
         p['side'] == 'short' ? '매도' : '매수',
-        style: TextStyle(color: p['side'] == 'short' ? AppColors.down : AppColors.up, fontWeight: FontWeight.w700),
+        style: TextStyle(color: p['side'] == 'short' ? AppColors.down : AppColors.up, fontWeight: FontWeight.w500),
       ),
       _right(Text('${_amount(p['size'])}${_text(p['qtyUnit'])}')),
       _right(Text(_amount(p['entryPrice']))),
@@ -417,7 +417,7 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
                   if (i > 0) const TextSpan(text: ' · '),
                   TextSpan(
                     text: '${_money(e.value)} ${e.key}',
-                    style: TextStyle(color: _pnlColor(e.value), fontWeight: FontWeight.w700),
+                    style: TextStyle(color: _pnlColor(e.value), fontWeight: FontWeight.w500),
                   ),
                 ],
               ],
@@ -433,7 +433,7 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
       children: [
         Text(
           '${_tab.label} ${body['total'] ?? rows.length}개 · 가동중 ${totals['running'] ?? '-'}개',
-          style: const TextStyle(color: AppColors.textTertiary, fontWeight: FontWeight.w600),
+          style: const TextStyle(color: AppColors.textTertiary, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 8),
         AdminTable(
@@ -445,10 +445,10 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
           rows: [
             for (final r in rows)
               [
-                Text(r.username, style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(r.username, style: const TextStyle(fontWeight: FontWeight.w500)),
                 Text(r.accounts),
                 Text(r.kind),
-                Text(r.symbolCode, style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(r.symbolCode, style: const TextStyle(fontWeight: FontWeight.w500)),
                 Text(r.symbolName),
                 Text(r.market),
                 StatusBadge(r.running ? '가동중' : '중지됨', color: r.running ? AppColors.success : AppColors.textTertiary),
@@ -467,7 +467,7 @@ class _LiveWorkersTableState extends State<LiveWorkersTable> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              const Text('실현손익 합계(활성 워커 기준)  ', style: TextStyle(fontWeight: FontWeight.w700)),
+              const Text('실현손익 합계(활성 워커 기준)  ', style: TextStyle(fontWeight: FontWeight.w500)),
               _pnlText(livePnl(totals['pnl'])),
             ],
           ),

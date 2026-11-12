@@ -108,7 +108,7 @@ class _MemberBar extends StatelessWidget {
             runSpacing: 6,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Text(m.username, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              Text(m.username, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               // 사용 모드는 앱이 서버로 보내야 알 수 있어 테스트 DB 회원은 비어 있다.
               if (mode != null) ...[
                 const Text('사용 모드', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
@@ -423,7 +423,7 @@ class _AccountsPane extends StatelessWidget {
       selected: selected == name,
       selectedTileColor: AppColors.brand.withValues(alpha: 0.18),
       selectedColor: AppColors.textPrimary,
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
       subtitle: Text(subtitle, style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
       trailing: trailing,
       onTap: () => onSelect(name),
@@ -584,7 +584,7 @@ class _PositionsPane extends StatelessWidget {
                         children: [
                           Text(
                             '${p.symbolName} (${p.symbolCode})',
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                           ),
                           if (p.jobName == null) const StatusBadge('수동', color: AppColors.warning),
                           if (pnl != null) _PnlValue(pnl, p.currency),
@@ -689,7 +689,7 @@ class _OrdersPane extends StatelessWidget {
                           StatusBadge(o.statusLabel, color: _statusColor(o)),
                           Text(
                             '${o.symbolName} ${o.sideLabel}',
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                           ),
                           Text(
                             formatDateTime(o.at, seconds: true),
@@ -701,7 +701,7 @@ class _OrdersPane extends StatelessWidget {
                               style: TextStyle(
                                 color: _pnlColor(o.realizedPnl!),
                                 fontSize: 13,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                         ],
@@ -830,7 +830,7 @@ class _NotificationHistoryPane extends StatelessWidget {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         if (!m.isRead) const StatusBadge('안 읽음', color: AppColors.accent),
-                        Text(m.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        Text(m.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
                         Text(
                           formatDateTime(m.sentAt, seconds: true),
                           style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),

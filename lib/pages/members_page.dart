@@ -390,14 +390,14 @@ class _MembersPageState extends State<MembersPage> {
                   onTap: () => _openDetail(m),
                   // 아이디를 두 번 눌러도 상세가 먼저 열리지 않게 한다.
                   onDoubleTap: m.status == MemberStatus.pending ? null : () => _openMonitor(m),
-                  child: Text(m.username, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  child: Text(m.username, style: const TextStyle(fontWeight: FontWeight.w500)),
                 ),
                 if (!canBlock)
                   m.issueKinds.isEmpty
                       ? const Text('-')
                       : Text(
                           m.issueKinds.map(_issueLabel).join(', '),
-                          style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w600),
+                          style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w500),
                         ),
                 Text(m.maskedName ?? '-'),
                 Text(m.gradeLabel ?? '-'),
@@ -490,7 +490,7 @@ class _PendingBanner extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           const Icon(Icons.how_to_reg_outlined, color: AppColors.accent),
-          Text('가입 승인을 기다리는 회원이 $count명 있습니다.', style: const TextStyle(fontWeight: FontWeight.w600)),
+          Text('가입 승인을 기다리는 회원이 $count명 있습니다.', style: const TextStyle(fontWeight: FontWeight.w500)),
           TextButton(onPressed: onTap, child: const Text('승인 대기 보기')),
         ],
       ),

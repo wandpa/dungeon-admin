@@ -184,23 +184,26 @@ class _MenuBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.strip,
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      height: 56,
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            Image.asset('assets/admin_icon.png', width: 28, height: 28),
+            Image.asset('assets/admin_icon.png', width: 24, height: 24),
             const SizedBox(width: 8),
-            const Text('던전우상향', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            const Text('던전우상향', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(width: 6),
-            const Text(
-              '관리자',
-              style: TextStyle(color: AppColors.accent, fontSize: 12, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(width: 20),
-            for (final m in menus)
+            const Text('관리자', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+            const SizedBox(width: 32),
+            for (final m in menus) ...[
               AdminMenuItem(label: m.label, icon: m.icon, selected: m.label == current, onTap: () => onSelect(m)),
+              const SizedBox(width: 4),
+            ],
           ],
         ),
       ),
@@ -225,28 +228,31 @@ class AdminMenuItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? AppColors.brand : AppColors.textSecondary;
+    // 선택은 한 단계 올라온 면과 강조색 아이콘으로만 보인다.
     return Material(
-      color: selected ? AppColors.surface : Colors.transparent,
-      borderRadius: BorderRadius.circular(4),
+      color: selected ? AppColors.strip : Colors.transparent,
+      borderRadius: BorderRadius.circular(AppRadius.control),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
-        child: SizedBox(
-          width: 84,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 22, color: color),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700),
+        borderRadius: BorderRadius.circular(AppRadius.control),
+        hoverColor: AppColors.surfaceSoft,
+        child: Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: selected ? AppColors.brand : AppColors.textTertiary),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: selected ? AppColors.textPrimary : AppColors.textSecondary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -276,11 +282,11 @@ class _OpenTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: AppColors.surfaceSoft,
+        color: AppColors.background,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
-      padding: const EdgeInsets.only(left: 8),
-      height: 30,
+      padding: const EdgeInsets.only(left: AppSpace.page - 4),
+      height: 36,
       child: ReorderableListView(
         scrollDirection: Axis.horizontal,
         buildDefaultDragHandles: false,
@@ -295,8 +301,11 @@ class _OpenTabs extends StatelessWidget {
                 child: InkWell(
                   onTap: () => onSelect(t),
                   child: Container(
-                    decoration: const BoxDecoration(
-                      border: Border(right: BorderSide(color: AppColors.grid)),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        right: const BorderSide(color: AppColors.border),
+                        bottom: BorderSide(color: t == current ? AppColors.brand : Colors.transparent, width: 2),
+                      ),
                     ),
                     padding: EdgeInsets.only(left: 12, right: closable ? 4 : 12),
                     child: Row(
@@ -305,9 +314,9 @@ class _OpenTabs extends StatelessWidget {
                         Text(
                           t,
                           style: TextStyle(
-                            color: t == current ? AppColors.brand : AppColors.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                            color: t == current ? AppColors.textPrimary : AppColors.textTertiary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                         if (closable)
@@ -337,12 +346,15 @@ class _StatusBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const small = TextStyle(color: AppColors.textSecondary, fontSize: 12);
+    const small = TextStyle(color: AppColors.textTertiary, fontSize: 12);
     final admin = signedInAdmin.value;
     return Container(
-      color: AppColors.strip,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      height: 28,
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
+      height: 32,
       child: Row(
         children: [
           Expanded(
@@ -352,10 +364,10 @@ class _StatusBar extends StatelessWidget {
             ),
           ),
           if (MediaQuery.sizeOf(context).width >= 800)
-            Text(useLiveData.value ? '테스트 DB 조회 · 공지·관리자는 샘플' : '샘플 데이터', style: small),
+            Text(useLiveData.value ? '테스트 DB 조회 · 공지·등급별 화면은 목업 API' : '샘플 데이터', style: small),
           if (admin != null) ...[
             const SizedBox(width: 16),
-            Text('${admin.name} · ${admin.role.label}', style: small.copyWith(fontWeight: FontWeight.w700)),
+            Text('${admin.name} · ${admin.role.label}', style: small.copyWith(color: AppColors.textSecondary)),
             IconButton(
               tooltip: '로그아웃',
               padding: EdgeInsets.zero,
