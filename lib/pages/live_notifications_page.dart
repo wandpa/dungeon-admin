@@ -264,7 +264,7 @@ class _LiveNotificationsPageState extends State<LiveNotificationsPage> {
               children: [
                 Text(
                   _query.trim().isEmpty
-                      ? '전체 ${counts['all'] ?? '-'}건 · 안 읽음 ${counts['unread'] ?? '-'}건'
+                      ? '전체 ${_count(counts['all'])}건 · 안 읽음 ${_count(counts['unread'])}건'
                       : '검색 결과 ${body['total'] ?? '-'}건',
                   style: const TextStyle(color: AppColors.textTertiary),
                 ),
@@ -298,3 +298,5 @@ class _LiveNotificationsPageState extends State<LiveNotificationsPage> {
     );
   }
 }
+
+String _count(Object? v) => v is num ? formatNumber(v.toInt()) : '-';

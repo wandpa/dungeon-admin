@@ -367,7 +367,7 @@ class _OperationSectionState extends State<_OperationSection> {
               if (totals.isEmpty)
                 const Text('이 기간의 주문이 없습니다.', style: TextStyle(color: AppColors.textTertiary))
               else
-                Wrap(spacing: 32, runSpacing: 16, children: [for (final t in totals) _CurrencyTotal(t)]),
+                _CurrencyTotals(totals),
             ],
           ),
         ),
@@ -406,20 +406,54 @@ class _CurrencyTotal extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = total;
+    const meta = TextStyle(color: AppColors.textTertiary, fontSize: 12);
+    Widget legend(Color color, String text) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [StatusDot(color, size: 6), const SizedBox(width: 6), Text(text, style: meta)],
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('${t.currency} 체결 금액', style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
-        const SizedBox(height: 2),
-        Text(_amount(t.filledAmount), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 2),
-        Text(
-          '주문 ${t.orders}건 · 체결 ${t.filled}건 · 미체결 ${t.waiting}건 · 거부 ${t.rejected}건',
-          style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+        Text('${t.currency} 체결 금액', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        const SizedBox(height: 8),
+        Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(text: _amount(t.filledAmount)),
+              if (t.currency != '통화 미확인')
+                TextSpan(
+                  text: '  ${t.currency}',
+                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 15, fontWeight: FontWeight.w400),
+                ),
+            ],
+          ),
+          style: const TextStyle(fontSize: 36, height: 1, fontWeight: FontWeight.w500),
         ),
-        Text(
-          '매수 ${_amount(t.buyAmount)} · 매도 ${_amount(t.sellAmount)}',
-          style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+        const SizedBox(height: 16),
+        _ShareBar([(t.buyAmount, AppColors.up), (t.sellAmount, AppColors.down)]),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 16,
+          children: [
+            legend(AppColors.up, '매수 ${_amount(t.buyAmount)}'),
+            legend(AppColors.down, '매도 ${_amount(t.sellAmount)}'),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _ShareBar([
+          (t.filled.toDouble(), AppColors.textPrimary),
+          (t.waiting.toDouble(), AppColors.warning),
+          (t.rejected.toDouble(), AppColors.up.withValues(alpha: 0.45)),
+        ]),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 16,
+          children: [
+            Text('주문 ${formatNumber(t.orders)}건', style: meta.copyWith(color: AppColors.textSecondary)),
+            legend(AppColors.textPrimary, '체결 ${formatNumber(t.filled)}'),
+            legend(AppColors.warning, '미체결 ${formatNumber(t.waiting)}'),
+            legend(AppColors.up.withValues(alpha: 0.45), '거부 ${formatNumber(t.rejected)}'),
+          ],
         ),
       ],
     );
@@ -427,6 +461,55 @@ class _CurrencyTotal extends StatelessWidget {
 }
 
 String _amount(double v) => formatNumber(v.round());
+
+/// 통화가 여럿이면 금액이 큰 통화를 왼쪽에 크게 두고 나머지는 옆에 같은 모양으로 둔다.
+class _CurrencyTotals extends StatelessWidget {
+  const _CurrencyTotals(this.totals);
+
+  final List<OrderTotal> totals;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, c) {
+      final perRow = c.maxWidth >= 900 ? 2 : 1;
+      final width = (c.maxWidth - 32 * (perRow - 1)) / perRow;
+      return Wrap(
+        spacing: 32,
+        runSpacing: 24,
+        children: [for (final t in totals) SizedBox(width: width, child: _CurrencyTotal(t))],
+      );
+    },
+  );
+}
+
+/// 비율 막대 한 줄. 각 칸 색은 뜻이 있다(매수 빨강·매도 파랑, 체결·미체결·거부).
+class _ShareBar extends StatelessWidget {
+  const _ShareBar(this.parts);
+
+  final List<(double value, Color color)> parts;
+
+  @override
+  Widget build(BuildContext context) {
+    final sum = parts.fold(0.0, (s, p) => s + p.$1);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: SizedBox(
+        height: 8,
+        child: sum <= 0
+            ? Container(color: AppColors.strip)
+            : Row(
+                children: [
+                  for (final (i, p) in parts.indexed)
+                    if (p.$1 > 0) ...[
+                      if (i > 0) const SizedBox(width: 2),
+                      Expanded(flex: (p.$1 / sum * 1000).round().clamp(1, 1000), child: Container(color: p.$2)),
+                    ],
+                ],
+              ),
+      ),
+    );
+  }
+}
 
 /// 많은 순서의 가로 막대. 값은 막대 옆에 쓰고, 마우스를 올리면 자세한 내용을 보여 준다.
 class _BarPanel extends StatelessWidget {
@@ -467,10 +550,10 @@ class _BarPanel extends StatelessWidget {
                               child: FractionallySizedBox(
                                 widthFactor: r.value / maxValue,
                                 child: Container(
-                                  height: 10,
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.accent,
-                                    borderRadius: BorderRadius.horizontal(right: Radius.circular(4)),
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    color: identical(r, rows.first) ? AppColors.brand : AppColors.control,
+                                    borderRadius: BorderRadius.circular(3),
                                   ),
                                 ),
                               ),
@@ -498,15 +581,17 @@ class _BarPanel extends StatelessWidget {
 /// 통계 칸을 화면 너비에 맞춰 같은 너비의 칸으로 나눈다. 한 줄에 최대 5칸이고,
 /// 칸 수가 적은 줄도 같은 격자에 맞춰 위아래 칸이 줄을 맞춘다.
 class _StatGrid extends StatelessWidget {
-  const _StatGrid({required this.spacing, required this.children});
+  const _StatGrid({required this.spacing, required this.children, this.fill = false});
 
   final double spacing;
   final List<Widget> children;
+  final bool fill; // 칸이 적으면 줄을 칸 수로 나눠 오른쪽을 비워 두지 않는다
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, c) {
-      final cols = ((c.maxWidth + spacing) / (200 + spacing)).floor().clamp(1, 5);
+      final most = ((c.maxWidth + spacing) / (200 + spacing)).floor().clamp(1, 5);
+      final cols = fill ? children.length.clamp(1, most) : most;
       final width = (c.maxWidth - spacing * (cols - 1)) / cols;
       return Wrap(
         spacing: spacing,

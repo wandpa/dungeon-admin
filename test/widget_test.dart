@@ -667,12 +667,12 @@ void main() {
     // 오늘: 국내선물 113,025,000 + 현대차 1,247,500. 모의 삼성전자와 어제 체결은 빠진다.
     expect(find.text('KRW 체결 금액'), findsOneWidget);
     expect(find.text('USD 체결 금액'), findsOneWidget);
-    expect(find.text('114,272,500'), findsOneWidget);
+    expect(find.textContaining('114,272,500  KRW'), findsOneWidget);
 
     // 전체 기간: 어제의 삼성전자 489,000 이 더해진다.
     await tester.tap(find.widgetWithText(ChoiceChip, '전체'));
     await tester.pumpAndSettle();
-    expect(find.text('114,761,500'), findsOneWidget);
+    expect(find.textContaining('114,761,500  KRW'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

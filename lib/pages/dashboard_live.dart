@@ -74,7 +74,8 @@ class LiveDashboardPage extends StatelessWidget {
           children: [
             const _DashHead('회원', Icons.people_outline),
             _StatGrid(
-              spacing: 8,
+              spacing: AppSpace.gap,
+              fill: true,
               children: [
                 _StatTile(label: '전체 회원', value: formatNumber(n('totalMembers')), icon: Icons.people_outline),
                 _StatTile(label: '신규 가입 (어제·오늘)', value: '${n('newMembers')}', icon: Icons.person_add_alt),
@@ -89,7 +90,7 @@ class LiveDashboardPage extends StatelessWidget {
             _DashColumns(left: issues, right: members),
             const _DashHead('매매', Icons.show_chart),
             _StatGrid(
-              spacing: 8,
+              spacing: AppSpace.gap,
               children: [
                 _StatTile(label: '오늘 발생 신호', value: '${n('todaySignals')}', icon: Icons.show_chart),
                 _StatTile(
@@ -139,18 +140,10 @@ class _DashHead extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 묶음 제목은 글자만 둔다. 위쪽을 더 띄워 앞 묶음과 갈라 보이게 한다.
     return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: AppColors.brand),
-          const SizedBox(width: 6),
-          Text(
-            title,
-            style: const TextStyle(color: AppColors.brand, fontSize: 15, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.only(top: 12),
+      child: Text(title, style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w500)),
     );
   }
 }
@@ -169,14 +162,14 @@ class _DashColumns extends StatelessWidget {
         if (constraints.maxWidth < 760) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [left, const SizedBox(height: 8), right],
+            children: [left, const SizedBox(height: AppSpace.gap), right],
           );
         }
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(child: left),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpace.gap),
             Expanded(child: right),
           ],
         );
@@ -224,8 +217,8 @@ class _LiveOrderTotalsState extends State<_LiveOrderTotals> {
               const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('회원 전체 주문 금액', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                  SizedBox(height: 2),
+                  Text('회원 전체 주문 금액', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+                  SizedBox(height: 4),
                   Text(
                     '실전 계좌 체결 기준 · 체결가 × 수량 × 계약승수 · 모의 계좌 제외',
                     style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
@@ -246,13 +239,16 @@ class _LiveOrderTotalsState extends State<_LiveOrderTotals> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 20),
           LiveLoader<List<OrderTotal>>(
             key: ValueKey(_period),
             load: () => _load(_period),
             builder: (context, totals) => totals.isEmpty
-                ? const Text('이 기간의 주문이 없습니다.', style: TextStyle(color: AppColors.textTertiary))
-                : Wrap(spacing: 32, runSpacing: 16, children: [for (final t in totals) _CurrencyTotal(t)]),
+                ? Text(
+                    '${_period.label} 실전 체결이 없습니다. 7일이나 전체로 바꿔 보세요',
+                    style: const TextStyle(color: AppColors.textTertiary),
+                  )
+                : _CurrencyTotals(totals),
           ),
         ],
       ),
