@@ -158,6 +158,7 @@ class Notice {
     this.grades = const {},
     this.popup = false,
     this.endAt,
+    this.images = const [],
   });
 
   final int id;
@@ -174,8 +175,19 @@ class Notice {
   Set<String> grades; // 볼 수 있는 회원등급. 비어 있으면 전체
   bool popup; // 앱을 열 때 팝업으로 보여 준다
   DateTime? endAt; // 게시 종료 시각. 비어 있으면 내릴 때까지 게시
+  List<NoticeImage> images; // 본문 아래에 붙는 이미지. 올린 순서대로 보인다
 
   String get audience => grades.isEmpty ? '전체' : grades.join('·');
+}
+
+/// 공지에 붙인 이미지. 저장소가 생기기 전이라 브라우저 메모리에만 있다.
+class NoticeImage {
+  const NoticeImage(this.name, this.bytes, {this.id, this.url});
+
+  final String name;
+  final Uint8List? bytes; // 이 화면에서 고른 파일. 서버에서 받은 공지는 비어 있다
+  final String? id; // 서버에 올린 이미지 id
+  final String? url; // 서버 이미지 주소
 }
 
 final mockMembers = _seedMembers();

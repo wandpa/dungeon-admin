@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../mock_admin.dart';
 import '../mock_data.dart';
 import '../mock_system.dart';
 import 'dashboard_page.dart';
@@ -41,6 +42,9 @@ class _DashboardHubPageState extends State<DashboardHubPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 최고 관리자가 이 등급에게 끈 소화면은 빠진다.
+    final tabs = [for (final t in _Tab.values) if (canSee(screenKey(['대시보드', t.label]))) t];
+    final tab = tabs.contains(_tab) ? _tab : tabs.first;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -49,18 +53,18 @@ class _DashboardHubPageState extends State<DashboardHubPage> {
           child: Wrap(
             spacing: 6,
             children: [
-              for (final t in _Tab.values)
+              for (final t in tabs)
                 ChoiceChip(
                   label: Text(t.label),
                   visualDensity: VisualDensity.compact,
-                  selected: _tab == t,
+                  selected: tab == t,
                   onSelected: (_) => setState(() => _tab = t),
                 ),
             ],
           ),
         ),
         Expanded(
-          child: switch (_tab) {
+          child: switch (tab) {
             _Tab.dashboard => useLiveData.value ? const LiveDashboardPage() : const DashboardPage(),
             _Tab.system => useLiveData.value ? const LiveSystemPage() : const SystemPage(),
           },

@@ -113,6 +113,33 @@ Future<dynamic> adminGet(String path) async {
   return _json(res);
 }
 
+/// 관리자 API 의 /live 밖 경로에 쓰기 요청을 보낸다(목업 저장소: 공지·등급별 화면). 응답 JSON 이 없으면 null.
+Future<dynamic> adminSend(String method, String path, [Object? body]) async {
+  final res = await _send(() async {
+    final req = http.Request(method, Uri.parse('$_baseUrl$path'))..headers.addAll(_auth);
+    if (body != null) {
+      req.headers['Content-Type'] = 'application/json';
+      req.body = jsonEncode(body);
+    }
+    return http.Response.fromStream(await _client.send(req));
+  });
+  return res.bodyBytes.isEmpty ? null : _json(res);
+}
+
+/// 파일 하나를 multipart(필드 file)로 올린다.
+Future<Map<String, dynamic>> adminUpload(String path, String fileName, Uint8List bytes) async {
+  final res = await _send(() async {
+    final req = http.MultipartRequest('POST', Uri.parse('$_baseUrl$path'))
+      ..headers.addAll(_auth)
+      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: fileName));
+    return http.Response.fromStream(await _client.send(req));
+  });
+  return _json(res) as Map<String, dynamic>;
+}
+
+/// API 가 준 상대 경로(/api/admin/...)를 전체 주소로 바꾼다.
+String adminUrl(String path) => Uri.parse(_baseUrl).resolve(path).toString();
+
 /// 회원 상세를 열었음을 서버 열람 기록에 남긴다. 같은 내용은 서버가 5분에 한 번만 남긴다.
 Future<void> logLiveMemberView(Member m) async {
   try {
@@ -196,7 +223,7 @@ Future<http.Response> _send(Future<http.Response> Function() request) async {
     _expireSession(used);
     throw const LiveApiException(_sessionExpired);
   }
-  if (res.statusCode == 200 || res.statusCode == 204) return res;
+  if (res.statusCode == 200 || res.statusCode == 201 || res.statusCode == 204) return res;
   if (res.statusCode == 403) throw const LiveApiException('권한이 없습니다.');
   if (res.statusCode == 404) throw const LiveApiException('대상을 찾지 못했습니다.');
   throw LiveApiException(_messageOf(res) ?? '조회에 실패했습니다.');

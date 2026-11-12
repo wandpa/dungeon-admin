@@ -414,6 +414,9 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 최고 관리자가 이 등급에게 끈 탭을 보고 있었다면 남은 첫 탭으로 옮긴다.
+    final shown = _shownTabs.toList();
+    if (shown.isNotEmpty && !shown.contains(_tab)) _tab = shown.first;
     final member = _member;
     if (member != null && member.id != _viewedMemberId) {
       _viewedMemberId = member.id;
@@ -427,7 +430,11 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
             for (final w in allWorkers)
               if (w.usesAccount(accountName)) w.onlyAccount(accountName),
           ];
-    final worker = _workerIn(workers);
+    // 워커 종류 체크에서 빠진 워커는 목록에서 숨으므로 선택도 풀린 것으로 본다(상담 연결·잡·로그에 남지 않게).
+    final picked = _workerIn(workers);
+    final hidden = picked != null && useLiveData.value && !_workerKinds.contains(picked.kindKey);
+    final worker = hidden ? null : picked;
+    if (hidden) _job = null;
     _loadMissing(member, worker);
     final memberLogs = member == null
         ? const <CustomerLog>[]

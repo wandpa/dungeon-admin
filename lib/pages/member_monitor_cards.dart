@@ -385,7 +385,12 @@ class _WorkerCard extends StatelessWidget {
         ),
       ]);
     }
-    parts.add([TextSpan(text: '잡 ${_open.length}개')]);
+    parts.add([
+      TextSpan(
+        text: '잡 ${_open.length}개',
+        style: const TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700),
+      ),
+    ]);
     return [
       for (final (i, part) in parts.indexed) ...[if (i > 0) const TextSpan(text: ' · '), ...part],
     ];
@@ -457,7 +462,14 @@ class _WorkerCard extends StatelessWidget {
                             children: [
                               const _KindBadge.worker(),
                               Text(w.symbolCode, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
-                              Text(w.symbolName, style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+                              Text(
+                                w.symbolName,
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                               if (kind == 'alert') const StatusBadge('알람', color: AppColors.warning),
                               if (kind == 'paper') const StatusBadge('모의', color: AppColors.down),
                               if (w.kind == 'real') const StatusBadge('실전', color: AppColors.success),

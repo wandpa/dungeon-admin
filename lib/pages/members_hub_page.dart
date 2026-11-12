@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../live_api.dart';
+import '../mock_admin.dart';
 import '../mock_data.dart';
 import '../theme.dart';
 import 'consultations_page.dart';
@@ -58,8 +59,12 @@ class _MembersHubPageState extends State<MembersHubPage> {
     final live = useLiveData.value;
     final status = liveStatus.value;
     // 상담 이력은 저장할 테이블이 없어 테스트 DB 화면에서는 뺀다(C-1). 전체 회원 포지션은 모니터링의 전체 회원 탭에 있다.
-    final tabs = live ? const [_Tab.list, _Tab.monitor] : _Tab.values;
-    final tab = tabs.contains(_tab) ? _tab : _Tab.list;
+    // 최고 관리자가 이 등급에게 끈 소화면은 빠진다.
+    final tabs = [
+      for (final t in live ? const [_Tab.list, _Tab.monitor] : _Tab.values)
+        if (canSee(screenKey(['회원 관리', t.label]))) t,
+    ];
+    final tab = tabs.contains(_tab) ? _tab : tabs.first;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

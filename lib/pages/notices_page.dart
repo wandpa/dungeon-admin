@@ -1,10 +1,34 @@
 import 'package:flutter/material.dart';
 
+import '../file_pick.dart';
+import '../live_admin.dart';
+import '../live_api.dart' show LiveApiException;
 import '../mock_accounts.dart';
 import '../mock_admin.dart';
 import '../mock_data.dart';
 import '../theme.dart';
 import '../widgets/admin_page.dart';
+
+/// 이미지 한 장의 최대 크기와 공지 하나에 붙일 수 있는 장수.
+const _maxImageBytes = 5 * 1024 * 1024;
+const _maxImages = 10;
+
+/// 이 화면에서 고른 이미지는 내용으로, 서버에서 받은 이미지는 주소로 그린다.
+Widget _image(NoticeImage img, {double? width, double? height, BoxFit fit = BoxFit.contain}) {
+  final bytes = img.bytes;
+  if (bytes != null) return Image.memory(bytes, width: width, height: height, fit: fit);
+  return Image.network(
+    img.url ?? '',
+    width: width,
+    height: height,
+    fit: fit,
+    errorBuilder: (_, _, _) => SizedBox(
+      width: width ?? 120,
+      height: height ?? 80,
+      child: const Center(child: Icon(Icons.broken_image_outlined, color: AppColors.textTertiary)),
+    ),
+  );
+}
 
 Color _statusColor(NoticeStatus s) => switch (s) {
   NoticeStatus.published => AppColors.success,
@@ -35,6 +59,52 @@ class _NoticesPageState extends State<NoticesPage> {
   final _grades = <String>{}; // 비어 있으면 전체 회원
   bool _popup = false;
   DateTime? _endAt; // 게시 종료 시각
+  final _images = <NoticeImage>[];
+
+  // 테스트 DB 화면은 관리자 API 의 공지 목업 저장소를 쓴다.
+  List<Notice> _live = [];
+  bool _loading = false;
+  bool _busy = false; // 저장·업로드 중
+  String? _error;
+
+  bool get _isLive => useLiveData.value;
+  List<Notice> get _all => _isLive ? _live : mockNotices;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isLive) _reload();
+  }
+
+  Future<void> _reload() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final list = await loadLiveNotices();
+      if (!mounted) return;
+      setState(() => _live = list);
+    } on LiveApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// API 요청을 보내고 실패하면 서버 안내를 띄운다. 성공하면 true.
+  Future<bool> _call(Future<void> Function() action) async {
+    setState(() => _busy = true);
+    try {
+      await action();
+      return true;
+    } on LiveApiException catch (e) {
+      if (mounted) showMessage(context, e.message);
+      return false;
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -47,7 +117,7 @@ class _NoticesPageState extends State<NoticesPage> {
   List<Notice> get _visible {
     final q = _query.trim().toLowerCase();
     return [
-      for (final n in mockNotices)
+      for (final n in _all)
         if ((_status == null || n.status == _status) &&
             (q.isEmpty || n.title.toLowerCase().contains(q) || n.body.toLowerCase().contains(q)))
           n,
@@ -57,7 +127,7 @@ class _NoticesPageState extends State<NoticesPage> {
     });
   }
 
-  int _count(NoticeStatus? s) => s == null ? mockNotices.length : mockNotices.where((n) => n.status == s).length;
+  int _count(NoticeStatus? s) => s == null ? _all.length : _all.where((n) => n.status == s).length;
 
   void _open(Notice? n) => setState(() {
     _editing = true;
@@ -73,6 +143,9 @@ class _NoticesPageState extends State<NoticesPage> {
       ..addAll(n?.grades ?? const {});
     _popup = n?.popup ?? false;
     _endAt = n?.endAt;
+    _images
+      ..clear()
+      ..addAll(n?.images ?? const []);
   });
 
   void _close() => setState(() {
@@ -131,6 +204,7 @@ class _NoticesPageState extends State<NoticesPage> {
           grades: {..._grades},
           popup: _popup,
           endAt: _endAt,
+          images: [..._images],
         ),
       );
     } else {
@@ -144,12 +218,74 @@ class _NoticesPageState extends State<NoticesPage> {
         ..category = _category
         ..grades = {..._grades}
         ..popup = _popup
-        ..endAt = _endAt;
+        ..endAt = _endAt
+        ..images = [..._images];
     }
   }
 
+  /// 이미지를 고른다. 너무 크거나 장수를 넘는 것은 빼고 알려 준다.
+  Future<void> _addImages() async {
+    final picked = await pickImages();
+    if (picked.isEmpty || !mounted) return;
+    final skipped = <String>[];
+    final ok = <PickedFile>[];
+    for (final f in picked) {
+      if (f.bytes.length > _maxImageBytes) {
+        skipped.add('${f.name}(5MB 초과)');
+      } else if (_images.length + ok.length >= _maxImages) {
+        skipped.add('${f.name}($_maxImages장 초과)');
+      } else {
+        ok.add(f);
+      }
+    }
+    if (_isLive) {
+      // 서버에 먼저 올려 id 를 받고, 저장할 때 그 id 를 보낸다.
+      for (final f in ok) {
+        final sent = await _call(() async {
+          final img = await uploadLiveNoticeImage(f.name, f.bytes);
+          if (mounted) setState(() => _images.add(img));
+        });
+        if (!sent) skipped.add('${f.name}(올리지 못함)');
+      }
+    } else {
+      setState(() => _images.addAll([for (final f in ok) NoticeImage(f.name, f.bytes)]));
+    }
+    if (!mounted) return;
+    if (skipped.isNotEmpty) showMessage(context, '빼고 올렸습니다: ${skipped.join(', ')}');
+  }
+
+  Map<String, Object?> _request(String status, {bool notifyPush = false}) => noticeRequest(
+    title: _title.text.trim(),
+    body: _body.text.trim(),
+    category: _category,
+    grades: _grades,
+    pinned: _pinned,
+    popup: _popup,
+    publishAt: _publishAt,
+    endAt: _endAt,
+    status: status,
+    notifyPush: notifyPush,
+    images: _images,
+  );
+
+  /// 서버 목업에 저장하고 목록을 다시 받는다.
+  Future<void> _saveLive(String status, String done, {bool notifyPush = false}) async {
+    final ok = await _call(() => saveLiveNotice(_target?.id, _request(status, notifyPush: notifyPush)));
+    if (!ok || !mounted) return;
+    setState(() {
+      _editing = false;
+      _target = null;
+    });
+    showMessage(context, done);
+    await _reload();
+  }
+
   void _saveDraft() {
-    if (useLiveData.value) return showNotConnected(context); // 저장할 곳이 없다
+    if (_isLive) {
+      _publishAt = null;
+      _saveLive('draft', '임시저장했습니다.');
+      return;
+    }
     setState(() {
       _publishAt = null;
       _write(NoticeStatus.draft);
@@ -162,20 +298,26 @@ class _NoticesPageState extends State<NoticesPage> {
 
   /// 게시·예약. 사용자에게 보이게 되므로 확인을 받는다.
   Future<void> _publish() async {
-    if (useLiveData.value) return showNotConnected(context); // 저장할 곳이 없다
     final scheduled = _publishAt != null;
-    final receivers = pushableMembers().where((m) => pushBlockReason(m) == null).toList();
+    final receivers = _isLive ? <Member>[] : pushableMembers().where((m) => pushBlockReason(m) == null).toList();
     final title = _title.text.trim();
     final ok = await showConfirmDialog(
       context,
       title: scheduled ? '예약 게시' : '공지 게시',
       message: scheduled
           ? '「$title」을(를) ${formatDateTime(_publishAt!)}에 게시합니다.'
-          : '「$title」을(를) 사용자에게 게시합니다.${_notifyPush ? '\n${receivers.length}명에게 푸시도 보냅니다.' : ''}',
+          : '「$title」을(를) 사용자에게 게시합니다.${!_notifyPush ? '' : _isLive ? '\n푸시 발송 요청을 기록합니다(목업이라 실제로 보내지 않습니다).' : '\n${receivers.length}명에게 푸시도 보냅니다.'}',
       confirmText: scheduled ? '예약' : '게시',
     );
     if (!ok || !mounted) return;
     final push = _notifyPush && !scheduled;
+    if (_isLive) {
+      return _saveLive(
+        'published',
+        scheduled ? '게시를 예약했습니다.' : (push ? '게시하고 푸시 발송 요청을 기록했습니다.' : '게시했습니다.'),
+        notifyPush: push,
+      );
+    }
     setState(() {
       _write(scheduled ? NoticeStatus.scheduled : NoticeStatus.published);
       logActivity(ActivityKind.notice, '「$title」 ${scheduled ? '게시 예약' : '게시'}');
@@ -188,7 +330,6 @@ class _NoticesPageState extends State<NoticesPage> {
 
   /// 목록에서 바로 게시하거나 내린다.
   Future<void> _togglePublished(Notice n) async {
-    if (useLiveData.value) return showNotConnected(context); // 저장할 곳이 없다
     final live = n.status == NoticeStatus.published;
     final ok = await showConfirmDialog(
       context,
@@ -198,6 +339,11 @@ class _NoticesPageState extends State<NoticesPage> {
       destructive: live,
     );
     if (!ok || !mounted) return;
+    if (_isLive) {
+      if (!await _call(() => setLiveNoticePublished(n.id, !live)) || !mounted) return;
+      showMessage(context, live ? '게시를 중단했습니다.' : '게시했습니다.');
+      return _reload();
+    }
     setState(() {
       n
         ..status = live ? NoticeStatus.draft : NoticeStatus.published
@@ -209,7 +355,6 @@ class _NoticesPageState extends State<NoticesPage> {
   }
 
   Future<void> _delete(Notice n) async {
-    if (useLiveData.value) return showNotConnected(context); // 저장할 곳이 없다
     final ok = await showConfirmDialog(
       context,
       title: '공지 삭제',
@@ -218,6 +363,12 @@ class _NoticesPageState extends State<NoticesPage> {
       destructive: true,
     );
     if (!ok || !mounted) return;
+    if (_isLive) {
+      if (!await _call(() => deleteLiveNotice(n.id)) || !mounted) return;
+      if (_target?.id == n.id) _close();
+      showMessage(context, '삭제했습니다.');
+      return _reload();
+    }
     setState(() {
       mockNotices.remove(n);
       logActivity(ActivityKind.notice, '「${n.title}」 삭제');
@@ -297,6 +448,45 @@ class _NoticesPageState extends State<NoticesPage> {
         ),
         const SizedBox(height: 8),
         Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            for (final img in _images)
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: _image(img, width: 88, height: 88, fit: BoxFit.cover),
+                  ),
+                  Positioned(
+                    right: 2,
+                    top: 2,
+                    child: InkWell(
+                      onTap: () => setState(() => _images.remove(img)),
+                      child: const CircleAvatar(
+                        radius: 11,
+                        backgroundColor: Colors.black54,
+                        child: Icon(Icons.close, size: 14, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            if (_images.length < _maxImages)
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _addImages,
+                icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
+                label: Text('이미지 첨부 ${_images.length}/$_maxImages'),
+              ),
+            const Text(
+              'PNG·JPG·GIF·WEBP, 장당 5MB까지',
+              style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
           spacing: 12,
           runSpacing: 4,
           crossAxisAlignment: WrapCrossAlignment.center,
@@ -332,9 +522,9 @@ class _NoticesPageState extends State<NoticesPage> {
           runSpacing: 8,
           children: [
             TextButton(onPressed: _close, child: const Text('취소')),
-            OutlinedButton(onPressed: _valid ? _saveDraft : null, child: const Text('임시저장')),
+            OutlinedButton(onPressed: _valid && !_busy ? _saveDraft : null, child: const Text('임시저장')),
             FilledButton(
-              onPressed: _valid ? _publish : null,
+              onPressed: _valid && !_busy ? _publish : null,
               child: Text(_publishAt != null ? '예약하기' : (live ? '수정 저장' : '게시하기')),
             ),
           ],
@@ -364,6 +554,17 @@ class _NoticesPageState extends State<NoticesPage> {
           ),
           const SizedBox(height: 12),
           Text(_body.text.trim().isEmpty ? '내용' : _body.text.trim()),
+          // 앱 화면 폭에 맞춰 보이고, 긴 이미지는 높이를 잘라 미리보기가 너무 길어지지 않게 한다.
+          for (final img in _images) ...[
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360, maxHeight: 360),
+                child: _image(img),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -408,7 +609,13 @@ class _NoticesPageState extends State<NoticesPage> {
           ),
       ],
       children: [
-        if (useLiveData.value) const SampleNotice('샘플 공지입니다. 공지 API 연결 전이라 저장·게시되지 않고 회원에게 보이지 않습니다.'),
+        if (_isLive)
+          const SampleNotice(
+            '공지 API 목업에 저장합니다. DB 연결 전이라 API 를 다시 켜면 사라지고, 회원 앱에는 보이지 않으며 푸시도 실제로 보내지 않습니다.',
+          ),
+        if (_isLive && _loading) const LinearProgressIndicator(),
+        if (_isLive && _error != null)
+          Text('$_error API 서버가 실행 중인지 확인하세요.', style: const TextStyle(color: AppColors.up)),
         if (_editing) _editor(),
         FilterBar(
           hint: '제목·내용 검색',
@@ -436,6 +643,11 @@ class _NoticesPageState extends State<NoticesPage> {
                       ],
                       Text(n.title, style: const TextStyle(fontWeight: FontWeight.w600)),
                       if (n.popup) ...[const SizedBox(width: 6), const StatusBadge('팝업', color: AppColors.brand)],
+                      if (n.images.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        const Icon(Icons.image_outlined, size: 16, color: AppColors.textTertiary),
+                        Text(' ${n.images.length}', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                      ],
                     ],
                   ),
                 ),
@@ -484,7 +696,10 @@ class _NoticesPageState extends State<NoticesPage> {
                       IconButton(
                         tooltip: n.pinned ? '고정 해제' : '상단 고정',
                         visualDensity: VisualDensity.compact,
-                        onPressed: () => useLiveData.value ? showNotConnected(context) : setState(() => n.pinned = !n.pinned),
+                        onPressed: () async {
+                          if (!_isLive) return setState(() => n.pinned = !n.pinned);
+                          if (await _call(() => setLiveNoticePinned(n.id, !n.pinned))) await _reload();
+                        },
                         icon: Icon(n.pinned ? Icons.push_pin : Icons.push_pin_outlined, size: 18),
                       ),
                       IconButton(

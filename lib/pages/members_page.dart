@@ -381,7 +381,7 @@ class _MembersPageState extends State<MembersPage> {
                   children: [
                     TextButton(style: _rowButton, onPressed: () => _openDetail(m), child: const Text('상세')),
                     // 승인 전 회원은 로그인한 적이 없어 모니터링할 내용이 없다.
-                    if (m.status != MemberStatus.pending)
+                    if (m.status != MemberStatus.pending && canSee(screenKey(['회원 관리', '회원 모니터링'])))
                       TextButton(style: _rowButton, onPressed: () => _openMonitor(m), child: const Text('모니터링')),
                   ],
                 ),

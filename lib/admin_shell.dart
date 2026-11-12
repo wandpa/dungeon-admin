@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'live_admin.dart';
 import 'live_api.dart';
 import 'mock_admin.dart';
 import 'mock_data.dart';
@@ -15,12 +16,12 @@ import 'pages/symbol_master_page.dart';
 import 'theme.dart';
 import 'widgets/admin_page.dart';
 
+/// 메뉴를 볼 수 있는지는 최고 관리자가 등급별로 고른다(roleScreens).
 class _Menu {
-  const _Menu(this.label, this.icon, this.page, {this.permission});
+  const _Menu(this.label, this.icon, this.page);
   final String label;
   final IconData icon;
   final Widget page;
-  final AdminPermission? permission; // 비어 있으면 모두에게 보인다
 }
 
 const _menus = [
@@ -29,7 +30,7 @@ const _menus = [
   _Menu('종목 마스터', Icons.schedule, SymbolMasterPage()),
   _Menu('푸시 알림', Icons.notifications_outlined, PushPage()),
   _Menu('공지사항', Icons.campaign_outlined, NoticesPage()),
-  _Menu('관리자', Icons.admin_panel_settings_outlined, AdminUsersPage(), permission: AdminPermission.viewActivity),
+  _Menu('관리자', Icons.admin_panel_settings_outlined, AdminUsersPage()),
 ];
 
 /// 위쪽 메뉴 + 열린 화면 탭 + 본문 + 상태줄. 열어 둔 화면은 탭을 옮겨도 보던 자리를 유지한다.
@@ -48,8 +49,16 @@ class _AdminShellState extends State<AdminShell> {
   /// 지금 관리자에게 보이는 메뉴.
   List<_Menu> get _visible => [
     for (final m in _menus)
-      if (m.permission == null || can(m.permission!)) m,
+      if (canSee(m.label)) m,
   ];
+
+  /// 최고 관리자가 화면 보기를 바꾸면 메뉴를 다시 그리고, 못 보게 된 탭은 닫는다.
+  void _screensChanged() => setState(() {
+    final visible = {for (final m in _visible) m.label};
+    _open.removeWhere((l) => !visible.contains(l));
+    if (_open.isEmpty) _open.add(_visible.first.label);
+    if (!_open.contains(_current)) _current = _open.first;
+  });
 
   void _select(_Menu m) => _show(m.label);
 
@@ -88,6 +97,8 @@ class _AdminShellState extends State<AdminShell> {
     memberMonitorRequest.addListener(_openMonitor);
     pushTargetRequest.addListener(_openPush);
     liveStatus.addListener(_reportMembers);
+    roleScreens.addListener(_screensChanged);
+    if (useLiveData.value) loadLiveRoleScreens(); // 서버에 저장된 등급별 화면
     _open.add(_visible.first.label);
     _current = _open.first;
   }
@@ -97,6 +108,7 @@ class _AdminShellState extends State<AdminShell> {
     memberMonitorRequest.removeListener(_openMonitor);
     pushTargetRequest.removeListener(_openPush);
     liveStatus.removeListener(_reportMembers);
+    roleScreens.removeListener(_screensChanged);
     super.dispose();
   }
 

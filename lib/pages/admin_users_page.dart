@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../live_admin.dart';
+import '../live_api.dart' show LiveApiException;
 import '../mock_admin.dart';
 import '../mock_data.dart';
 import '../theme.dart';
@@ -259,6 +261,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
             ],
         ],
       ),
+      _RoleScreensPanel(),
       Panel(
         title: '권한별 기능',
         child: Column(
@@ -320,6 +323,91 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
             ? const [LiveActivityView()]
             : _activityView()),
       ],
+    );
+  }
+}
+
+/// 최고 관리자가 등급별로 볼 수 있는 대화면(위쪽 메뉴)과 소화면(탭)을 고른다.
+class _RoleScreensPanel extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    const roles = AdminRole.values;
+    Widget cell(Widget child, {double indent = -1}) => Container(
+      height: 38,
+      alignment: indent >= 0 ? Alignment.centerLeft : Alignment.center,
+      padding: EdgeInsets.only(left: 12 + (indent < 0 ? 0 : indent), right: 12),
+      child: child,
+    );
+    return Panel(
+      title: '등급별 볼 수 있는 화면',
+      child: ValueListenableBuilder(
+        valueListenable: roleScreens,
+        builder: (context, _, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '체크한 화면만 그 등급에게 보입니다. 대화면을 끄면 그 안의 소화면도 모두 안 보입니다. '
+              '최고 관리자는 늘 모든 화면을 보고, 같은 묶음에 화면이 하나는 남아야 합니다. '
+              '테스트 DB 화면에서는 관리자 API 목업에 저장되어 API 를 다시 켜면 처음 값으로 돌아갑니다.',
+              style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 620),
+              child: Table(
+                border: TableBorder.all(color: AppColors.border),
+                columnWidths: const {0: FlexColumnWidth(1.8)},
+                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                children: [
+                  TableRow(
+                    decoration: const BoxDecoration(color: AppColors.surfaceSoft),
+                    children: [
+                      cell(const Text('화면', style: TextStyle(fontWeight: FontWeight.w700)), indent: 0),
+                      for (final r in roles) cell(Text(r.label, style: const TextStyle(fontWeight: FontWeight.w700))),
+                    ],
+                  ),
+                  for (final row in adminScreenRows)
+                    TableRow(
+                      decoration: row.depth == 0 ? const BoxDecoration(color: AppColors.surfaceSoft) : null,
+                      children: [
+                        cell(
+                          Text(
+                            row.depth == 0 ? row.label : '└ ${row.label}',
+                            style: TextStyle(
+                              fontWeight: row.depth == 0 ? FontWeight.w700 : FontWeight.w400,
+                              fontSize: row.depth == 0 ? 14 : 13,
+                            ),
+                          ),
+                          indent: row.depth * 20.0,
+                        ),
+                        for (final r in roles)
+                          cell(
+                            Checkbox(
+                              value: roleCanSee(r, row.key),
+                              onChanged: r == AdminRole.superAdmin || !roleParentOn(r, row.key)
+                                  ? null
+                                  : (on) async {
+                                      if (on == false && isLastRoleScreen(r, row.key)) {
+                                        return showMessage(context, '${r.label}에게 이 묶음의 화면이 하나는 있어야 합니다.');
+                                      }
+                                      if (!useLiveData.value) return setRoleScreen(r, row.key, on ?? false);
+                                      // 테스트 DB 화면은 관리자 API 목업에 저장한다. 서버가 활동 기록도 남긴다.
+                                      try {
+                                        await saveLiveRoleScreen(r, row.key, on ?? false);
+                                      } on LiveApiException catch (e) {
+                                        if (context.mounted) showMessage(context, e.message);
+                                      }
+                                    },
+                            ),
+                          ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

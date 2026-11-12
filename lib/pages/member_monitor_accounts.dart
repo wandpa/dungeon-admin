@@ -21,7 +21,9 @@ enum _MonitorTab {
 }
 
 /// 지금 보여 줄 탭.
-Iterable<_MonitorTab> get _shownTabs => _MonitorTab.values.where((t) => useLiveData.value || !t.liveOnly);
+/// 최고 관리자가 이 등급에게 끈 탭은 빠진다.
+Iterable<_MonitorTab> get _shownTabs =>
+    _MonitorTab.values.where((t) => (useLiveData.value || !t.liveOnly) && canSee(monitorTabKey(t.label)));
 
 /// 지금 보고 있는 범위. 누르면 그 단계로 돌아간다.
 class _ScopeBar extends StatelessWidget {
