@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../deep_link.dart';
+import '../live_admin.dart' show loadLiveNotices;
 import '../live_api.dart';
 import '../mock_admin.dart';
 import '../mock_data.dart';
 import '../theme.dart';
 import '../widgets/admin_page.dart';
+import '../widgets/deep_link_field.dart';
 import 'live_view.dart';
 import 'push_page.dart' show pushTargetRequest;
 
@@ -37,6 +40,8 @@ class _LiveNotificationsPageState extends State<LiveNotificationsPage> {
   final _targetIds = <int>{}; // 회원 목록을 다시 받아도 이어지게 번호로 둔다
   final _grades = <String>{};
   _Target _target = _Target.all;
+  DeepLink _link = DeepLink.none; // 누르면 앱이 열 곳
+  List<(int, String)> _notices = const []; // 연결할 수 있는 게시 중 공지
 
   @override
   void initState() {
@@ -51,6 +56,16 @@ class _LiveNotificationsPageState extends State<LiveNotificationsPage> {
     ensureLiveMembers().then((_) {
       if (mounted) setState(() {});
     }, onError: (_) {}); // 목록을 못 받으면 아래 표가 오류를 보여 준다
+    // 공지 연결 후보는 공지 API 목업에서 받는다. 못 받으면 '공지' 연결만 못 고른다.
+    loadLiveNotices().then((list) {
+      if (!mounted) return;
+      setState(
+        () => _notices = [
+          for (final n in list)
+            if (n.status == NoticeStatus.published) (n.id, n.title),
+        ],
+      );
+    }, onError: (_) {});
   }
 
   @override
@@ -94,7 +109,8 @@ class _LiveNotificationsPageState extends State<LiveNotificationsPage> {
         final n => '${targets.first.username} 외 ${n - 1}명',
       },
     };
-    final ready = receiver != null && _title.text.trim().isNotEmpty && _body.text.trim().isNotEmpty;
+    final ready =
+        receiver != null && _title.text.trim().isNotEmpty && _body.text.trim().isNotEmpty && _link.error == null;
     return Panel(
       title: '새 알림 보내기',
       child: Column(
@@ -205,7 +221,7 @@ class _LiveNotificationsPageState extends State<LiveNotificationsPage> {
           TextField(
             controller: _title,
             onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(hintText: '제목'),
+            decoration: const InputDecoration(labelText: '제목'),
           ),
           const SizedBox(height: 8),
           TextField(
@@ -213,8 +229,12 @@ class _LiveNotificationsPageState extends State<LiveNotificationsPage> {
             onChanged: (_) => setState(() {}),
             minLines: 3,
             maxLines: 5,
-            decoration: const InputDecoration(hintText: '내용'),
+            decoration: const InputDecoration(labelText: '내용', alignLabelWithHint: true),
           ),
+          const SizedBox(height: 12),
+          const Text('누르면 열 곳', style: TextStyle(fontWeight: FontWeight.w500)),
+          const SizedBox(height: 6),
+          DeepLinkField(value: _link, notices: _notices, onChanged: (v) => setState(() => _link = v)),
           const SizedBox(height: 8),
           Row(
             children: [

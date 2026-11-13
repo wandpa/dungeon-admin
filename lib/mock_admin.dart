@@ -267,9 +267,9 @@ void logActivity(ActivityKind kind, String text, {String target = ''}) {
 /// 성공하면 null, 실패하면 안내 문구를 돌려준다.
 String? signIn(String loginId, String password) {
   final matches = mockAdmins.where((a) => a.loginId == loginId.trim());
-  if (matches.isEmpty || password != samplePassword) return '아이디 또는 비밀번호가 맞지 않습니다.';
+  if (matches.isEmpty || password != samplePassword) return '아이디나 비밀번호가 맞지 않습니다. 다시 입력해 주세요.';
   final admin = matches.first;
-  if (!admin.active) return '사용이 중지된 계정입니다.';
+  if (!admin.active) return '사용이 중지된 계정입니다. 최고 관리자에게 계정을 다시 켜 달라고 요청하세요.';
   admin.lastLoginAt = DateTime.now();
   currentAdmin = admin.name;
   signedInAdmin.value = admin;

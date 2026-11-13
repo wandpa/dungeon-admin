@@ -53,24 +53,40 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 8),
                   const Text('던전우상향', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
-                  const Text('관리자', style: TextStyle(color: AppColors.accent, fontSize: 13)),
+                  const Text('관리자', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
                   const SizedBox(height: 20),
-                  TextField(
-                    controller: _id,
-                    decoration: const InputDecoration(hintText: '아이디'),
-                    textInputAction: TextInputAction.next,
+                  // 비밀번호 관리자가 채울 수 있게 아이디·비밀번호로 묶는다.
+                  AutofillGroup(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextField(
+                          controller: _id,
+                          autofillHints: const [AutofillHints.username],
+                          decoration: const InputDecoration(labelText: '아이디'),
+                          textInputAction: TextInputAction.next,
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _password,
+                          obscureText: true,
+                          autofillHints: const [AutofillHints.password],
+                          onSubmitted: (_) => _submit(),
+                          decoration: const InputDecoration(labelText: '비밀번호'),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _password,
-                    obscureText: true,
-                    onSubmitted: (_) => _submit(),
-                    decoration: const InputDecoration(hintText: '비밀번호'),
+                  // 오류가 생기면 화면 읽기 프로그램도 읽어 준다.
+                  Semantics(
+                    liveRegion: true,
+                    child: _error == null
+                        ? const SizedBox.shrink()
+                        : Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 13)),
+                          ),
                   ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 8),
-                    Text(_error!, style: const TextStyle(color: AppColors.up, fontSize: 13)),
-                  ],
                   const SizedBox(height: 12),
                   FilledButton(onPressed: _submit, child: const Text('로그인')),
                   const SizedBox(height: 16),

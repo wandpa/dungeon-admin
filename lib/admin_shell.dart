@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'live_admin.dart';
 import 'live_api.dart';
@@ -183,36 +184,42 @@ class _MenuBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 좁은 화면에서 메뉴가 옆으로 숨지 않게 다음 줄로 넘긴다.
     return Container(
-      height: 56,
+      constraints: const BoxConstraints(minHeight: 56),
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpace.page),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            Image.asset('assets/admin_icon.png', width: 24, height: 24),
-            const SizedBox(width: 8),
-            const Text('던전우상향', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(width: 6),
-            const Text('관리자', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
-            const SizedBox(width: 32),
-            for (final m in menus) ...[
-              AdminMenuItem(label: m.label, icon: m.icon, selected: m.label == current, onTap: () => onSelect(m)),
-              const SizedBox(width: 4),
-            ],
-          ],
-        ),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.page, vertical: 10),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(right: 28),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image(image: AssetImage('assets/admin_icon.png'), width: 24, height: 24),
+                SizedBox(width: 8),
+                Text('던전우상향', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                SizedBox(width: 6),
+                Text('관리자', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+              ],
+            ),
+          ),
+          for (final m in menus)
+            AdminMenuItem(label: m.label, icon: m.icon, selected: m.label == current, onTap: () => onSelect(m)),
+        ],
       ),
     );
   }
 }
 
 /// 위쪽 메뉴 한 칸: 아이콘 + 이름.
-class AdminMenuItem extends StatelessWidget {
+class AdminMenuItem extends StatefulWidget {
   const AdminMenuItem({
     super.key,
     required this.label,
@@ -227,18 +234,33 @@ class AdminMenuItem extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<AdminMenuItem> createState() => _AdminMenuItemState();
+}
+
+class _AdminMenuItemState extends State<AdminMenuItem> {
+  bool _focused = false; // 키보드로 와 있는가
+
+  @override
   Widget build(BuildContext context) {
-    // 선택은 한 단계 올라온 면과 강조색 아이콘으로만 보인다.
+    final AdminMenuItem(:label, :icon, :selected, :onTap) = widget;
+    // 선택은 한 단계 올라온 면과 강조색 아이콘으로 보인다.
+    // 키보드 위치는 선택과 헷갈리지 않게 바탕이 아니라 강조색 테두리로 보인다.
     return Material(
       color: selected ? AppColors.strip : Colors.transparent,
       borderRadius: BorderRadius.circular(AppRadius.control),
       child: InkWell(
         onTap: onTap,
+        onFocusChange: (v) => setState(() => _focused = v),
         borderRadius: BorderRadius.circular(AppRadius.control),
         hoverColor: AppColors.surfaceSoft,
+        focusColor: Colors.transparent,
         child: Container(
           height: 36,
           padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.control),
+            border: Border.all(color: _focused ? AppColors.brand : Colors.transparent, width: 2),
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -296,39 +318,58 @@ class _OpenTabs extends StatelessWidget {
             ReorderableDragStartListener(
               key: ValueKey(t),
               index: i,
-              child: Material(
-                color: t == current ? AppColors.surface : Colors.transparent,
-                child: InkWell(
-                  onTap: () => onSelect(t),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border(
-                        right: const BorderSide(color: AppColors.border),
-                        bottom: BorderSide(color: t == current ? AppColors.brand : Colors.transparent, width: 2),
-                      ),
-                    ),
-                    padding: EdgeInsets.only(left: 12, right: closable ? 4 : 12),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          t,
-                          style: TextStyle(
-                            color: t == current ? AppColors.textPrimary : AppColors.textTertiary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
+              // 끌기 대신 키보드로도 순서를 바꾼다: 탭에 와서 Alt + ← / →.
+              child: CallbackShortcuts(
+                bindings: {
+                  const SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true): () {
+                    if (i > 0) onMove(i, i - 1);
+                  },
+                  const SingleActivator(LogicalKeyboardKey.arrowRight, alt: true): () {
+                    if (i < tabs.length - 1) onMove(i, i + 1);
+                  },
+                },
+                child: Material(
+                  color: t == current ? AppColors.surface : Colors.transparent,
+                  child: InkWell(
+                    onTap: () => onSelect(t),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border(
+                          right: const BorderSide(color: AppColors.border),
+                          bottom: BorderSide(color: t == current ? AppColors.brand : Colors.transparent, width: 2),
                         ),
-                        if (closable)
-                          IconButton(
-                            tooltip: '$t 닫기',
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
-                            iconSize: 14,
-                            onPressed: () => onClose(t),
-                            icon: const Icon(Icons.close),
+                      ),
+                      padding: EdgeInsets.only(left: 12, right: closable ? 4 : 12),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Semantics(
+                            hint: 'Alt + 왼쪽·오른쪽 화살표로 순서 바꾸기',
+                            child: Tooltip(
+                              message: '끌거나 Alt + ← / → 로 순서를 바꿉니다',
+                              excludeFromSemantics: true,
+                              waitDuration: const Duration(seconds: 1),
+                              child: Text(
+                                t,
+                                style: TextStyle(
+                                  color: t == current ? AppColors.textPrimary : AppColors.textTertiary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
                           ),
-                      ],
+                          if (closable)
+                            IconButton(
+                              tooltip: '$t 닫기',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                              iconSize: 14,
+                              onPressed: () => onClose(t),
+                              icon: const Icon(Icons.close),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

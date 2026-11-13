@@ -117,7 +117,7 @@ class _WorkerSlotCard extends StatelessWidget {
     final color = switch (w.status) {
       WorkerStatus.running => AppColors.success,
       WorkerStatus.stopped => AppColors.textSecondary,
-      WorkerStatus.error => AppColors.up,
+      WorkerStatus.error => AppColors.danger,
     };
     final limit = w.pnlLimit;
     return Container(
@@ -242,7 +242,7 @@ class _PnlLimitLine extends StatelessWidget {
               alignment: Alignment.centerRight,
               child: Text(
                 '평가 포함 · 실현 ${_fmt(realized)} + 평가 ${_fmt(unreal)}',
-                style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
               ),
             ),
         ],
@@ -408,7 +408,7 @@ class _WorkerCard extends StatelessWidget {
     final borderColor = selected
         ? AppColors.brand
         : w.status == WorkerStatus.error
-        ? AppColors.up.withValues(alpha: 0.5)
+        ? AppColors.danger.withValues(alpha: 0.5)
         : AppColors.border;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -706,7 +706,7 @@ class _JobCard extends StatelessWidget {
                 for (final r in job.rejectReasons)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-                    child: Text(r, style: const TextStyle(color: AppColors.up, fontSize: 12)),
+                    child: Text(r, style: const TextStyle(color: AppColors.danger, fontSize: 12)),
                   ),
             ],
           ),
@@ -739,7 +739,7 @@ class _FinishedJobCard extends StatelessWidget {
   Color get _endColor => switch (job.endReason) {
     'completed' => AppColors.brand,
     'user_close' => AppColors.warning,
-    'failed' || 'abnormal' => AppColors.up,
+    'failed' || 'abnormal' => AppColors.danger,
     null => _jobStatusColor(job),
     _ => AppColors.textTertiary,
   };
@@ -823,7 +823,7 @@ class _FinishedJobCard extends StatelessWidget {
                 for (final r in job.rejectReasons)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Text(r, style: const TextStyle(color: AppColors.up, fontSize: 12)),
+                    child: Text(r, style: const TextStyle(color: AppColors.danger, fontSize: 12)),
                   ),
               ],
             ),

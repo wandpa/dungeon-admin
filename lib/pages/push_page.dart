@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../deep_link.dart';
 import '../mock_accounts.dart';
 import '../mock_admin.dart';
 import '../mock_data.dart';
 import '../theme.dart';
 import '../widgets/admin_page.dart';
+import '../widgets/deep_link_field.dart';
 
 enum _TargetMode {
   all('전체'),
@@ -33,6 +35,7 @@ class _PushPageState extends State<PushPage> {
   _TargetMode _mode = _TargetMode.all;
   PushGroup _group = pushGroups.first;
   final _userIds = <int>{};
+  DeepLink _link = DeepLink.none; // 누르면 앱이 열 곳
 
   @override
   void initState() {
@@ -84,18 +87,28 @@ class _PushPageState extends State<PushPage> {
     final ok = await showConfirmDialog(
       context,
       title: '푸시 보내기',
-      message: '「$title」을(를) $_targetLabel 대상 ${receivers.length}명에게 보냅니다.\n보낸 뒤에는 취소할 수 없습니다.',
+      message:
+          '「$title」을(를) $_targetLabel 대상 ${receivers.length}명에게 보냅니다.\n'
+          '누르면: ${_link.describe(noticeTitle: _noticeTitle)}\n보낸 뒤에는 취소할 수 없습니다.',
       confirmText: '보내기',
     );
     if (!ok || !mounted) return;
     setState(() {
-      sendPush(title, _body.text.trim(), _targetLabel, receivers);
+      sendPush(title, _body.text.trim(), _targetLabel, receivers, link: _link);
+      _link = DeepLink.none;
       _title.clear();
       _body.clear();
       _search.clear();
       _userIds.clear();
     });
     showMessage(context, '${receivers.length}명에게 보냈습니다.');
+  }
+
+  String _noticeTitle(int id) {
+    for (final n in mockNotices) {
+      if (n.id == id) return n.title;
+    }
+    return '#$id';
   }
 
   Widget _chips<T>(
@@ -212,7 +225,8 @@ class _PushPageState extends State<PushPage> {
     final targets = _targets;
     final receivers = targets.where((m) => pushBlockReason(m) == null).toList();
     final blocked = targets.where((m) => pushBlockReason(m) != null).toList();
-    final canSend = _title.text.trim().isNotEmpty && _body.text.trim().isNotEmpty && receivers.isNotEmpty;
+    final canSend =
+        _title.text.trim().isNotEmpty && _body.text.trim().isNotEmpty && receivers.isNotEmpty && _link.error == null;
 
     final form = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -220,7 +234,7 @@ class _PushPageState extends State<PushPage> {
         TextField(
           controller: _title,
           onChanged: (_) => setState(() {}),
-          decoration: const InputDecoration(hintText: '제목'),
+          decoration: const InputDecoration(labelText: '제목'),
         ),
         const SizedBox(height: 8),
         TextField(
@@ -228,7 +242,18 @@ class _PushPageState extends State<PushPage> {
           onChanged: (_) => setState(() {}),
           minLines: 4,
           maxLines: 6,
-          decoration: const InputDecoration(hintText: '내용'),
+          decoration: const InputDecoration(labelText: '내용', alignLabelWithHint: true),
+        ),
+        const SizedBox(height: 12),
+        const Text('누르면 열 곳', style: TextStyle(fontWeight: FontWeight.w500)),
+        const SizedBox(height: 6),
+        DeepLinkField(
+          value: _link,
+          notices: [
+            for (final n in mockNotices)
+              if (n.status == NoticeStatus.published) (n.id, n.title),
+          ],
+          onChanged: (v) => setState(() => _link = v),
         ),
         const SizedBox(height: 12),
         Align(
@@ -274,7 +299,7 @@ class _PushPageState extends State<PushPage> {
             ),
           ),
         AdminTable(
-          columns: const ['번호', '제목', '내용', '대상', '발송 시각', '발송', '열람'],
+          columns: const ['번호', '제목', '내용', '대상', '누르면', '발송 시각', '발송', '열람'],
           rows: [
             for (final p in mockPushes)
               [
@@ -282,6 +307,14 @@ class _PushPageState extends State<PushPage> {
                 Text(p.title, style: const TextStyle(fontWeight: FontWeight.w500)),
                 SizedBox(width: 260, child: Text(p.body, overflow: TextOverflow.ellipsis)),
                 Text(p.target),
+                SizedBox(
+                  width: 180,
+                  child: Text(
+                    p.link.describe(noticeTitle: _noticeTitle),
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: p.link.isNone ? AppColors.textTertiary : AppColors.textPrimary),
+                  ),
+                ),
                 Text(formatDateTime(p.sentAt)),
                 Text(formatNumber(p.sentCount)),
                 Text(

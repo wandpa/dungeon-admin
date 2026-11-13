@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/foundation.dart';
 
+import 'deep_link.dart';
 import 'live_api.dart';
 import 'mock_admin.dart';
 import 'mock_data.dart';
@@ -59,6 +60,7 @@ Notice _notice(Map<String, dynamic> n) => Notice(
     for (final i in (n['images'] as List? ?? const []).cast<Map<String, dynamic>>())
       NoticeImage(i['name'] as String? ?? '', null, id: i['id'] as String?, url: adminUrl(i['url'] as String)),
   ],
+  link: DeepLink.fromJson(n['link']),
 );
 
 /// 공지 전체. 서버 목업은 많아야 수십 건이라 한 번에 받는다.
@@ -80,6 +82,7 @@ Map<String, Object?> noticeRequest({
   required String status,
   required bool notifyPush,
   required List<NoticeImage> images,
+  DeepLink link = DeepLink.none,
 }) => {
   'title': title,
   'body': body,
@@ -92,11 +95,14 @@ Map<String, Object?> noticeRequest({
   'status': status,
   'notifyPush': notifyPush,
   'imageIds': [for (final i in images) ?i.id],
+  'link': link.toJson(),
 };
 
 /// 새 공지면 id 없이 만든다.
-Future<Notice> saveLiveNotice(int? id, Map<String, Object?> request) async =>
-    _notice(await adminSend(id == null ? 'POST' : 'PUT', id == null ? '/notices' : '/notices/$id', request) as Map<String, dynamic>);
+Future<Notice> saveLiveNotice(int? id, Map<String, Object?> request) async => _notice(
+  await adminSend(id == null ? 'POST' : 'PUT', id == null ? '/notices' : '/notices/$id', request)
+      as Map<String, dynamic>,
+);
 
 Future<Notice> setLiveNoticePublished(int id, bool published) async =>
     _notice(await adminSend('POST', '/notices/$id/${published ? 'publish' : 'unpublish'}') as Map<String, dynamic>);

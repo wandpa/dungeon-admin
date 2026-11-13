@@ -148,7 +148,7 @@ class _LivePagedPanelState extends State<_LivePagedPanel> {
                 head,
                 const SizedBox(height: 8),
                 if (_error != null)
-                  Text(_error!, style: const TextStyle(color: AppColors.up))
+                  Text(_error!, style: const TextStyle(color: AppColors.danger))
                 else if (_page > 0)
                   AdminTable(
                     exportName: widget.title.replaceAll(' ', '_'),

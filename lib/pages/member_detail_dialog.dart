@@ -196,7 +196,7 @@ class _MemberDetailViewState extends State<MemberDetailView> {
                 children: [
                   Text(m.username, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
                   StatusBadge(m.status.label, color: memberStatusColor(m.status)),
-                  if (m.accessBlocked) const StatusBadge('접속 차단', color: AppColors.up),
+                  if (m.accessBlocked) const StatusBadge('접속 차단', color: AppColors.danger),
                   Text('#${m.shownId}', style: const TextStyle(color: AppColors.textTertiary)),
                 ],
               ),
@@ -467,7 +467,7 @@ class _MemberDetailViewState extends State<MemberDetailView> {
       ),
     if (m.status == MemberStatus.deleteRequested)
       FilledButton.icon(
-        style: FilledButton.styleFrom(backgroundColor: AppColors.up),
+        style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
         onPressed: () => _act(
           title: '탈퇴 처리',
           message: '${m.username} 회원의 탈퇴를 완료합니다. 회원 정보가 삭제되며 되돌릴 수 없습니다.',
@@ -625,7 +625,7 @@ class _BlockAccessDialogState extends State<_BlockAccessDialog> {
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
         FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: AppColors.up),
+          style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
           onPressed: reason.isEmpty ? null : () => Navigator.pop(context, reason),
           child: const Text('차단'),
         ),
@@ -689,7 +689,7 @@ class _SuspendDialogState extends State<_SuspendDialog> {
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
         FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: AppColors.up),
+          style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
           onPressed: reason.isEmpty ? null : () => Navigator.pop(context, (reason, _periods[_period].$2)),
           child: const Text('정지'),
         ),

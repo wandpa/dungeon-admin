@@ -286,7 +286,7 @@ class _HoursFormState extends State<_HoursForm> {
           const SizedBox(height: 8),
           Text(
             problem ?? '저장 API 연결 전입니다. 입력한 값은 저장되지 않습니다.',
-            style: TextStyle(color: problem == null ? AppColors.warning : AppColors.up, fontSize: 12),
+            style: TextStyle(color: problem == null ? AppColors.warning : AppColors.danger, fontSize: 12),
           ),
           const SizedBox(height: 6),
           Row(

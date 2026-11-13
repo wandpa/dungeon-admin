@@ -69,7 +69,7 @@ Future<void> _signIn() async {
     throw const LiveApiException('API 서버에 연결하지 못했습니다.');
   }
   if (res.statusCode == 429) throw LiveApiException(_messageOf(res) ?? '요청이 많습니다. 잠시 뒤 다시 시도하세요.');
-  if (res.statusCode != 200) throw const LiveApiException('API 로그인에 실패했습니다.');
+  if (res.statusCode != 200) throw const LiveApiException('API 로그인에 실패했습니다. API 서버가 실행 중인지 확인하고 다시 로그인하세요.');
   _token = (_json(res) as Map<String, dynamic>)['token'] as String;
   _tokenFor = loginId;
 }

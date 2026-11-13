@@ -6,6 +6,8 @@ library;
 
 import 'package:flutter/foundation.dart';
 
+import 'deep_link.dart';
+
 /// 회원. 관리자 화면에서 상태를 바꾸므로 일부 필드는 바뀔 수 있다.
 /// 앱과 같은 회원등급. 서버 tier 1~5 가 이 순서다.
 const memberGrades = ['브론즈', '실버', '골드', '다이아', 'VIP'];
@@ -120,7 +122,16 @@ class Signal {
 }
 
 class PushMessage {
-  const PushMessage(this.id, this.title, this.body, this.target, this.sentAt, this.sentCount, this.openCount);
+  const PushMessage(
+    this.id,
+    this.title,
+    this.body,
+    this.target,
+    this.sentAt,
+    this.sentCount,
+    this.openCount, {
+    this.link = DeepLink.none,
+  });
   final int id;
   final String title;
   final String body;
@@ -128,6 +139,7 @@ class PushMessage {
   final DateTime sentAt;
   final int sentCount;
   final int openCount;
+  final DeepLink link; // 누르면 앱이 열 곳
 }
 
 enum NoticeStatus {
@@ -159,6 +171,7 @@ class Notice {
     this.popup = false,
     this.endAt,
     this.images = const [],
+    this.link = DeepLink.none,
   });
 
   final int id;
@@ -176,6 +189,7 @@ class Notice {
   bool popup; // 앱을 열 때 팝업으로 보여 준다
   DateTime? endAt; // 게시 종료 시각. 비어 있으면 내릴 때까지 게시
   List<NoticeImage> images; // 본문 아래에 붙는 이미지. 올린 순서대로 보인다
+  DeepLink link; // 본문 아래 버튼을 누르면 앱이 열 곳
 
   String get audience => grades.isEmpty ? '전체' : grades.join('·');
 }
@@ -329,7 +343,16 @@ final mockSignals = <Signal>[
 ];
 
 final mockPushes = <PushMessage>[
-  PushMessage(312, '오늘의 던전이 열렸습니다', '장 시작 전 체크할 신호 3개를 확인하세요.', '전체', DateTime(2026, 10, 30, 8, 30), 1018, 412),
+  PushMessage(
+    312,
+    '오늘의 던전이 열렸습니다',
+    '장 시작 전 체크할 신호 3개를 확인하세요.',
+    '전체',
+    DateTime(2026, 10, 30, 8, 30),
+    1018,
+    412,
+    link: DeepLink(DeepLinkType.screen, target: '/history'),
+  ),
   PushMessage(
     311,
     '[점검] 10/29 새벽 서버 점검 안내',

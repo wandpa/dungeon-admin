@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../deep_link.dart';
 import '../file_pick.dart';
 import '../live_admin.dart';
 import '../live_api.dart' show LiveApiException;
@@ -8,6 +9,7 @@ import '../mock_admin.dart';
 import '../mock_data.dart';
 import '../theme.dart';
 import '../widgets/admin_page.dart';
+import '../widgets/deep_link_field.dart';
 
 /// 이미지 한 장의 최대 크기와 공지 하나에 붙일 수 있는 장수.
 const _maxImageBytes = 5 * 1024 * 1024;
@@ -60,6 +62,7 @@ class _NoticesPageState extends State<NoticesPage> {
   bool _popup = false;
   DateTime? _endAt; // 게시 종료 시각
   final _images = <NoticeImage>[];
+  DeepLink _link = DeepLink.none; // 본문 아래 버튼이 열 곳
 
   // 테스트 DB 화면은 관리자 API 의 공지 목업 저장소를 쓴다.
   List<Notice> _live = [];
@@ -146,6 +149,7 @@ class _NoticesPageState extends State<NoticesPage> {
     _images
       ..clear()
       ..addAll(n?.images ?? const []);
+    _link = n?.link ?? DeepLink.none;
   });
 
   void _close() => setState(() {
@@ -153,7 +157,20 @@ class _NoticesPageState extends State<NoticesPage> {
     _target = null;
   });
 
-  bool get _valid => _title.text.trim().isNotEmpty && _body.text.trim().isNotEmpty;
+  bool get _valid => _title.text.trim().isNotEmpty && _body.text.trim().isNotEmpty && _link.error == null;
+
+  /// 버튼으로 연결할 수 있는 다른 공지. 게시 중인 것만, 자기 자신은 뺀다.
+  List<(int, String)> get _linkableNotices => [
+    for (final n in _all)
+      if (n.status == NoticeStatus.published && n.id != _target?.id) (n.id, n.title),
+  ];
+
+  String _noticeTitle(int id) {
+    for (final n in _all) {
+      if (n.id == id) return n.title;
+    }
+    return '#$id';
+  }
 
   Future<void> _pickSchedule() async {
     final now = DateTime.now();
@@ -205,6 +222,7 @@ class _NoticesPageState extends State<NoticesPage> {
           popup: _popup,
           endAt: _endAt,
           images: [..._images],
+          link: _link,
         ),
       );
     } else {
@@ -219,7 +237,8 @@ class _NoticesPageState extends State<NoticesPage> {
         ..grades = {..._grades}
         ..popup = _popup
         ..endAt = _endAt
-        ..images = [..._images];
+        ..images = [..._images]
+        ..link = _link;
     }
   }
 
@@ -266,6 +285,7 @@ class _NoticesPageState extends State<NoticesPage> {
     status: status,
     notifyPush: notifyPush,
     images: _images,
+    link: _link,
   );
 
   /// 서버 목업에 저장하고 목록을 다시 받는다.
@@ -306,7 +326,11 @@ class _NoticesPageState extends State<NoticesPage> {
       title: scheduled ? '예약 게시' : '공지 게시',
       message: scheduled
           ? '「$title」을(를) ${formatDateTime(_publishAt!)}에 게시합니다.'
-          : '「$title」을(를) 사용자에게 게시합니다.${!_notifyPush ? '' : _isLive ? '\n푸시 발송 요청을 기록합니다(목업이라 실제로 보내지 않습니다).' : '\n${receivers.length}명에게 푸시도 보냅니다.'}',
+          : '「$title」을(를) 사용자에게 게시합니다.${!_notifyPush
+                ? ''
+                : _isLive
+                ? '\n푸시 발송 요청을 기록합니다(목업이라 실제로 보내지 않습니다).'
+                : '\n${receivers.length}명에게 푸시도 보냅니다.'}',
       confirmText: scheduled ? '예약' : '게시',
     );
     if (!ok || !mounted) return;
@@ -321,7 +345,10 @@ class _NoticesPageState extends State<NoticesPage> {
     setState(() {
       _write(scheduled ? NoticeStatus.scheduled : NoticeStatus.published);
       logActivity(ActivityKind.notice, '「$title」 ${scheduled ? '게시 예약' : '게시'}');
-      if (push) sendPush(title, _body.text.trim(), '전체', receivers);
+      if (push) {
+        final id = _target?.id ?? mockNotices.last.id;
+        sendPush(title, _body.text.trim(), '전체', receivers, link: DeepLink(DeepLinkType.notice, target: '$id'));
+      }
       _editing = false;
       _target = null;
     });
@@ -436,7 +463,7 @@ class _NoticesPageState extends State<NoticesPage> {
         TextField(
           controller: _title,
           onChanged: (_) => setState(() {}),
-          decoration: const InputDecoration(hintText: '제목'),
+          decoration: const InputDecoration(labelText: '제목'),
         ),
         const SizedBox(height: 8),
         TextField(
@@ -444,7 +471,7 @@ class _NoticesPageState extends State<NoticesPage> {
           onChanged: (_) => setState(() {}),
           minLines: 6,
           maxLines: 12,
-          decoration: const InputDecoration(hintText: '내용'),
+          decoration: const InputDecoration(labelText: '내용', alignLabelWithHint: true),
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -479,11 +506,17 @@ class _NoticesPageState extends State<NoticesPage> {
                 icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
                 label: Text('이미지 첨부 ${_images.length}/$_maxImages'),
               ),
-            const Text(
-              'PNG·JPG·GIF·WEBP, 장당 5MB까지',
-              style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
-            ),
+            const Text('PNG·JPG·GIF·WEBP, 장당 5MB까지', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
           ],
+        ),
+        const SizedBox(height: 12),
+        const Text('버튼 연결', style: TextStyle(fontWeight: FontWeight.w500)),
+        const SizedBox(height: 6),
+        DeepLinkField(
+          value: _link,
+          notices: _linkableNotices,
+          showButtonLabel: true,
+          onChanged: (v) => setState(() => _link = v),
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -565,6 +598,26 @@ class _NoticesPageState extends State<NoticesPage> {
               ),
             ),
           ],
+          // 앱 공지 화면 맨 아래 버튼. 누르면 고른 화면·공지·웹 주소를 연다.
+          if (!_link.isNone) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: 360,
+              child: FilledButton(
+                onPressed: null,
+                style: FilledButton.styleFrom(
+                  disabledBackgroundColor: AppColors.brand,
+                  disabledForegroundColor: Colors.white,
+                ),
+                child: Text(_link.label?.trim().isNotEmpty == true ? _link.label!.trim() : '자세히 보기'),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _link.describe(noticeTitle: _noticeTitle),
+              style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+            ),
+          ],
         ],
       ),
     );
@@ -610,12 +663,10 @@ class _NoticesPageState extends State<NoticesPage> {
       ],
       children: [
         if (_isLive)
-          const SampleNotice(
-            '공지 API 목업에 저장합니다. DB 연결 전이라 API 를 다시 켜면 사라지고, 회원 앱에는 보이지 않으며 푸시도 실제로 보내지 않습니다.',
-          ),
+          const SampleNotice('공지 API 목업에 저장합니다. DB 연결 전이라 API 를 다시 켜면 사라지고, 회원 앱에는 보이지 않으며 푸시도 실제로 보내지 않습니다.'),
         if (_isLive && _loading) const LinearProgressIndicator(),
         if (_isLive && _error != null)
-          Text('$_error API 서버가 실행 중인지 확인하세요.', style: const TextStyle(color: AppColors.up)),
+          Text('$_error API 서버가 실행 중인지 확인하세요.', style: const TextStyle(color: AppColors.danger)),
         if (_editing) _editor(),
         FilterBar(
           hint: '제목·내용 검색',
@@ -643,10 +694,21 @@ class _NoticesPageState extends State<NoticesPage> {
                       ],
                       Text(n.title, style: const TextStyle(fontWeight: FontWeight.w500)),
                       if (n.popup) ...[const SizedBox(width: 6), const StatusBadge('팝업', color: AppColors.brand)],
+                      if (!n.link.isNone) ...[
+                        const SizedBox(width: 6),
+                        Tooltip(
+                          message: n.link.describe(noticeTitle: _noticeTitle),
+                          excludeFromSemantics: true,
+                          child: const Icon(Icons.link, size: 16, color: AppColors.textTertiary),
+                        ),
+                      ],
                       if (n.images.isNotEmpty) ...[
                         const SizedBox(width: 6),
                         const Icon(Icons.image_outlined, size: 16, color: AppColors.textTertiary),
-                        Text(' ${n.images.length}', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                        Text(
+                          ' ${n.images.length}',
+                          style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                        ),
                       ],
                     ],
                   ),
@@ -663,12 +725,12 @@ class _NoticesPageState extends State<NoticesPage> {
                     if (n.status == NoticeStatus.scheduled && n.publishAt != null)
                       Text(
                         formatDateTime(n.publishAt!),
-                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
                       ),
                     if (n.endAt != null)
                       Text(
                         '~ ${formatDateTime(n.endAt!)}',
-                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
                       ),
                   ],
                 ),
@@ -706,7 +768,7 @@ class _NoticesPageState extends State<NoticesPage> {
                         tooltip: '삭제',
                         visualDensity: VisualDensity.compact,
                         onPressed: () => _delete(n),
-                        icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.up),
+                        icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
                       ),
                     ],
                   ),

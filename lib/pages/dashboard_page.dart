@@ -443,7 +443,7 @@ class _CurrencyTotal extends StatelessWidget {
         _ShareBar([
           (t.filled.toDouble(), AppColors.textPrimary),
           (t.waiting.toDouble(), AppColors.warning),
-          (t.rejected.toDouble(), AppColors.up.withValues(alpha: 0.45)),
+          (t.rejected.toDouble(), AppColors.danger.withValues(alpha: 0.45)),
         ]),
         const SizedBox(height: 8),
         Wrap(
@@ -452,7 +452,7 @@ class _CurrencyTotal extends StatelessWidget {
             Text('주문 ${formatNumber(t.orders)}건', style: meta.copyWith(color: AppColors.textSecondary)),
             legend(AppColors.textPrimary, '체결 ${formatNumber(t.filled)}'),
             legend(AppColors.warning, '미체결 ${formatNumber(t.waiting)}'),
-            legend(AppColors.up.withValues(alpha: 0.45), '거부 ${formatNumber(t.rejected)}'),
+            legend(AppColors.danger.withValues(alpha: 0.45), '거부 ${formatNumber(t.rejected)}'),
           ],
         ),
       ],

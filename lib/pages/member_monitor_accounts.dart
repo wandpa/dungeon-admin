@@ -270,7 +270,7 @@ class _ConsultPaneState extends State<_ConsultPane> {
               ),
               Text(
                 '${c.channel.label} · ${c.type.label}',
-                style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
               ),
             ],
           ),
@@ -281,13 +281,13 @@ class _ConsultPaneState extends State<_ConsultPane> {
               onTap: () => widget.onOpen(c),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Text(link, style: const TextStyle(color: AppColors.accent, fontSize: 11)),
+                child: Text(link, style: const TextStyle(color: AppColors.accent, fontSize: 12)),
               ),
             ),
           Text(
             '${formatDateTime(c.at)} · ${c.adminName}'
             '${c.handledBy == null ? '' : ' · 처리 ${c.handledBy}'}',
-            style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+            style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
           ),
         ],
       ),
@@ -340,7 +340,7 @@ class _ConsultPaneState extends State<_ConsultPane> {
                       '연결: $context_',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                      style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
                     ),
                   ),
               ],
@@ -366,7 +366,7 @@ class _ConsultPaneState extends State<_ConsultPane> {
                           Text(l.text, style: const TextStyle(fontSize: 12)),
                           Text(
                             '${formatDateTime(l.at)} · ${l.actor}',
-                            style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                            style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
                           ),
                         ],
                       ),
@@ -642,7 +642,7 @@ class _OrdersPane extends StatelessWidget {
   final Future<void> Function()? onMore;
 
   Color _statusColor(AccountOrder o) => o.isRejected || o.status == 'failed'
-      ? AppColors.up
+      ? AppColors.danger
       : o.isFilled
       ? AppColors.success
       : o.isWaiting
@@ -719,7 +719,7 @@ class _OrdersPane extends StatelessWidget {
                       }),
                       if (o.message != null) ...[
                         const SizedBox(height: 3),
-                        Text(o.message!, style: const TextStyle(color: AppColors.up, fontSize: 12)),
+                        Text(o.message!, style: const TextStyle(color: AppColors.danger, fontSize: 12)),
                       ],
                     ],
                   ),
@@ -787,11 +787,11 @@ class _DiagRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(width: 72, child: Text(label, style: const TextStyle(fontSize: 13))),
-          StatusBadge(ok ? '정상' : '확인 필요', color: ok ? AppColors.success : AppColors.up),
+          StatusBadge(ok ? '정상' : '확인 필요', color: ok ? AppColors.success : AppColors.danger),
           if (!ok) ...[
             const SizedBox(width: 8),
             Expanded(
-              child: Text(hint, style: const TextStyle(color: AppColors.up, fontSize: 12)),
+              child: Text(hint, style: const TextStyle(color: AppColors.danger, fontSize: 12)),
             ),
           ],
         ],

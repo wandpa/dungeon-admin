@@ -62,7 +62,7 @@ class LiveSystemPage extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               '마지막 기록 ${_time(c['lastSeenAt'])}',
-              style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+              style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
             ),
             const SizedBox(height: 4),
             Wrap(

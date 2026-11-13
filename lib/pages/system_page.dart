@@ -9,7 +9,7 @@ import '../widgets/admin_page.dart';
 Color systemLevelColor(SystemLevel l) => switch (l) {
   SystemLevel.ok => AppColors.success,
   SystemLevel.degraded => AppColors.warning,
-  SystemLevel.down => AppColors.up,
+  SystemLevel.down => AppColors.danger,
 };
 
 IconData systemLevelIcon(SystemLevel l) => switch (l) {
@@ -65,7 +65,7 @@ class _SystemPageState extends State<SystemPage> {
             const SizedBox(height: 4),
             Text(
               '마지막 보고 ${formatDateTime(c.lastSeen, seconds: true)}',
-              style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+              style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
             ),
             const SizedBox(height: 4),
             Wrap(

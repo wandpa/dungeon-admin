@@ -143,7 +143,7 @@ class _DashHead extends StatelessWidget {
     // 묶음 제목은 글자만 둔다. 위쪽을 더 띄워 앞 묶음과 갈라 보이게 한다.
     return Padding(
       padding: const EdgeInsets.only(top: 12),
-      child: Text(title, style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w500)),
+      child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
     );
   }
 }

@@ -91,7 +91,7 @@ class _SummaryOnOff extends StatelessWidget {
             color: on ? AppColors.brand : AppColors.border,
             borderRadius: BorderRadius.circular(11),
           ),
-          child: Text(on ? 'ON' : 'OFF', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+          child: Text(on ? 'ON' : 'OFF', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
         ),
       ],
     );

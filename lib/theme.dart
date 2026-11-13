@@ -8,7 +8,7 @@ class AppColors {
   static const surfaceSoft = Color(0xFFFAFAFA); // 카드 안의 옅은 칸
   static const strip = Color(0xFFF2F2F3); // 표 머리줄·선택 탭 같은 한 단계 올라온 면
   static const border = Color(0x1A18181B); // 선. 글자색 10%
-  static const control = Color(0x3318181B); // 입력칸·버튼 테두리. 글자색 20%
+  static const control = Color(0x8018181B); // 입력칸·버튼 테두리. 흰 바탕에서 3.4:1 이라 칸 경계가 보인다
   static const grid = Color(0x0F18181B); // 표 칸 선. 글자색 6%
   static const brand = Color(0xFF2259C7); // 강조색. 주 버튼·선택·중요한 숫자에만
   static const brandSoft = Color(0xFFEAF0FB); // 선택된 칩·줄 바탕
@@ -18,6 +18,7 @@ class AppColors {
   static const textTertiary = Color(0xFF6E6E75); // 보조 글자·아이콘
   static const up = Color(0xFFD92D20); // 이익·매수 (국내 관례 빨강)
   static const down = Color(0xFF1F5AD6); // 손실·매도 (국내 관례 파랑)
+  static const danger = Color(0xFFD92D20); // 오류·삭제·정지. 값은 up 과 같지만 뜻이 달라 따로 둔다
   static const success = Color(0xFF15803D);
   static const warning = Color(0xFFB45309);
 }

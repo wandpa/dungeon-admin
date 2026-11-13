@@ -249,7 +249,7 @@ class _MembersPageState extends State<MembersPage> {
           if (_conditionError != null)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Text(_conditionError!, style: const TextStyle(color: AppColors.up, fontSize: 12)),
+              child: Text(_conditionError!, style: const TextStyle(color: AppColors.danger, fontSize: 12)),
             )
           else if (_matched != null)
             Padding(
@@ -408,7 +408,7 @@ class _MembersPageState extends State<MembersPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     StatusBadge(m.status.label, color: memberStatusColor(m.status)),
-                    if (m.accessBlocked) ...[const SizedBox(width: 4), const StatusBadge('접속 차단', color: AppColors.up)],
+                    if (m.accessBlocked) ...[const SizedBox(width: 4), const StatusBadge('접속 차단', color: AppColors.danger)],
                   ],
                 ),
                 if (canBlock)
@@ -425,7 +425,7 @@ class _MembersPageState extends State<MembersPage> {
                                 child: const Text('해제'),
                               )
                             : TextButton(
-                                style: _rowButton.merge(TextButton.styleFrom(foregroundColor: AppColors.up)),
+                                style: _rowButton.merge(TextButton.styleFrom(foregroundColor: AppColors.danger)),
                                 onPressed: () async {
                                   if (await blockMemberAccess(context, m) && mounted) setState(() {});
                                 },
@@ -464,7 +464,7 @@ Color memberStatusColor(MemberStatus s) => switch (s) {
   MemberStatus.pending => AppColors.accent,
   MemberStatus.active => AppColors.success,
   MemberStatus.dormant => AppColors.textTertiary,
-  MemberStatus.suspended => AppColors.up,
+  MemberStatus.suspended => AppColors.danger,
   MemberStatus.deleteRequested => AppColors.warning,
 };
 

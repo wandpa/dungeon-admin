@@ -5,6 +5,7 @@
 /// 포지션·주문·알림은 워커 샘플의 잡과 회차에서 만들어, 화면끼리 숫자가 어긋나지 않게 한다.
 library;
 
+import 'deep_link.dart';
 import 'mock_admin.dart';
 import 'mock_data.dart';
 import 'mock_workers.dart';
@@ -275,9 +276,9 @@ final _sentPushes = <int, List<NotificationMessage>>{};
 void resetSentPushes() => _sentPushes.clear();
 
 /// 푸시를 발송 이력과 받는 회원의 알림 이력에 남긴다. 샘플이라 실제로 나가지는 않는다.
-void sendPush(String title, String body, String target, List<Member> receivers) {
+void sendPush(String title, String body, String target, List<Member> receivers, {DeepLink link = DeepLink.none}) {
   final now = DateTime.now();
-  mockPushes.insert(0, PushMessage(mockPushes.first.id + 1, title, body, target, now, receivers.length, 0));
+  mockPushes.insert(0, PushMessage(mockPushes.first.id + 1, title, body, target, now, receivers.length, 0, link: link));
   for (final m in receivers) {
     (_sentPushes[m.id] ??= []).insert(0, NotificationMessage(now, title, body, '', isRead: false));
   }

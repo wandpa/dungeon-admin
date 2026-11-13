@@ -210,7 +210,7 @@ void main() {
 
     await tester.tap(find.widgetWithText(FilledButton, '로그인'));
     await tester.pumpAndSettle();
-    expect(find.text('아이디 또는 비밀번호가 맞지 않습니다.'), findsOneWidget);
+    expect(find.text('아이디나 비밀번호가 맞지 않습니다. 다시 입력해 주세요.'), findsOneWidget);
 
     await tester.enterText(find.widgetWithText(TextField, '비밀번호'), '11111111');
     await tester.tap(find.widgetWithText(FilledButton, '로그인'));
@@ -1260,13 +1260,13 @@ void main() {
     await tester.enterText(find.widgetWithText(TextField, '비밀번호'), '0000');
     await tester.tap(find.widgetWithText(FilledButton, '로그인'));
     await tester.pumpAndSettle();
-    expect(find.text('아이디 또는 비밀번호가 맞지 않습니다.'), findsOneWidget);
+    expect(find.text('아이디나 비밀번호가 맞지 않습니다. 다시 입력해 주세요.'), findsOneWidget);
 
     await tester.enterText(find.widgetWithText(TextField, '아이디'), 'cs2');
     await tester.enterText(find.widgetWithText(TextField, '비밀번호'), samplePassword);
     await tester.tap(find.widgetWithText(FilledButton, '로그인'));
     await tester.pumpAndSettle();
-    expect(find.text('사용이 중지된 계정입니다.'), findsOneWidget);
+    expect(find.text('사용이 중지된 계정입니다. 최고 관리자에게 계정을 다시 켜 달라고 요청하세요.'), findsOneWidget);
 
     // 상담 직원: 조회만 된다.
     await tester.tap(find.text('상담 직원'));

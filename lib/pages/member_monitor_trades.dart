@@ -164,7 +164,7 @@ class _TradesPaneState extends State<_TradesPane> {
         ? _appTime(o.at)
         : '대기';
     final stateColor = o.isRejected
-        ? AppColors.up
+        ? AppColors.danger
         : o.isFilled
         ? AppColors.textTertiary
         : AppColors.textSecondary;
@@ -211,7 +211,7 @@ class _TradesPaneState extends State<_TradesPane> {
                           style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                         ),
                       if (o.message != null)
-                        Text(o.message!, style: const TextStyle(color: AppColors.up, fontSize: 12)),
+                        Text(o.message!, style: const TextStyle(color: AppColors.danger, fontSize: 12)),
                       if (o.judgePrice != null)
                         Text(
                           '판정가 ${_appPrice(o.judgePrice!, o.currency)}',

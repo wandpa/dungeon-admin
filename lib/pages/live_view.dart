@@ -47,7 +47,7 @@ class _LiveLoaderState<T> extends State<LiveLoader<T>> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${snapshot.error}', style: const TextStyle(color: AppColors.up)),
+                Text('${snapshot.error}', style: const TextStyle(color: AppColors.danger)),
                 const SizedBox(height: 8),
                 OutlinedButton(onPressed: () => setState(() => _future = _load()), child: const Text('다시 시도')),
               ],

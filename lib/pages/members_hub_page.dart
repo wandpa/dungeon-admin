@@ -97,7 +97,7 @@ class _MembersHubPageState extends State<MembersHubPage> {
         if (live && status.error != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
-            child: Text('${status.error} API 서버가 실행 중인지 확인하세요.', style: const TextStyle(color: AppColors.up)),
+            child: Text('${status.error} API 서버가 실행 중인지 확인하세요.', style: const TextStyle(color: AppColors.danger)),
           ),
         Expanded(
           child: KeyedSubtree(

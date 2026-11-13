@@ -68,12 +68,7 @@ class AdminPage extends StatelessWidget {
               Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  description,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
-                ),
+                child: Text(description, style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
               ),
               const SizedBox(width: 12),
               Wrap(spacing: 8, runSpacing: 8, children: actions),
@@ -314,7 +309,7 @@ class FilterBar extends StatelessWidget {
           width: 280,
           child: TextField(
             onChanged: onSearchChanged,
-            decoration: InputDecoration(prefixIcon: const Icon(Icons.search, size: 18), hintText: hint),
+            decoration: InputDecoration(prefixIcon: const Icon(Icons.search, size: 18), labelText: hint),
           ),
         ),
         for (final (i, f) in filters.indexed)
@@ -443,7 +438,6 @@ class SampleNotice extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     decoration: BoxDecoration(
-      color: AppColors.warning.withValues(alpha: 0.06),
       border: Border.all(color: AppColors.warning.withValues(alpha: 0.25)),
       borderRadius: BorderRadius.circular(AppRadius.control),
     ),
@@ -479,7 +473,7 @@ Future<bool> showConfirmDialog(
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
         FilledButton(
-          style: destructive ? FilledButton.styleFrom(backgroundColor: AppColors.up) : null,
+          style: destructive ? FilledButton.styleFrom(backgroundColor: AppColors.danger) : null,
           onPressed: () => Navigator.pop(context, true),
           child: Text(confirmText),
         ),

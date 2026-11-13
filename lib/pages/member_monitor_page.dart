@@ -536,7 +536,7 @@ class _MemberMonitorPageState extends State<MemberMonitorPage> {
               ],
               if (_liveError != null) ...[
                 const SizedBox(height: 8),
-                Text(' API 서버가 실행 중인지 확인하세요.', style: const TextStyle(color: AppColors.up)),
+                Text(' API 서버가 실행 중인지 확인하세요.', style: const TextStyle(color: AppColors.danger)),
               ],
             ],
           );
@@ -1223,7 +1223,7 @@ class _MemberPane extends StatelessWidget {
 Color _workerStatusColor(WorkerStatus s) => switch (s) {
   WorkerStatus.running => AppColors.success,
   WorkerStatus.stopped => AppColors.textTertiary,
-  WorkerStatus.error => AppColors.up,
+  WorkerStatus.error => AppColors.danger,
 };
 
 /// 소수 둘째 자리까지 쓰고, 정수면 소수점을 뺀다. 예: 2.0 → 2, 1250.5 → 1,250.5
@@ -1593,8 +1593,8 @@ class _Notice extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: AppColors.up.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-      child: Text(text, style: const TextStyle(color: AppColors.up, fontSize: 13)),
+      decoration: BoxDecoration(color: AppColors.danger.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+      child: Text(text, style: const TextStyle(color: AppColors.danger, fontSize: 13)),
     );
   }
 }
@@ -1662,7 +1662,7 @@ class _SlotHeader extends StatelessWidget {
 }
 
 Color _jobStatusColor(WorkerJob job) => switch (job.status) {
-  'abnormal_terminated' || 'error' || 'failed' => AppColors.up,
+  'abnormal_terminated' || 'error' || 'failed' => AppColors.danger,
   'monitoring' ||
   'bought' ||
   'submitted' ||
@@ -1810,7 +1810,7 @@ class _CustomerLogPane extends StatelessWidget {
     CustomerLogCategory.access => AppColors.textTertiary,
     CustomerLogCategory.worker => AppColors.accent,
     CustomerLogCategory.order => AppColors.down,
-    CustomerLogCategory.error => AppColors.up,
+    CustomerLogCategory.error => AppColors.danger,
   };
 
   @override
